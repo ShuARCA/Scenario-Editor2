@@ -1,0 +1,3339 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>リッチテキストエディタ</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#fffff9">
+  <link rel="icon" href="icons/icon-192.png" type="image/png">
+  <style>
+    /* --- リセット --- */
+    html, body {
+      margin: 0; padding: 0;
+    }
+    body {
+      font-family: sans-serif;
+    }
+    /* --- ヘッダー --- */
+    #toolbar {
+      padding: 6px;
+      background: #f2f0f2;
+      position: sticky; top: 0; z-index: 1000;
+      display: flex; align-items: center; gap: 8px;
+    }
+    /* ヘッダーに残すボタン */
+    #toolbar button, #toolbar input[type=file] {
+      display: flex;
+      margin-right: 4px;
+    }
+    
+    /* ファイル名表示スタイル */
+    #filename {
+      font-weight: bold;
+      color: #333;
+      margin-left: 16px;
+      flex-grow: 1;
+    }
+    
+    /* --- コンテナ --- */
+    #container {
+      display: flex;
+      height: calc(100vh - 50px);
+      border-top: 20px;
+    }
+    /* --- サイドバー（アウトライン） --- */
+    #sidebar {
+      width: 200px;
+      max-width: 500px;
+      background: #f2f0f2;
+      padding: 4px 8px;
+      box-sizing: border-box;
+      overflow-y: auto;
+      position: relative;
+      transition: width 0.2s ease;
+    }
+    #sidebar.hidden {
+      width: 0;
+      padding: 0;
+      overflow: hidden;
+    }
+    #sidebar p{ font-size: 12px; color: #7d7d7d; margin: 16px 0px 2px 0px;}
+
+    #file { display: inline-flex; gap: 2px; }
+    #file .icon { width: 20px; height: 20px; color:#555; }
+
+    #outline { list-style:none; padding:0; margin:0; }
+    #outline li { margin:0px 0; }
+    #outline li.active > a { background:#ddd; }
+    #outline .outline-item { text-decoration:none; font-size: 14px; color:#333333; display:block; padding:3px; border-radius:6px; cursor:pointer; margin: 2px 0px;}
+    #outline .outline-item:hover { background:#dfdfdf; }
+    #outline .outline-item.active { background:#e0e0e0;  font-weight:bold; }
+
+    #toggleSidebar {
+      position: static;
+      top: 0.8em;
+      left: 0.8em;
+      width: 1.6em;
+      height: 1.6em;
+      border-radius: 0.25em;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10;
+      visibility: visible !important;
+    }
+    #toggleSidebar .icon {
+      width: 20px;
+      height: 20px;
+      fill: currentColor;
+    }
+
+    #resizer {
+      width: 5px;
+      cursor: col-resize;
+      background-color: transparent;
+      position: absolute;
+      top: 0;
+      right: 0;
+      height: 100%;
+      z-index: 9;
+    }
+
+    /* --- エディタ領域 --- */
+    #editor {
+      flex: 1;
+      padding: 10px 20px;
+      overflow-y: auto;
+      position: relative;
+      background-color: #fbfbff;
+    }
+    /* リサイズ用コンテナ */
+    .resizable-container {
+      display: block;
+      resize: both; overflow: auto;
+      max-width: 100%;
+      max-height: fit-content;
+      margin:1em 0;
+      border:1px dashed #ccc; position: relative;
+    }
+    .resizable-container img {
+      width:100%; height:auto; display:block;
+    }
+    /* --- 浮動ツールバー --- */
+    #float-toolbar {
+      position: absolute;
+      display: none;
+      background-color: #fbfbff;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+      padding: 4px;
+      z-index: 1001;
+      display: flex;
+      gap: 4px;
+      align-items: center;
+    }
+    #float-toolbar button, #float-toolbar select {
+      background: none;
+      border: none;
+      padding: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      border-radius: 3px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+    }
+    #float-toolbar button:hover, #float-toolbar select:hover {
+      background-color: #fbfbff;
+    }
+    
+    #float-toolbar select {
+      width: auto;
+      padding: 4px 8px;
+      font-size: 12px;
+    }
+    
+    /* カラーピッカー関連 */
+    .color-picker-container {
+      position: relative;
+      display: inline-block;
+    }
+    
+    .color-picker {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      background: white;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      padding: 8px;
+      display: none;
+      z-index: 1002;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+      grid-template-columns: repeat(5, 1fr);
+      gap: 4px;
+      min-width: 120px;
+    }
+    
+    .color-picker.show {
+      display: grid;
+    }
+    
+    .color-option {
+      width: 20px;
+      height: 20px;
+      border-radius: 3px;
+      cursor: pointer;
+      border: 1px solid #ddd;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+    }
+    
+    .color-option:hover {
+      border-color: #999;
+      transform: scale(1.1);
+    }
+    
+    /* SVGアイコンのスタイル */
+    .icon {
+      width: 16px;
+      height: 16px;
+      fill: currentColor;
+    }
+    
+    /* サイドバーのボタンスタイル */
+    #sidebar button {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 8px;
+      border: none;
+      margin: 2px 0;
+      border-radius: 4px;
+      background:  transparent;
+      cursor: pointer;
+      font-size: 12px;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    #sidebar button:hover {
+      background: #dfdfdf;
+    }
+    
+    /* ファイル読み込みボタンのスタイル */
+    #loadFileBtn {
+      position: relative;
+      overflow: hidden;
+    }
+    
+    #loadFileBtn input[type=file] {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      opacity: 0;
+      cursor: pointer;
+    }
+    
+    /* 浮動ツールバーのアクティブ状態 */
+    #float-toolbar button.active {
+      background: #e3f2fd;
+      color: #1976d2;
+    }
+    
+    #float-toolbar select.active {
+      background: #e3f2fd;
+      color: #1976d2;
+    }
+
+    
+    
+    
+    /* --- フローチャートキャンバス --- */
+    #flowchart-container {
+      position: relative;
+      width: 100%;
+      height: 200px;
+      background: #fbfbff;
+      border-bottom: 2px solid #ddd;
+      overflow: hidden;
+      resize: vertical;
+      min-height: 100px;
+      max-height: 60vh;
+    }
+    #flowchart-canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 2000px;
+      height: 2000px;
+      background: 
+        radial-gradient(circle, #ccc 1px, transparent 1px);
+      background-size: 20px 20px;
+      cursor: grab;
+    }
+
+    /* --- エディタ領域 --- */
+    #main-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background-color: #fbfbff;
+    }
+
+    
+    .flowchart-panel { flex:1; position:relative; background:#fafafa; overflow:hidden; }
+    .flowchart-header { padding:20px; background:#f2f0f2; color:#333; font-weight:600; font-size:18px; display:flex; justify-content:space-between; align-items:center; }
+    .save-controls { display:flex; gap:10px; }
+    .save-btn, .load-btn { background:rgba(255,255,255,0.2); color:white; border:1px solid rgba(255,255,255,0.3); padding:8px 16px; border-radius:6px; cursor:pointer; font-size:12px; }
+
+    .flowchart-canvas { position:absolute; top:60px; left:0; right:0; bottom:0; background:#fbfbff; background-image:radial-gradient(circle,#e0e0e0 1px, transparent 1px); background-size:20px 20px; }
+    .canvas-container { width:100%; height:100%; overflow:auto; position:relative; }
+    .flowchart-content { position:relative; padding:40px; min-width:100%; min-height:100%; }
+
+    .toolbar { position:absolute; top:10px; left:20px; z-index:100; padding:15px 20px; background:linear-gradient(135deg,#f8f9fa 0%,#e9ecef 100%); border:2px solid #dee2e6; border-radius:10px; display:flex; gap:15px; align-items:center; box-shadow:0 4px 12px rgba(0,0,0,0.15); }
+    .toolbar-label { font-weight:600; color:#495057; margin-right:10px; }
+    .mode-button { padding:10px 16px; border:2px solid #ddd; background:white; border-radius:8px; cursor:pointer; font-size:13px; font-weight:500; transition:all .3s ease; box-shadow:0 2px 4px rgba(0,0,0,0.1); }
+    .mode-button.active { background:linear-gradient(135deg,#2196f3 0%,#1976d2 100%); color:white; border-color:#1976d2; transform:translateY(-1px); box-shadow:0 4px 8px rgba(33,150,243,.3); }
+    .canvas-container.pan-mode { cursor:grab; }
+    .canvas-container.panning { cursor:grabbing; }
+
+    .shape { position:absolute; background:#fbfbff; color:#333; border:2px solid #c2c2c2; border-radius:12px; padding:15px 20px; cursor:move; user-select:none; font-weight:500; font-size:14px; text-align:center; min-width:60px; min-height:20px; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 12px rgba(0,0,0,0.15); transition:all .08s linear; z-index:10; }
+    .shape.selected { border:3px solid #ff4081; box-shadow:0 0 0 2px rgba(255,64,129,0.3); }
+    .shape.dragging { z-index:1000; cursor:grabbing; }
+
+    /* group toggle button (右上の折りたたみ) */
+    .group-toggle { position:absolute; top:6px; right:6px; width:18px; height:18px; background:rgba(255,255,255,0.95); color:#333; border-radius:4px; font-size:12px; display:flex; align-items:center; justify-content:center; cursor:pointer; z-index:20; border:1px solid rgba(0,0,0,0.08); }
+
+    .resize-handle { position:absolute; width:12px; height:12px; background:#ff4081; border:2px solid white; border-radius:50%; box-shadow:0 2px 6px rgba(0,0,0,0.3); z-index:50; }
+    .resize-handle.top-left { top:-6px; left:-6px; cursor:nw-resize; }
+    .resize-handle.top-right { top:-6px; right:-6px; cursor:ne-resize; }
+    .resize-handle.bottom-left { bottom:-6px; left:-6px; cursor:sw-resize; }
+    .resize-handle.bottom-right { bottom:-6px; right:-6px; cursor:se-resize; }
+    .resize-handle.top { top:-6px; left:50%; transform:translateX(-50%); cursor:n-resize; }
+    .resize-handle.bottom { bottom:-6px; left:50%; transform:translateX(-50%); cursor:s-resize; }
+    .resize-handle.left { left:-6px; top:50%; transform:translateY(-50%); cursor:w-resize; }
+    .resize-handle.right { right:-6px; top:50%; transform:translateY(-50%); cursor:e-resize; }
+
+    .connection-point { position:absolute; width:12px; height:12px; background:#fbfbff; border:2px solid #ff4081; border-radius:50%; cursor:crosshair; box-shadow:0 2px 4px rgba(0,0,0,0.3); transition:all .2s ease; }
+    .connection-point.top { top:-6px; left:50%; transform:translateX(-50%); }
+    .connection-point.bottom { bottom:-6px; left:50%; transform:translateX(-50%); }
+    .connection-point.left { left:-6px; top:50%; transform:translateY(-50%); }
+    .connection-point.right { right:-6px; top:50%; transform:translateY(-50%); }
+
+    .connection-line { position:absolute; z-index:1; cursor:pointer; pointer-events:auto; }
+    .connection-line path { fill:none; stroke:#666; stroke-width:2; vector-effect: non-scaling-stroke; stroke-linecap:round; pointer-events: stroke; }
+    .connection-line polygon { pointer-events: stroke; vector-effect: non-scaling-stroke; }
+    .connection-line.selected path { stroke:#ff4081; stroke-width:3; }
+
+    .canvas-container.pan-mode .connection-line,
+    .canvas-container.pan-mode .connection-line * {
+      pointer-events: none !important;
+    }
+
+    .style-menu { position:absolute; background:white; border:1px solid #ddd; border-radius:8px; padding:8px; box-shadow:0 6px 18px rgba(0,0,0,0.12); z-index:500; min-width:180px; display:flex; gap:8px; align-items:center; }
+    .style-item { display:flex; align-items:center; gap:6px; font-size:13px; color:#333; user-select:none; }
+    .icon-btn { width:30px; height:30px; display:inline-flex; align-items:center; justify-content:center; border-radius:6px; cursor:pointer; border:1px solid transparent; background:transparent; }
+    .icon-btn:hover { background:#f2f6fb; border-color:#e6eefc; }
+    .color-icon { width:18px; height:18px; border-radius:4px; border:1px solid #fff; box-shadow:0 1px 2px rgba(0,0,0,0.12); }
+    .shape-type-select { padding:4px 6px; font-size:13px; border-radius:6px; border:1px solid #ddd; background:#fff; }
+
+    .color-palette { position:absolute; display:flex; gap:6px; padding:8px; background:white; border:1px solid #ddd; border-radius:8px; box-shadow:0 8px 24px rgba(0,0,0,0.14); z-index:600; }
+    .swatch { width:26px; height:20px; border-radius:4px; cursor:pointer; border:1px solid #ccc; box-shadow:0 1px 2px rgba(0,0,0,0.08); }
+    .swatch:hover { transform:translateY(-2px); box-shadow:0 6px 14px rgba(0,0,0,0.12); }
+
+    .style-compact-label { font-size:12px; color:#666; margin-left:4px; white-space:nowrap; }
+
+    .line-menu { display:flex; gap:8px; align-items:center; }
+    .label-input { padding:6px 8px; border-radius:6px; border:1px solid #ddd; font-size:13px; width:110px; }
+
+    .delete-btn { width:30px; height:30px; display:inline-flex; align-items:center; justify-content:center; border-radius:6px; cursor:pointer; border:1px solid #f44336; background:transparent; color:#f44336; }
+    .delete-btn:hover { background:#fff0f0; }
+
+    svg defs { pointer-events:none; }
+  </style>
+</head>
+<body>
+
+  <!-- ヘッダー：ファイル選択・保存のみ -->
+  <div id="toolbar">
+    <div id="toggleSidebar" title="折りたたみ">
+      <svg class="icon" viewBox="0 0 24 24">
+        <path d="M3 6h18v2H3V6m0 5h18v2H3v-2m0 5h18v2H3v-2Z"/>
+      </svg>
+    </div>
+    <div id="filename">無題のドキュメント</div>
+    <span id="lastModified" style="margin-left: auto; font-size: 12px; color: #333;"></span>
+  </div>
+
+  <div id="container">
+    
+    <div id="sidebar">
+      <div id="resizer"></div>
+      <!-- ファイル -->
+      <P>ファイル</P>
+      <div id="file">
+         <button id="loadFileBtn" title="開く">
+           <svg class="icon" viewBox="0 0 24 24">
+             <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/>
+           </svg>
+           <input type="file" accept=".html" onchange="loadFile(event)">
+         </button>
+         <button onclick="saveAs()" title="保存 / Ctrl+S">
+           <svg class="icon" viewBox="0 0 24 24">
+             <path d="M15,9H5V5H15M12,19A3,3 0 0,1 9,16A3,3 0 0,1 12,13A3,3 0 0,1 15,16A3,3 0 0,1 12,19M17,3H5C3.89,3 3,3.9 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V7L17,3Z"/>
+           </svg>
+         </button>
+      </div>
+      <!-- アウトライン -->
+      <P>アウトライン</P>
+      <div id="outline">
+        <ul id="outline"></ul>
+      </div>
+    </div>
+
+     <!-- メインコンテンツエリア -->
+    <div id="main-content">
+      <!-- フローチャートキャンバス -->
+      <div id="flowchart-container">
+        <div id="flowchart-canvas">
+          <!-- フローチャートツールバー -->
+          <div class="toolbar">
+            <span class="toolbar-label">編集モード:</span>
+            <button class="mode-button active" id="select-mode">📝 選択</button>
+            <button class="mode-button" id="connect-mode">🔗 接続</button>
+            <button class="mode-button" id="pan-mode">✋ 移動</button>
+          </div>
+          <!-- フローチャート要素がここに動的追加される -->
+          <div class="canvas-container" id="canvas-container">
+            <div class="flowchart-content" id="flowchart-content">
+              <svg id="root-defs" style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none;">
+                <defs></defs>
+              </svg>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 編集領域 -->
+      <div id="editor" contenteditable="true"
+           ondrop="handleDrop(event)" ondragover="e=>e.preventDefault()">
+        <h1>ここに文章を入力してください...</h1>
+      </div>
+    </div>
+  </div>
+
+  <!-- 選択範囲浮動ツールバー -->
+  <div id="float-toolbar">
+    <button onclick="exec('bold')" title="太字" id="boldBtn">
+      <svg class="icon" viewBox="0 0 24 24">
+        <path d="M13.5,15.5H10V12.5H13.5A1.5,1.5 0 0,1 15,14A1.5,1.5 0 0,1 13.5,15.5M10,6.5H13A1.5,1.5 0 0,1 14.5,8A1.5,1.5 0 0,1 13,9.5H10M15.6,10.79C16.57,10.11 17.25,9.02 17.25,8C17.25,5.74 15.5,4 13.25,4H7V18H14.04C16.14,18 17.75,16.3 17.75,14.21C17.75,12.69 16.89,11.39 15.6,10.79Z"/>
+      </svg>
+    </button>
+    <button onclick="exec('italic')" title="斜体" id="italicBtn">
+      <svg class="icon" viewBox="0 0 24 24">
+        <path d="M10,4V7H12.21L8.79,15H6V18H14V15H11.79L15.21,7H18V4H10Z"/>
+      </svg>
+    </button>
+    <button onclick="exec('underline')" title="下線" id="underlineBtn">
+      <svg class="icon" viewBox="0 0 24 24">
+        <path d="M5,21H19V19H5V21M12,17A6,6 0 0,0 18,11V3H15.5V11A3.5,3.5 0 0,1 12,14.5A3.5,3.5 0 0,1 8.5,11V3H6V11A6,6 0 0,0 12,17Z"/>
+      </svg>
+    </button>
+    <button onclick="exec('insertUnorderedList')" title="箇条書き" id="ulBtn">
+      <svg class="icon" viewBox="0 0 24 24">
+        <path d="M7,5H21V7H7V5M7,13V11H21V13H7M4,4.5A1.5,1.5 0 0,1 5.5,6A1.5,1.5 0 0,1 4,7.5A1.5,1.5 0 0,1 2.5,6A1.5,1.5 0 0,1 4,4.5M4,10.5A1.5,1.5 0 0,1 5.5,12A1.5,1.5 0 0,1 4,13.5A1.5,1.5 0 0,1 2.5,12A1.5,1.5 0 0,1 4,10.5M7,19V17H21V19H7M4,16.5A1.5,1.5 0 0,1 5.5,18A1.5,1.5 0 0,1 4,19.5A1.5,1.5 0 0,1 2.5,18A1.5,1.5 0 0,1 4,16.5Z"/>
+      </svg>
+    </button>
+    <button onclick="exec('insertOrderedList')" title="番号付きリスト" id="olBtn">
+      <svg class="icon" viewBox="0 0 24 24">
+        <path d="M7,13V11H21V13H7M7,19V17H21V19H7M7,7V5H21V7H7M3,8V5H2V4H4V8H3M2,17V16H5V20H2V19H4V18.5H3V17.5H4V17H2M4.25,10A0.75,0.75 0 0,1 5,10.75C5,10.95 4.92,11.14 4.79,11.27L3.12,13H5V14H2V13.08L4,11H2V10H4.25Z"/>
+      </svg>
+    </button>
+    <select onchange="exec('formatBlock', this.value)" title="見出し/段落" id="formatSelect">
+      <option value="P">テキスト</option>
+      <option value="H1">見出し1</option>
+      <option value="H2">見出し2</option>
+      <option value="H3">見出し3</option>
+      <option value="H4">見出し4</option>
+    </select>
+    <div class="color-picker-container">
+      <button onclick="toggleColorPicker('text')" title="文字色" id="textColorBtn">
+        <svg class="icon" viewBox="0 0 24 24">
+          <path d="M9.62,12L12,5.67L14.38,12M11,3L5.5,17H7.75L8.87,14H15.13L16.25,17H18.5L13,3H11Z"/>
+          <rect x="4" y="20" width="16" height="2" fill="currentColor"/>
+        </svg>
+      </button>
+      <div id="textColorPicker" class="color-picker">
+        <div class="color-option" style="background-color: #24140e" onclick="setTextColor('#24140e')" title="ランプブラック"></div>
+        <div class="color-option" style="background-color: #abb1b5" onclick="setTextColor('#abb1b5')" title="フォッグ"></div>
+        <div class="color-option" style="background-color: #946c45" onclick="setTextColor('#946c45')" title="カフェオレ"></div>
+        <div class="color-option" style="background-color: #f39800" onclick="setTextColor('#f39800')" title="マリーゴールド"></div>
+        <div class="color-option" style="background-color: #e9bc00" onclick="setTextColor('#e9bc00')" title="トパーズ"></div>
+        <div class="color-option" style="background-color: #578a3d" onclick="setTextColor('#578a3d')" title="アイビーグリーン"></div>
+        <div class="color-option" style="background-color: #0068b7" onclick="setTextColor('#0068b7')" title="コバルトブルー"></div>
+        <div class="color-option" style="background-color: #5a4498" onclick="setTextColor('#5a4498')" title="バイオレット"></div>
+        <div class="color-option" style="background-color: #dc6b9a" onclick="setTextColor('#dc6b9a')" title="コスモス"></div>
+        <div class="color-option" style="background-color: #ea5550" onclick="setTextColor('#ea5550')" title="ポピーレッド"></div>
+      </div>
+    </div>
+    <div class="color-picker-container">
+      <button onclick="toggleColorPicker('highlight')" title="ハイライト" id="highlightBtn">
+        <svg class="icon" viewBox="0 0 24 24">
+          <path d="M5,21L12.5,7.5L10.5,5.5L8.5,7.5L5,21M18.5,4.5L19.5,3.5C20.3,2.7 20.3,1.4 19.5,0.6C18.7,-0.2 17.4,-0.2 16.6,0.6L15.6,1.6L18.5,4.5M16.5,2.5L4.3,14.7L6.7,17.1L18.9,4.9L16.5,2.5Z"/>
+        </svg>
+      </button>
+      <div id="highlightColorPicker" class="color-picker">
+        <div class="color-option" style="background-color: transparent; border: 1px solid #ccc" onclick="setHighlightColor('transparent')" title="クリア">×</div>
+        <div class="color-option" style="background-color: #efefef" onclick="setHighlightColor('#efefef')" title="シルバーホワイト"></div>
+        <div class="color-option" style="background-color: #f6e5cc" onclick="setHighlightColor('#f6e5cc')" title="エクルベージュ"></div>
+        <div class="color-option" style="background-color: #fbd8b5" onclick="setHighlightColor('#fbd8b5')" title="ピーチ"></div>
+        <div class="color-option" style="background-color: #fff3b8" onclick="setHighlightColor('#fff3b8')" title="クリームイエロー"></div>
+        <div class="color-option" style="background-color: #f0f6da" onclick="setHighlightColor('#f0f6da')" title="ホワイトリリー"></div>
+        <div class="color-option" style="background-color: #bbdbf3" onclick="setHighlightColor('#bbdbf3')" title="フロスティブルー"></div>
+        <div class="color-option" style="background-color: #d1bada" onclick="setHighlightColor('#d1bada')" title="ライラック"></div>
+        <div class="color-option" style="background-color: #e5c1cd" onclick="setHighlightColor('#e5c1cd')" title="ローズドラジェ"></div>
+        <div class="color-option" style="background-color: #fbdac8" onclick="setHighlightColor('#fbdac8')" title="シェルピンク"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  // PWA ServiceWorker 登録
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('service-worker.js');
+  }
+
+  let currentFilename = 'document.html';
+  let lastModified = new Date(); // 最終更新日時
+  const editor = document.getElementById('editor');
+  const floatBar = document.getElementById('float-toolbar');
+  const filenameDisplay = document.getElementById('filename');
+  
+  // 選択範囲を保存するための変数（改善版）
+  let savedSelection = null;
+  let savedSelectionData = null;
+
+  // ファイル名を更新する関数
+  function updateFilenameDisplay(filename) {
+    if (filename && filename !== 'document.html') {
+      // 拡張子を除いたファイル名を表示
+      const nameWithoutExtension = filename.replace(/\.[^/.]+$/, "");
+      filenameDisplay.textContent = nameWithoutExtension;
+    } else {
+      filenameDisplay.textContent = '無題のドキュメント';
+    }
+  }
+
+  // アウトライン更新関数をグローバルスコープに定義
+  function updateOutline() {
+    const outline = document.getElementById('outline');
+    outline.innerHTML = '';
+
+    const headings = editor.querySelectorAll('h1, h2, h3, h4');
+    headings.forEach((h, idx) => {
+      const level = parseInt(h.tagName.substring(1));
+      const link = document.createElement('div');
+      link.textContent = h.textContent;
+      link.style.marginLeft = (level - 1) * 16 + 'px';
+      link.className = 'outline-item';
+      link.dataset.headingIndex = idx; // 見出しのインデックスを保存
+      link.onclick = () => {
+        // スクロールして見出しを中央に表示
+        h.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+        // 見出しにカーソル（キャレット）を移動
+        const range = document.createRange();
+        range.selectNodeContents(h);
+        range.collapse(true);
+
+        const selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(range);
+        
+        // アウトラインをハイライト
+        updateOutlineHighlight();
+      };
+      outline.appendChild(link);
+      // サイドバーのアウトライン更新後に Flowchart を同期（存在すれば）
+      if (window.flowchartApp && typeof window.flowchartApp.updateFlowchart === 'function') {
+        window.flowchartApp.updateFlowchart();
+      }
+    });
+    
+    // 現在のカーソル位置に基づいてハイライトを更新
+    updateOutlineHighlight();
+  }
+
+  // アウトラインのハイライトを更新する関数
+  function updateOutlineHighlight() {
+    const selection = window.getSelection();
+    if (!selection.rangeCount) return;
+
+    const range = selection.getRangeAt(0);
+    const currentElement = range.startContainer.nodeType === Node.TEXT_NODE 
+      ? range.startContainer.parentElement 
+      : range.startContainer;
+
+    // 現在の要素から最も近い見出しを見つける
+    let targetHeading = findCurrentOrPreviousHeading(currentElement);
+    
+    // 全てのアウトライン項目からactiveクラスを削除
+    const outlineItems = document.querySelectorAll('.outline-item');
+    outlineItems.forEach(item => item.classList.remove('active'));
+
+    // 対象の見出しがある場合、対応するアウトライン項目をハイライト
+    if (targetHeading) {
+      const headings = editor.querySelectorAll('h1, h2, h3, h4');
+      const headingIndex = Array.from(headings).indexOf(targetHeading);
+      if (headingIndex >= 0) {
+        const targetOutlineItem = document.querySelector(`[data-heading-index="${headingIndex}"]`);
+        if (targetOutlineItem) {
+          targetOutlineItem.classList.add('active');
+        }
+      }
+    }
+  }
+
+  // 現在の要素または手前の見出しを見つける関数
+  function findCurrentOrPreviousHeading(element) {
+    // 現在の要素が見出しの場合はそれを返す
+    if (element && element.matches && element.matches('h1, h2, h3, h4')) {
+      return element;
+    }
+
+    // エディタ内の全ての要素を取得
+    const allElements = Array.from(editor.querySelectorAll('*'));
+    const currentIndex = allElements.indexOf(element);
+
+    // 現在の要素から前方に向かって見出しを探す
+    for (let i = currentIndex; i >= 0; i--) {
+      const el = allElements[i];
+      if (el.matches('h1, h2, h3, h4')) {
+        return el;
+      }
+    }
+
+    // 現在の要素の親要素から前方の兄弟要素を探す
+    let current = element;
+    while (current && current !== editor) {
+      let prev = current.previousElementSibling;
+      while (prev) {
+        if (prev.matches('h1, h2, h3, h4')) {
+          return prev;
+        }
+        // 前の要素の子要素内の見出しも確認
+        const headingInPrev = prev.querySelector('h1, h2, h3, h4:last-of-type');
+        if (headingInPrev) {
+          return headingInPrev;
+        }
+        prev = prev.previousElementSibling;
+      }
+      current = current.parentElement;
+    }
+
+    return null;
+  }
+
+  // 選択範囲を保存する関数（改善版）
+  function saveSelection() {
+    const selection = window.getSelection();
+    if (selection.rangeCount > 0) {
+      const range = selection.getRangeAt(0);
+      savedSelection = range.cloneRange();
+      
+      // 追加の選択情報を保存
+      savedSelectionData = {
+        startContainer: range.startContainer,
+        startOffset: range.startOffset,
+        endContainer: range.endContainer,
+        endOffset: range.endOffset,
+        collapsed: range.collapsed
+      };
+    }
+  }
+
+  // 保存した選択範囲を復元する関数（改善版）
+  function restoreSelection() {
+    if (savedSelection) {
+      try {
+        const selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(savedSelection);
+        return true;
+      } catch (e) {
+        // Rangeが無効になった場合の代替処理
+        if (savedSelectionData) {
+          try {
+            const range = document.createRange();
+            range.setStart(savedSelectionData.startContainer, savedSelectionData.startOffset);
+            range.setEnd(savedSelectionData.endContainer, savedSelectionData.endOffset);
+            
+            const selection = window.getSelection();
+            selection.removeAllRanges();
+            selection.addRange(range);
+            return true;
+          } catch (e2) {
+            return false;
+          }
+        }
+      }
+    }
+    return false;
+  }
+
+  // 標準コマンド実行
+  function exec(cmd, val=null){
+    document.execCommand(cmd, false, val);
+    editor.focus();
+    
+    // コマンド実行後に浮動ツールバーの状態を更新
+    setTimeout(() => {
+      updateFloatToolbarState();
+    }, 10);
+  }
+
+  // 浮動ツールバーの状態を更新する関数
+  function updateFloatToolbarState() {
+    const selection = window.getSelection();
+    if (!selection.rangeCount || selection.isCollapsed) return;
+
+    // 太字の状態チェック
+    const boldBtn = document.getElementById('boldBtn');
+    boldBtn.classList.toggle('active', document.queryCommandState('bold'));
+
+    // 斜体の状態チェック
+    const italicBtn = document.getElementById('italicBtn');
+    italicBtn.classList.toggle('active', document.queryCommandState('italic'));
+
+    // 下線の状態チェック
+    const underlineBtn = document.getElementById('underlineBtn');
+    underlineBtn.classList.toggle('active', document.queryCommandState('underline'));
+
+    // 箇条書きの状態チェック
+    const ulBtn = document.getElementById('ulBtn');
+    ulBtn.classList.toggle('active', document.queryCommandState('insertUnorderedList'));
+
+    // 番号付きリストの状態チェック
+    const olBtn = document.getElementById('olBtn');
+    olBtn.classList.toggle('active', document.queryCommandState('insertOrderedList'));
+
+    // 見出しレベルの検出
+    const formatSelect = document.getElementById('formatSelect');
+    const range = selection.getRangeAt(0);
+    let currentElement = range.startContainer;
+    if (currentElement.nodeType === Node.TEXT_NODE) {
+      currentElement = currentElement.parentElement;
+    }
+
+    // 最も近い見出しまたは段落要素を探す
+    let formatElement = currentElement;
+    while (formatElement && formatElement !== editor) {
+      if (formatElement.matches && formatElement.matches('h1, h2, h3, h4, p')) {
+        break;
+      }
+      formatElement = formatElement.parentElement;
+    }
+
+    if (formatElement && formatElement.matches('h1, h2, h3, h4, p')) {
+      const tagName = formatElement.tagName.toUpperCase();
+      formatSelect.value = tagName;
+      formatSelect.classList.add('active');
+      
+      // selectの表示テキストを更新
+      const options = formatSelect.options;
+      for (let i = 0; i < options.length; i++) {
+        if (options[i].value === tagName) {
+          // 一時的にテキストを変更して視覚的フィードバックを提供
+          break;
+        }
+      }
+    } else {
+      formatSelect.value = 'P';
+      formatSelect.classList.remove('active');
+    }
+
+    // 文字色の検出
+    const textColorBtn = document.getElementById('textColorBtn');
+    const textColor = document.queryCommandValue('foreColor');
+    if (textColor && textColor !== 'rgb(0, 0, 0)' && textColor !== '#000000') {
+      // RGB値をHEX値に変換（簡易版）
+      let hexColor = textColor;
+      if (textColor.startsWith('rgb')) {
+        const rgbMatch = textColor.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+        if (rgbMatch) {
+          const r = parseInt(rgbMatch[1]);
+          const g = parseInt(rgbMatch[2]);
+          const b = parseInt(rgbMatch[3]);
+          hexColor = `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+        }
+      }
+      textColorBtn.style.color = hexColor;
+    } else {
+      textColorBtn.style.color = '#000';
+    }
+
+    // ハイライト色の検出
+    const highlightBtn = document.getElementById('highlightBtn');
+    const backgroundColor = document.queryCommandValue('backColor') || document.queryCommandValue('hiliteColor');
+    if (backgroundColor && backgroundColor !== 'rgb(255, 255, 255)' && backgroundColor !== '#ffffff' && backgroundColor !== 'transparent') {
+      // RGB値をHEX値に変換（簡易版）
+      let hexColor = backgroundColor;
+      if (backgroundColor.startsWith('rgb')) {
+        const rgbMatch = backgroundColor.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+        if (rgbMatch) {
+          const r = parseInt(rgbMatch[1]);
+          const g = parseInt(rgbMatch[2]);
+          const b = parseInt(rgbMatch[3]);
+          hexColor = `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+        }
+      }
+      highlightBtn.style.color = hexColor;
+    } else {
+      highlightBtn.style.color = '#000';
+    }
+  }
+
+  // カラーピッカーの表示/非表示（改善版）
+  function toggleColorPicker(type) {
+    // 選択範囲を保存
+    saveSelection();
+    
+    const pickerId = type === 'text' ? 'textColorPicker' : 'highlightColorPicker';
+    const picker = document.getElementById(pickerId);
+    const otherPicker = document.getElementById(type === 'text' ? 'highlightColorPicker' : 'textColorPicker');
+    
+    // 他のピッカーを閉じる
+    otherPicker.classList.remove('show');
+    
+    // 現在のピッカーをトグル
+    picker.classList.toggle('show');
+    
+    // ピッカーが開いた場合は、マウスイベントを防ぐ
+    if (picker.classList.contains('show')) {
+      picker.addEventListener('mousedown', function(e) {
+        e.preventDefault();
+      });
+    }
+  }
+
+  // 文字色を設定（改善版）
+  function setTextColor(color) {
+    // 選択範囲を復元
+    if (restoreSelection()) {
+      // 即座にコマンドを実行
+      const success = document.execCommand('foreColor', false, color);
+      
+      // 代替方法（一部のブラウザで必要）
+      if (!success) {
+        try {
+          const selection = window.getSelection();
+          if (selection.rangeCount > 0) {
+            const range = selection.getRangeAt(0);
+            if (!range.collapsed) {
+              const span = document.createElement('span');
+              span.style.color = color;
+              try {
+                range.surroundContents(span);
+              } catch (e) {
+                // 複雑な選択範囲の場合
+                const contents = range.extractContents();
+                span.appendChild(contents);
+                range.insertNode(span);
+              }
+            }
+          }
+        } catch (e) {
+        }
+      }
+    }
+    
+    // ピッカーを閉じる
+    document.getElementById('textColorPicker').classList.remove('show');
+    
+    // エディタにフォーカスを戻す
+    editor.focus();
+    
+    // 最終更新日時を更新
+    updateLastModified();
+  }
+
+  // ハイライト色を設定（改善版）
+  function setHighlightColor(color) {
+    // 選択範囲を復元
+    if (restoreSelection()) {
+      if (color === 'transparent') {
+        // ハイライトを削除
+        document.execCommand('hiliteColor', false, 'transparent');
+        document.execCommand('backColor', false, 'transparent');
+      } else {
+        // ハイライト色を設定
+        let success = document.execCommand('hiliteColor', false, color);
+        
+        // Firefoxなど一部ブラウザ用の代替
+        if (!success || !document.queryCommandSupported('hiliteColor')) {
+          success = document.execCommand('backColor', false, color);
+        }
+        
+        // 代替方法
+        if (!success) {
+          try {
+            const selection = window.getSelection();
+            if (selection.rangeCount > 0) {
+              const range = selection.getRangeAt(0);
+              if (!range.collapsed) {
+                const span = document.createElement('span');
+                span.style.backgroundColor = color;
+                try {
+                  range.surroundContents(span);
+                } catch (e) {
+                  // 複雑な選択範囲の場合
+                  const contents = range.extractContents();
+                  span.appendChild(contents);
+                  range.insertNode(span);
+                }
+              }
+            }
+          } catch (e) {
+            console.warn('ハイライト色の設定に失敗しました:', e);
+          }
+        }
+      }
+    }
+    
+    // ピッカーを閉じる
+    document.getElementById('highlightColorPicker').classList.remove('show');
+    
+    // エディタにフォーカスを戻す
+    editor.focus();
+    
+    // 最終更新日時を更新
+    updateLastModified();
+  }
+
+  // File System Access API がサポートされているかチェック
+  function isFileSystemAccessSupported() {
+    return 'showSaveFilePicker' in window;
+  }
+
+  // 最終更新日時を更新して表示
+  function updateLastModified() {
+    lastModified = new Date();
+    displayLastModified();
+  }
+
+  // 最終更新日時を表示
+  function displayLastModified() {
+    const lastModifiedElement = document.getElementById('lastModified');
+    const formatted = lastModified.toLocaleString('ja-JP', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+    lastModifiedElement.textContent = `最終更新: ${formatted}`;
+  }
+
+  // 名前を付けて保存
+  async function saveAs() {
+    const content = editor.innerHTML;
+    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Document</title></head><body>${content}</body></html>`;
+
+    if (isFileSystemAccessSupported()) {
+      try {
+        // File System Access API を使用してファイル選択ダイアログを表示
+        const fileHandle = await window.showSaveFilePicker({
+          suggestedName: currentFilename,
+          types: [{
+            description: 'HTML files',
+            accept: {'text/html': ['.html']},
+          }],
+        });
+
+        const writable = await fileHandle.createWritable();
+        await writable.write(html);
+        await writable.close();
+
+        // 保存されたファイルの情報を更新
+        currentFilename = fileHandle.name;
+        updateFilenameDisplay(currentFilename);
+        
+        // 成功通知（オプション）
+        showNotification(`${fileHandle.name} として保存しました`);
+      } catch (error) {
+        if (error.name !== 'AbortError') {
+          // エラー時は従来の方法にフォールバック
+          downloadFile(html, currentFilename);
+        }
+      }
+    } else {
+      // File System Access API が使用できない場合は従来の方法
+      downloadFile(html, currentFilename);
+    }
+  }
+
+  // 従来のダウンロード方式
+  function downloadFile(content, filename) {
+    const blob = new Blob([content], {type:'text/html'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  // 通知表示（オプション）
+  function showNotification(message) {
+    // 簡単な通知を表示
+    const notification = document.createElement('div');
+    notification.textContent = message;
+    notification.style.cssText = `
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: #4CAF50;
+      color: white;
+      padding: 12px 20px;
+      border-radius: 4px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+      z-index: 10000;
+      font-size: 14px;
+    `;
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+      notification.remove();
+    }, 3000);
+  }
+
+  // 読み込み
+  async function loadFile(e) {
+    const f = e.target.files[0];
+    if (!f) return;
+    
+    currentFilename = f.name;
+    updateFilenameDisplay(currentFilename);
+    
+    const r = new FileReader();
+    r.onload = ev => {
+      const tmp = document.createElement('div');
+      tmp.innerHTML = ev.target.result;
+      const b = tmp.querySelector('body');
+      editor.innerHTML = b ? b.innerHTML : tmp.innerHTML;
+      
+      // ファイルの最終更新日時を設定
+      lastModified = new Date(f.lastModified);
+      displayLastModified();
+      
+      // ファイル読み込み後にアウトラインを更新
+      updateOutline();
+      showNotification(`${f.name} を読み込みました`);
+    };
+    r.readAsText(f);
+    document.body.style.margin = '0';
+    document.body.style.padding = '0';
+  }
+
+  // PWA ServiceWorker 登録（重複削除）
+  if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.protocol === 'http:')) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js').catch((err) => {
+        // ローカルや他の理由で失敗しても無視（必要なら console.log(err) を出す）
+        console.info('ServiceWorker registration skipped or failed:', err);
+      });
+    });
+  }
+  document.addEventListener('DOMContentLoaded', () => {
+    // Ctrl+S キーボードショートカットの追加
+    document.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        saveAs();
+      }
+    });
+
+    // エディタの内容が変更されたときに最終更新日時を更新
+    editor.addEventListener('input', () => {
+      updateLastModified();
+      updateOutline();
+    });
+
+    // アウトラインを自動更新
+    editor.addEventListener('keydown', updateOutline);
+    editor.addEventListener('mouseup', updateOutline);
+
+    // 初期表示時に最終更新日時を表示
+    displayLastModified();
+
+    // カーソル位置変更時のハイライト更新
+    editor.addEventListener('keyup', updateOutlineHighlight);
+    editor.addEventListener('click', updateOutlineHighlight);
+    document.addEventListener('selectionchange', () => {
+      // selection変更がエディタ内で発生した場合のみ処理
+      const selection = window.getSelection();
+      if (selection.rangeCount > 0) {
+        const range = selection.getRangeAt(0);
+        const container = range.commonAncestorContainer;
+        if (editor.contains(container) || container === editor) {
+          updateOutlineHighlight();
+        }
+      }
+    });
+
+    // サイドバーの折りたたみ
+    const sidebar = document.getElementById('sidebar');
+    const toggleSidebarBtn = document.getElementById('toggleSidebar');
+    let sidebarWidth = 200; // デフォルト幅を保存
+    
+    toggleSidebarBtn.addEventListener('click', () => {
+      if (sidebar.classList.contains('hidden')) {
+        // 展開：保存された幅を復元
+        sidebar.classList.remove('hidden');
+        sidebar.style.width = sidebarWidth + 'px';
+        toggleSidebarBtn.innerHTML = `
+          <svg class="icon" viewBox="0 0 24 24">
+            <path d="M15.41,16.58L10.83,12L15.41,7.41L14,6L8,12L14,18L15.41,16.58Z"/>
+          </svg>
+        `;
+      } else {
+        // 折りたたみ：現在の幅を保存してから非表示
+        const currentWidth = sidebar.offsetWidth;
+        if (currentWidth > 0) {
+          sidebarWidth = currentWidth;
+        }
+        sidebar.classList.add('hidden');
+        sidebar.style.width = '0px';
+        toggleSidebarBtn.innerHTML = `
+          <svg class="icon" viewBox="0 0 24 24">
+            <path d="M3 6h18v2H3V6m0 5h18v2H3v-2m0 5h18v2H3v-2Z"/>
+          </svg>
+        `;
+      }
+    });
+
+    // サイドバー幅のリサイズ
+    const resizer = document.getElementById('resizer');
+    let isResizing = false;
+
+    resizer.addEventListener('mousedown', (e) => {
+      // 折りたたまれている場合はリサイズを無効化
+      if (sidebar.classList.contains('hidden')) {
+        return;
+      }
+      isResizing = true;
+      document.body.style.cursor = 'col-resize';
+      e.preventDefault();
+    });
+
+    document.addEventListener('mousemove', (e) => {
+      if (!isResizing || sidebar.classList.contains('hidden')) return;
+      
+      const newWidth = Math.max(100, Math.min(500, e.clientX));
+      sidebar.style.width = `${newWidth}px`;
+      sidebarWidth = newWidth; // 幅を保存
+    });
+
+    document.addEventListener('mouseup', () => {
+      if (isResizing) {
+        isResizing = false;
+        document.body.style.cursor = 'default';
+      }
+    });
+
+    // 初期化
+    updateOutline();
+    updateFilenameDisplay(currentFilename);
+  });
+
+  // 画像ドロップ／挿入
+  function handleDrop(e){
+    e.preventDefault();
+    Array.from(e.dataTransfer.files).forEach(file=>{
+      if(file.type.startsWith('image/')){
+        const reader = new FileReader();
+        reader.onload=ev=>{
+          const wrap = document.createElement('div');
+          wrap.className='resizable-container';
+          const img = document.createElement('img');
+          img.src = ev.target.result;
+          wrap.appendChild(img);
+          insertAtCursor(wrap);
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+    updateOutline();
+  }
+
+  // カーソル位置にノード挿入
+  function insertAtCursor(node){
+    const sel = window.getSelection();
+    if(!sel.rangeCount) return;
+    const range = sel.getRangeAt(0);
+    range.deleteContents();
+    range.insertNode(node);
+  }
+
+  // 選択範囲時に浮動メニュー表示（改善版）
+  document.addEventListener('mouseup', e=>{
+    setTimeout(()=>{ // 選択反映待ち
+      const sel = window.getSelection();
+      
+      if(sel.isCollapsed) { 
+        hideFloatBar(); 
+        return; 
+      }
+      
+      // 選択範囲がエディタ内にあるかチェック
+      const range = sel.getRangeAt(0);
+      const container = range.commonAncestorContainer;
+      
+      // テキストノードの場合は親要素をチェック
+      const containerElement = container.nodeType === Node.TEXT_NODE 
+        ? container.parentElement 
+        : container;
+      
+      // エディタ内の選択でない場合は非表示
+      if (!editor.contains(containerElement) && containerElement !== editor) {
+        hideFloatBar();
+        return;
+      }
+      
+      // 選択範囲を保存（浮動ツールバー表示時）
+      saveSelection();
+      
+      // まず表示してサイズを取得
+      floatBar.style.display = 'flex';
+      floatBar.style.position = "absolute";
+      floatBar.style.visibility = 'hidden'; // サイズ計算のため一時的に非表示
+      
+      const rect = range.getBoundingClientRect();
+      const toolbarRect = floatBar.getBoundingClientRect();
+      
+      // 初期位置を設定（選択範囲の上中央）
+      let top = rect.top - toolbarRect.height - 8;
+      let left = rect.left + (rect.width / 2) - (toolbarRect.width / 2);
+      
+      // ビューポートの境界を取得
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+      
+      // 左右の調整
+      if (left < 10) {
+        left = 10; // 左端から10px
+      } else if (left + toolbarRect.width > viewportWidth - 10) {
+        left = viewportWidth - toolbarRect.width - 10; // 右端から10px
+      }
+      
+      // 上下の調整
+      if (top < 10) {
+        // 上にはみ出る場合は選択範囲の下に表示
+        top = rect.bottom + 8;
+      }
+      
+      if (top + toolbarRect.height > viewportHeight - 10) {
+        // 下にはみ出る場合は再度上に調整
+        top = rect.top - toolbarRect.height - 8;
+        if (top < 10) {
+          // それでも上にはみ出る場合は選択範囲と重なっても表示
+          top = 10;
+        }
+      }
+      
+      // スクロール位置を考慮して最終位置を設定
+      floatBar.style.top = (top + window.scrollY) + 'px';
+      floatBar.style.left = (left + window.scrollX) + 'px';
+      floatBar.style.visibility = 'visible'; // 表示
+      
+      // ツールバーの状態を更新
+      updateFloatToolbarState();
+    }, 10);
+  });
+
+  // 非表示
+  function hideFloatBar(){
+    floatBar.style.display = 'none';
+    // カラーピッカーも閉じる
+    document.getElementById('textColorPicker').classList.remove('show');
+    document.getElementById('highlightColorPicker').classList.remove('show');
+    
+    // ボタンの状態をリセット
+    const buttons = floatBar.querySelectorAll('button, select');
+    buttons.forEach(btn => {
+      btn.classList.remove('active');
+      btn.style.color = '';
+    });
+  }
+
+  // クリック時に消す（選択外）
+  document.addEventListener('mousedown', e=>{
+    if(!floatBar.contains(e.target)) {
+      hideFloatBar();
+    }
+  });
+
+  // エディタ以外でのselectionchange時は浮動ツールバーを隠す
+  document.addEventListener('selectionchange', () => {
+    const selection = window.getSelection();
+    if (selection.rangeCount > 0) {
+      const range = selection.getRangeAt(0);
+      const container = range.commonAncestorContainer;
+      const containerElement = container.nodeType === Node.TEXT_NODE 
+        ? container.parentElement 
+        : container;
+      
+      // エディタ外の選択の場合は浮動ツールバーを非表示
+      if (!editor.contains(containerElement) && containerElement !== editor) {
+        hideFloatBar();
+      }
+    } else {
+      hideFloatBar();
+    }
+  });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  ///////////////////////////////////////////////////////////////////////////////////////////////////////
+  // フローチャート
+  ///////////////////////////////////////////////////////////////////////////////////////////////////////
+
+    const PALETTE_COLORS = [
+    '#000000','#ffffff','#f44336','#e91e63','#9c27b0',
+    '#3f51b5','#03a9f4','#4caf50','#ff9800','#795548'
+  ];
+
+  class FlowchartApp {
+    constructor() {
+      this.shapes = new Map();
+      this.connections = [];
+      this.selectedShape = null;
+      this.selectedConnection = null;
+      this.isResizing = false;
+      this.isDragging = false;
+      this.isPanning = false;
+      this.isConnecting = false;
+      this.currentMode = 'select';
+      this.connectStart = null;
+      this.resizeHandle = null;
+      this.styleMenu = null;
+      this.openPalette = null;
+
+      this.startMousePos = { x:0, y:0 };
+      this.startShapePos = { x:0, y:0 };
+      this.startShapeSize = { width:0, height:0 };
+      this.startPanOffset = { x:0, y:0 };
+
+      this.nextShapeId = 0;
+      this.lineClickThreshold = 6;
+      this.minWidth = 80;
+      this.minHeight = 40;
+
+      // canvas margin when expanding
+      this.canvasMargin = 80; // px
+
+      this.outlineTextarea = document.querySelector('.outline-textarea') || null;
+      this.outlineListEl = document.getElementById('outline') || null;
+      this.flowchartContent = document.getElementById('flowchart-content');
+      this.canvasContainer = document.getElementById('canvas-container');
+      this.selectModeBtn = document.getElementById('select-mode');
+      this.connectModeBtn = document.getElementById('connect-mode');
+      this.panModeBtn = document.getElementById('pan-mode');
+      this.saveBtn = document.getElementById('save-btn');
+      this.loadBtn = document.getElementById('load-btn');
+      this.fileInput = document.getElementById('file-input');
+
+      this.init();
+    }
+
+    init() {
+      // アウトラインが textarea の場合は input を監視。#outline（DOM要素）であれば MutationObserver で変化を検出して更新。
+      if (this.outlineTextarea) {
+        this.outlineTextarea.addEventListener('input', () => this.updateFlowchart());
+      } else if (this.outlineListEl) {
+        // #outline の DOM 変化（項目の追加／編集）で flowchart を更新する
+        const mo = new MutationObserver(() => this.updateFlowchart());
+        mo.observe(this.outlineListEl, { childList: true, subtree: true, characterData: true });
+        // 後で解除したければ this._outlineMutationObserver.disconnect() を呼べます
+        this._outlineMutationObserver = mo;
+      }
+
+      document.addEventListener('mousedown', (e) => this.handleMouseDown(e));
+      document.addEventListener('mousemove', (e) => this.handleMouseMove(e));
+      document.addEventListener('mouseup', (e) => this.handleMouseUp(e));
+      document.addEventListener('click', (e) => this.handleDocumentClick(e));
+
+      this.selectModeBtn.addEventListener('click', () => this.setMode('select'));
+      this.connectModeBtn.addEventListener('click', () => this.setMode('connect'));
+      this.panModeBtn.addEventListener('click', () => this.setMode('pan'));
+
+      this.saveBtn.addEventListener('click', () => this.saveToFile());
+      this.loadBtn.addEventListener('click', () => this.fileInput.click());
+      this.fileInput.addEventListener('change', (e) => this.loadFromFile(e));
+
+      // resize observer & window resize to keep minimal canvas size in sync with container
+      window.addEventListener('resize', () => this.updateCanvasSize());
+
+      // initial render
+      this.updateFlowchart();
+    }
+
+    handleDocumentClick(e) {
+      if (this.openPalette) {
+        if (!this.openPalette.el.contains(e.target) && !e.target.closest('.icon-btn') && !e.target.closest('.color-palette')) {
+          this.closePalette();
+        }
+      }
+      this.handleClick(e);
+    }
+
+    setMode(mode) {
+      if (this.connectStart) { this.connectStart.point.style.background = '#ff4081'; this.connectStart = null; }
+      this.isConnecting = false;
+
+      this.currentMode = mode;
+      this.selectModeBtn.classList.toggle('active', mode === 'select');
+      this.connectModeBtn.classList.toggle('active', mode === 'connect');
+      this.panModeBtn.classList.toggle('active', mode === 'pan');
+
+      this.canvasContainer.classList.toggle('pan-mode', mode === 'pan');
+
+      if (this.selectedShape) { this.selectedShape.classList.remove('selected'); this.removeHandles(); this.selectedShape = null; }
+      if (this.selectedConnection) { this.selectedConnection.classList.remove('selected'); this.selectedConnection = null; }
+      this.hideStyleMenu();
+      this.updateConnectionPoints();
+    }
+
+    updateFlowchart() {
+      // アウトライン項目を取得（#outline の .outline-item を優先）。見つからなければ textarea、さらに見つからなければ editor の見出しをフォールバックで使用
+      let newLines = [];
+
+      if (this.outlineListEl) {
+        const items = this.outlineListEl.querySelectorAll('.outline-item');
+        newLines = Array.from(items).map(i => i.textContent.trim()).filter(l => l.length > 0);
+      } else if (this.outlineTextarea) {
+        newLines = this.outlineTextarea.value.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+      } else {
+        const headingEls = document.querySelectorAll('#editor h1, #editor h2, #editor h3, #editor h4');
+        newLines = Array.from(headingEls).map(h => h.textContent.trim()).filter(l => l.length > 0);
+      }
+      
+      const oldShapesSorted = Array.from(this.shapes.values()).sort((a, b) => {
+          const elA = a.element;
+          const elB = b.element;
+          if (elA && elB) {
+              return parseFloat(elA.style.top) - parseFloat(elB.style.top);
+          }
+          return 0;
+      });
+      const oldLines = oldShapesSorted.map(s => s.text);
+
+      const diff = this.diffLists(oldLines, newLines);
+
+      const newShapes = new Map();
+      const oldShapesPool = [...oldShapesSorted];
+      const removedShapeIds = new Set(this.shapes.keys());
+
+      diff.forEach((item, index) => {
+          let shapeData;
+          if (item.type === 'no-change' || item.type === 'changed') {
+              shapeData = oldShapesPool[item.oldIndex];
+              if (shapeData) {
+                  shapeData.text = item.value;
+                  newShapes.set(shapeData.id, shapeData);
+                  removedShapeIds.delete(shapeData.id);
+              }
+          } else if (item.type === 'added') {
+              const id = this.nextShapeId++;
+              shapeData = {
+                  id: id,
+                  element: null,
+                  text: item.value,
+                  x: 100,
+                  y: 100 + (index * 80),
+                  width: 120,
+                  height: 40,
+                  style: {},
+                  parent: null,
+                  children: [],
+                  collapsed: false,
+                  origWidth: 120,
+                  origHeight: 40,
+                  expandedWidth: 120,
+                  expandedHeight: 40,
+                  localX: undefined,
+                  localY: undefined
+              };
+              newShapes.set(id, shapeData);
+          }
+      });
+
+      removedShapeIds.forEach(id => {
+          const shape = this.shapes.get(id);
+          if (shape && shape.element) {
+              shape.element.remove();
+          }
+      });
+
+      this.shapes = newShapes;
+
+      this.shapes.forEach((sd, id) => {
+          if (!sd.element) {
+              const shapeEl = document.createElement('div');
+              shapeEl.className = 'shape';
+              shapeEl.dataset.index = sd.id;
+              shapeEl.style.left = sd.x + 'px';
+              shapeEl.style.top = sd.y + 'px';
+              shapeEl.style.width = sd.width + 'px';
+              shapeEl.style.height = sd.height + 'px';
+              shapeEl.appendChild(document.createTextNode(sd.text));
+              const toggle = document.createElement('div');
+              toggle.className = 'group-toggle';
+              toggle.title = '折りたたみ/展開';
+              toggle.textContent = sd.collapsed ? '▸' : '▾';
+              toggle.style.display = (sd.children && sd.children.length > 0) ? 'flex' : 'none';
+              toggle.addEventListener('click', (ev) => {
+                  ev.stopPropagation();
+                  this.toggleCollapse(sd.id);
+              });
+              shapeEl.appendChild(toggle);
+              this.flowchartContent.appendChild(shapeEl);
+              sd.element = shapeEl;
+          } else {
+              if (sd.element.firstChild.nodeType === Node.TEXT_NODE) {
+                  sd.element.firstChild.nodeValue = sd.text;
+              } else {
+                  sd.element.insertBefore(document.createTextNode(sd.text), sd.element.firstChild);
+              }
+          }
+      });
+
+      this.updateConnectionPoints();
+      this.redrawConnections();
+      this.updateCanvasSize();
+    }
+
+    createShape(text, index, total, savedPos, savedStyle) {
+      const id = this.nextShapeId++;
+      const shape = document.createElement('div');
+      shape.className = 'shape';
+      shape.textContent = text;
+      shape.dataset.index = id;
+
+      let x,y,w,h;
+      if (savedPos) { x = savedPos.x; y = savedPos.y; w = savedPos.width; h = savedPos.height; }
+      else { x = 100; y = 100 + (index * 80); w = 120; h = 40; }
+
+      shape.style.left = x + 'px';
+      shape.style.top = y + 'px';
+      shape.style.width = w + 'px';
+      shape.style.height = h + 'px';
+
+      const style = savedStyle || {};
+      if (style.backgroundColor) shape.style.background = style.backgroundColor;
+      if (style.borderColor) shape.style.borderColor = style.borderColor;
+      if (style.color) shape.style.color = style.color;
+      if (style.borderRadius) shape.style.borderRadius = style.borderRadius;
+
+      // group metadata
+      const sd = { id: id, element: shape, text: text, x: x, y: y, width: w, height: h, style: style, parent: (savedPos && savedPos.parent !== undefined) ? savedPos.parent : null, children: [], collapsed: (savedPos && savedPos.collapsed) ? true : false, origWidth: w, origHeight: h, expandedWidth: (savedPos && savedPos.expandedWidth !== undefined) ? savedPos.expandedWidth : w, expandedHeight: (savedPos && savedPos.expandedHeight !== undefined) ? savedPos.expandedHeight : h, localX: (savedPos && savedPos.localX !== undefined) ? savedPos.localX : undefined, localY: (savedPos && savedPos.localY !== undefined) ? savedPos.localY : undefined };
+
+      // add collapse toggle button (right-top) - initially hidden; only shown when shape has children
+      const toggle = document.createElement('div');
+      toggle.className = 'group-toggle';
+      toggle.title = '折りたたみ/展開';
+      toggle.textContent = sd.collapsed ? '▸' : '▾';
+      toggle.style.display = 'none'; // hide until there are actual children
+      toggle.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        this.toggleCollapse(parseInt(shape.dataset.index));
+      });
+      shape.appendChild(toggle);
+
+      this.flowchartContent.appendChild(shape);
+      this.shapes.set(id, sd);
+
+      // if shape had a saved parent, we'll wire parent -> children later in updateFlowchart
+
+      // update canvas size to ensure this new shape is visible
+      this.updateCanvasSize();
+    }
+
+    updateConnectionPoints() {
+      this.flowchartContent.querySelectorAll('.connection-point').forEach(p => p.remove());
+      if (this.currentMode === 'connect') {
+        this.shapes.forEach(sd => this.addConnectionPoints(sd.element));
+      }
+    }
+
+    addConnectionPoints(shape) {
+      ['top','bottom','left','right'].forEach(pos => {
+        const pt = document.createElement('div');
+        pt.className = `connection-point ${pos}`;
+        pt.dataset.position = pos;
+        shape.appendChild(pt);
+      });
+    }
+
+    selectShape(shape) {
+      this.clearSelection();
+      this.selectedShape = shape;
+      shape.classList.add('selected');
+      if (this.currentMode === 'select') { this.addResizeHandles(shape); this.showShapeStyleMenu(shape); }
+    }
+
+    selectConnection(connection) {
+      this.clearSelection();
+      this.selectedConnection = connection;
+      connection.classList.add('selected');
+      this.showConnectionStyleMenu(connection);
+    }
+
+    clearSelection() {
+      if (this.selectedShape) { this.selectedShape.classList.remove('selected'); this.removeHandles(); this.selectedShape = null; }
+      if (this.selectedConnection) { this.selectedConnection.classList.remove('selected'); this.selectedConnection = null; }
+      this.hideStyleMenu();
+    }
+
+    addResizeHandles(shape) {
+      ['top-left','top','top-right','right','bottom-right','bottom','bottom-left','left'].forEach(pos => {
+        const h = document.createElement('div');
+        h.className = `resize-handle ${pos}`;
+        h.dataset.position = pos;
+        shape.appendChild(h);
+      });
+    }
+
+    removeHandles() {
+      if (this.selectedShape) {
+        this.selectedShape.querySelectorAll('.resize-handle').forEach(h => h.remove());
+      } else {
+        this.flowchartContent.querySelectorAll('.resize-handle').forEach(h => h.remove());
+      }
+    }
+
+    showShapeStyleMenu(shape) {
+      this.hideStyleMenu();
+      this.closePalette();
+
+      const rect = shape.getBoundingClientRect();
+      const menu = document.createElement('div');
+      menu.className = 'style-menu';
+      menu.innerHTML = `
+        <div class="style-item">
+          <div class="icon-btn" data-role="bg-icon" title="背景色" aria-label="背景色">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M14 7.5L19.5 13L13 19.5L7.5 14L14 7.5Z" fill="#fff" stroke="#666" stroke-width="1.2"></path><path d="M3 21H21" stroke="#666" stroke-width="1.2"></path></svg>
+          </div>
+          <div class="style-compact-label">背景</div>
+        </div>
+        <div class="style-item">
+          <div class="icon-btn" data-role="border-icon" title="枠線色" aria-label="枠線色">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="4" y="4" width="16" height="16" stroke="#666" stroke-width="1.2" fill="none"></rect></svg>
+          </div>
+          <div class="style-compact-label">枠線</div>
+        </div>
+        <div class="style-item">
+          <div class="icon-btn" data-role="text-icon" title="文字色" aria-label="文字色">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 20L10 4L16 20" stroke="#666" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path><path d="M6 16H14" stroke="#666" stroke-width="1.6" stroke-linecap="round"></path></svg>
+          </div>
+          <div class="style-compact-label">文字</div>
+        </div>
+        <div class="style-item">
+          <select class="shape-type-select" data-role="shape-type" title="形状">
+            <option value="12px">角丸</option>
+            <option value="0px">角ばり</option>
+            <option value="50%">円形</option>
+          </select>
+        </div>
+      `;
+
+      document.body.appendChild(menu);
+
+      this._positionWithinCanvas(menu, {
+        preferredLeft: rect.left,
+        preferredTop: rect.top - 44
+      });
+
+      this.styleMenu = menu;
+
+      const index = parseInt(shape.dataset.index);
+      const shapeData = this.shapes.get(index);
+      const style = (shapeData && shapeData.style) || {};
+
+      const bgIcon = menu.querySelector('[data-role="bg-icon"]');
+      const borderIcon = menu.querySelector('[data-role="border-icon"]');
+      const textIcon = menu.querySelector('[data-role="text-icon"]');
+      const shapeTypeSelect = menu.querySelector('[data-role="shape-type"]');
+
+      const computed = getComputedStyle(shape);
+      const currentBg = style.backgroundColor || computed.background || computed.backgroundColor || '#29b6f6';
+      const currentBorder = style.borderColor || computed.borderColor || '#0288d1';
+      const currentText = style.color || computed.color || '#ffffff';
+      bgIcon.dataset.current = currentBg; borderIcon.dataset.current = currentBorder; textIcon.dataset.current = currentText;
+
+      this._setIconColorSwatch(bgIcon, currentBg);
+      this._setIconColorSwatch(borderIcon, currentBorder);
+      this._setIconColorSwatch(textIcon, currentText);
+
+      if (style.borderRadius) shapeTypeSelect.value = style.borderRadius;
+
+      bgIcon.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        this.togglePalette(bgIcon, (color) => {
+          shape.style.background = color;
+          if (shapeData) shapeData.style.backgroundColor = color;
+          bgIcon.dataset.current = color;
+          this._setIconColorSwatch(bgIcon, color);
+        });
+      });
+
+      borderIcon.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        this.togglePalette(borderIcon, (color) => {
+          shape.style.borderColor = color;
+          if (shapeData) shapeData.style.borderColor = color;
+          borderIcon.dataset.current = color;
+          this._setIconColorSwatch(borderIcon, color);
+        });
+      });
+
+      textIcon.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        this.togglePalette(textIcon, (color) => {
+          shape.style.color = color;
+          if (shapeData) shapeData.style.color = color;
+          textIcon.dataset.current = color;
+          this._setIconColorSwatch(textIcon, color);
+        });
+      });
+
+      shapeTypeSelect.addEventListener('change', (ev) => {
+        const val = ev.target.value;
+        shape.style.borderRadius = val;
+        if (shapeData) shapeData.style.borderRadius = val;
+      });
+    }
+
+    _setIconColorSwatch(iconBtn, color) {
+      const existing = iconBtn.querySelector('.color-icon');
+      if (existing) existing.remove();
+      const sw = document.createElement('div');
+      sw.className = 'color-icon';
+      sw.style.background = color;
+      sw.style.boxSizing = 'border-box';
+      iconBtn.appendChild(sw);
+    }
+
+    togglePalette(targetIcon, applyCallback) {
+      if (this.openPalette && this.openPalette.target === targetIcon) {
+        this.closePalette();
+        return;
+      } else if (this.openPalette) {
+        this.closePalette();
+      }
+
+      const palette = document.createElement('div');
+      palette.className = 'color-palette';
+      PALETTE_COLORS.forEach(c => {
+        const sw = document.createElement('div');
+        sw.className = 'swatch';
+        sw.style.background = c;
+        sw.dataset.color = c;
+        sw.title = c;
+        sw.addEventListener('click', (e) => {
+          e.stopPropagation();
+          applyCallback(c);
+          this.closePalette();
+        });
+        palette.appendChild(sw);
+      });
+
+      document.body.appendChild(palette);
+      const iconRect = targetIcon.getBoundingClientRect();
+      const preferredLeft = iconRect.left;
+      const preferredTop = iconRect.bottom + 6;
+      this._positionWithinCanvas(palette, { preferredLeft, preferredTop });
+
+      this.openPalette = { el: palette, target: targetIcon };
+    }
+
+    closePalette() {
+      if (this.openPalette) {
+        this.openPalette.el.remove();
+        this.openPalette = null;
+      }
+    }
+
+    hideStyleMenu() {
+      if (this.styleMenu) { this.styleMenu.remove(); this.styleMenu = null; }
+      this.closePalette();
+    }
+
+    _positionWithinCanvas(element, { preferredLeft = 8, preferredTop = 8 } = {}) {
+      const canvasRect = this.canvasContainer.getBoundingClientRect();
+      element.style.visibility = 'hidden';
+      element.style.left = preferredLeft + 'px';
+      element.style.top = preferredTop + 'px';
+      const rect = element.getBoundingClientRect();
+      const elW = rect.width;
+      const elH = rect.height;
+      const margin = 8;
+      let left = preferredLeft;
+      let top = preferredTop;
+      if (left + elW > canvasRect.right - margin) left = canvasRect.right - elW - margin;
+      if (left < canvasRect.left + margin) left = canvasRect.left + margin;
+      if (top + elH > canvasRect.bottom - margin) top = canvasRect.bottom - elH - margin;
+      if (top < canvasRect.top + margin) top = canvasRect.top + margin;
+      element.style.left = left + 'px';
+      element.style.top = top + 'px';
+      element.style.visibility = 'visible';
+    }
+
+    showConnectionStyleMenu(connection) {
+      this.hideStyleMenu();
+      this.closePalette();
+
+      const connData = this.connections.find(c => c.element === connection);
+      if (!connData) return;
+
+      const path = connection.querySelector('path');
+      if (!path) return;
+      const pathLength = path.getTotalLength();
+      const mid = path.getPointAtLength(pathLength / 2);
+      const contentRect = this.flowchartContent.getBoundingClientRect();
+      const centerX = contentRect.left + mid.x;
+      const centerY = contentRect.top + mid.y;
+
+      const menu = document.createElement('div');
+      menu.className = 'style-menu line-menu';
+      menu.style.visibility = 'hidden';
+      menu.innerHTML = `
+        <div class="style-item">
+          <div class="icon-btn" data-role="line-color-icon" title="線色" aria-label="線色">
+            <svg width="20" height="12" viewBox="0 0 24 8" fill="none"><path d="M2 6L22 2" stroke="#666" stroke-width="2" stroke-linecap="round"></path></svg>
+          </div>
+        </div>
+        <div class="style-item">
+          <input class="label-input" data-role="line-label" placeholder="ラベル">
+        </div>
+        <div class="style-item">
+          <select class="shape-type-select" data-role="line-style" title="線種">
+            <option value="solid">実線</option>
+            <option value="dashed">破線</option>
+            <option value="dotted">点線</option>
+          </select>
+        </div>
+        <div class="style-item">
+          <select class="shape-type-select" data-role="line-arrow" title="矢印">
+            <option value="end">矢印（終端）</option>
+            <option value="none">矢印なし</option>
+            <option value="both">両端に矢印</option>
+          </select>
+        </div>
+        <div class="style-item">
+          <div class="delete-btn" data-role="delete-line" title="線を削除">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M3 6h18" stroke="#f44336" stroke-width="2" stroke-linecap="round"/><path d="M8 6v14c0 .6.4 1 1 1h6c.6 0 1-.4 1-1V6" stroke="#f44336" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(menu);
+
+      const menuRect = menu.getBoundingClientRect();
+      const menuW = menuRect.width;
+      const menuH = menuRect.height;
+      const margin = 8;
+
+      let pathBBox;
+      try {
+        pathBBox = path.getBBox();
+      } catch (err) {
+        const b = connection.getBoundingClientRect();
+        pathBBox = { x: b.left - contentRect.left, y: b.top - contentRect.top, width: b.width, height: b.height };
+      }
+      const bboxViewport = {
+        left: contentRect.left + pathBBox.x,
+        top: contentRect.top + pathBBox.y,
+        right: contentRect.left + pathBBox.x + pathBBox.width,
+        bottom: contentRect.top + pathBBox.y + pathBBox.height
+      };
+
+      const up = {
+        left: centerX - (menuW / 2),
+        top: centerY - menuH - margin
+      };
+      const right = {
+        left: centerX + margin,
+        top: centerY - (menuH / 2)
+      };
+
+      const upRect = { left: up.left, top: up.top, right: up.left + menuW, bottom: up.top + menuH };
+      const rightRect = { left: right.left, top: right.top, right: right.left + menuW, bottom: right.top + menuH };
+
+      const intersects = (r1, r2) => !(r1.left >= r2.right || r1.right <= r2.left || r1.top >= r2.bottom || r1.bottom <= r2.top);
+
+      let chosenRect = null;
+      if (!intersects(upRect, bboxViewport)) chosenRect = upRect;
+      else if (!intersects(rightRect, bboxViewport)) chosenRect = rightRect;
+      else {
+        const above = {
+          left: bboxViewport.left + Math.max(0, (bboxViewport.right - bboxViewport.left - menuW)/2),
+          top: bboxViewport.top - menuH - margin
+        };
+        chosenRect = { left: Math.max(8, above.left), top: Math.max(8, above.top), right: above.left + menuW, bottom: above.top + menuH };
+      }
+
+      const canvasRect = this.canvasContainer.getBoundingClientRect();
+      let finalLeft = chosenRect.left;
+      let finalTop = chosenRect.top;
+      if (finalLeft + menuW > canvasRect.right - margin) finalLeft = canvasRect.right - menuW - margin;
+      if (finalLeft < canvasRect.left + margin) finalLeft = canvasRect.left + margin;
+      if (finalTop + menuH > canvasRect.bottom - margin) finalTop = canvasRect.bottom - menuH - margin;
+      if (finalTop < canvasRect.top + margin) finalTop = canvasRect.top + margin;
+
+      menu.style.left = finalLeft + 'px';
+      menu.style.top = finalTop + 'px';
+      menu.style.visibility = 'visible';
+
+      this.styleMenu = menu;
+
+      const lineColorIcon = menu.querySelector('[data-role="line-color-icon"]');
+      const lineLabelInput = menu.querySelector('[data-role="line-label"]');
+      const lineStyleSelect = menu.querySelector('[data-role="line-style"]');
+      const lineArrowSelect = menu.querySelector('[data-role="line-arrow"]');
+      const deleteBtn = menu.querySelector('[data-role="delete-line"]');
+
+      lineLabelInput.value = connData.label || '';
+      lineStyleSelect.value = connData.strokeStyle || 'solid';
+      lineArrowSelect.value = connData.arrow || 'end';
+      this._setIconColorSwatch(lineColorIcon, connData.color || '#666666');
+
+      lineColorIcon.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        this.togglePalette(lineColorIcon, (color) => {
+          connData.color = color;
+          const pathEl = connection.querySelector('path');
+          if (pathEl) {
+            pathEl.style.stroke = color;
+            this._updateArrowsForConnection(connData);
+            this.updateConnectionLabel(connection, connData.label);
+          }
+          this._setIconColorSwatch(lineColorIcon, color);
+        });
+      });
+
+
+      lineLabelInput.addEventListener('input', (e) => {
+        connData.label = e.target.value;
+        this.updateConnectionLabel(connection, connData.label);
+      });
+
+      lineStyleSelect.addEventListener('change', (e) => {
+        connData.strokeStyle = e.target.value;
+        const pathEl = connection.querySelector('path');
+        if (pathEl) {
+          if (e.target.value === 'dashed') pathEl.setAttribute('stroke-dasharray','5,5');
+          else if (e.target.value === 'dotted') pathEl.setAttribute('stroke-dasharray','2,3');
+          else pathEl.removeAttribute('stroke-dasharray');
+        }
+      });
+
+      lineArrowSelect.addEventListener('change', (e) => {
+        connData.arrow = e.target.value;
+        this._updateArrowsForConnection(connData);
+      });
+
+      deleteBtn.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        this._removeArrowsForConnection(connData);
+        if (connData.element && connData.element.parentNode) connData.element.parentNode.removeChild(connData.element);
+        this.connections = this.connections.filter(c => c !== connData);
+        this.hideStyleMenu();
+      });
+    }
+
+    _removeArrowsForConnection(conn) {
+      if (!conn || !conn.element) return;
+      const svg = conn.element; // いまや conn.element 自体が SVG
+      const start = svg.querySelector('.arrow-start');
+      const end = svg.querySelector('.arrow-end');
+      if (start) start.remove();
+      if (end) end.remove();
+    }
+
+    _updateArrowsForConnection(conn) {
+      // 既存矢印を削除
+      this._removeArrowsForConnection(conn);
+      if (!conn || !conn.element) return;
+      const svg = conn.element; // conn.element は小さな SVG
+      const path = svg.querySelector('path');
+      if (!path) return;
+      if (!conn.arrow || conn.arrow === 'none') return;
+
+      let len;
+      try { len = path.getTotalLength(); } catch(e) { return; }
+      if (len === 0) return;
+
+      const arrowOffset = 12;
+      const smallStep = Math.min(1, len / 100);
+
+      const angleRad = (dx,dy) => Math.atan2(dy,dx);
+      const angleDeg = (dx,dy) => angleRad(dx,dy) * 180 / Math.PI;
+
+      const makeArrowPolygon = (cls, x, y, rotationDeg, color) => {
+        const poly = document.createElementNS('http://www.w3.org/2000/svg','polygon');
+        poly.setAttribute('points', '0 -6, 12 0, 0 6'); // 右向き三角を基準
+        poly.setAttribute('class', cls);
+        poly.setAttribute('transform', `translate(${x},${y}) rotate(${rotationDeg})`);
+        poly.setAttribute('fill', color || '#666');
+        poly.style.fill = (color || '#666');
+        poly.style.stroke = (color || '#666');
+        poly.setAttribute('stroke-width','0');
+        // ここを stroke にして、矢印の“塗り”領域がクリックを奪わないようにする（要件）
+        poly.style.pointerEvents = 'stroke';
+        poly.style.vectorEffect = 'non-scaling-stroke';
+        return poly;
+      };
+
+      // 端に収まるようにオフセットした位置を計算
+      const endPosLen = Math.max(0, len - arrowOffset);
+      const endPos = path.getPointAtLength(endPosLen);
+      const beforeEndPos = path.getPointAtLength(Math.max(0, endPosLen - smallStep));
+      const dxE = endPos.x - beforeEndPos.x;
+      const dyE = endPos.y - beforeEndPos.y;
+      const rotE = angleDeg(dxE,dyE);
+      const endArrow = makeArrowPolygon('arrow-end', endPos.x, endPos.y, rotE, conn.color || '#666');
+      svg.appendChild(endArrow);
+
+      // 両端矢印の場合は start 側も（向きを補正して追加）
+      if (conn.arrow === 'both') {
+        const startPosLen = Math.min(len, arrowOffset);
+        const startPos = path.getPointAtLength(startPosLen);
+        const afterStartPos = path.getPointAtLength(Math.min(len, startPosLen + smallStep));
+        const dxS = afterStartPos.x - startPos.x;
+        const dyS = afterStartPos.y - startPos.y;
+        let rotS = angleDeg(dxS,dyS);
+        rotS = rotS + 180; // 反対向きに回転
+        const startArrow = makeArrowPolygon('arrow-start', startPos.x, startPos.y, rotS, conn.color || '#666');
+        svg.appendChild(startArrow);
+      }
+
+      // path の見た目を inline style で確定
+      path.style.stroke = (conn.color || '#666');
+      if (conn.strokeStyle === 'dashed') path.style.strokeDasharray = '5,5';
+      else if (conn.strokeStyle === 'dotted') path.style.strokeDasharray = '2,3';
+      else path.style.strokeDasharray = '';
+
+      // ラベル（あれば色更新）
+      const textElement = svg.querySelector('text');
+      if (textElement) {
+        textElement.style.fill = (conn.color || '#333');
+      }
+    }
+
+    updateConnectionLabel(connection, label) {
+      // connection: SVG element (conn.element)
+      if (!connection) return;
+      // conn データを見つけて色情報を取り出す
+      const connData = this.connections.find(c => c.element === connection);
+      const color = (connData && connData.color) ? connData.color : '#333';
+
+      // path は SVG 内に存在するはず（ローカル座標系）
+      const path = connection.querySelector('path');
+      if (!path) {
+        // nothing to place the label on
+        return;
+      }
+
+      // label が無ければ既存の text を削除して終わる
+      if (!label) {
+        const prev = connection.querySelector('text');
+        if (prev) prev.remove();
+        return;
+      }
+
+      const pathLength = path.getTotalLength();
+      const midPoint = path.getPointAtLength(pathLength / 2);
+
+      // path の接線に垂直な単位法線ベクトルを作る
+      const startPt = path.getPointAtLength(0);
+      const endPt = path.getPointAtLength(pathLength);
+      const dx = endPt.x - startPt.x;
+      const dy = endPt.y - startPt.y;
+      const len = Math.hypot(dx, dy) || 1;
+      const nx = -dy / len;
+      const ny = dx / len;
+
+      const offset = 12;
+      const labelX = midPoint.x + nx * offset;
+      const labelY = midPoint.y + ny * offset;
+
+      // create or reuse text element directly under the SVG (not nested in another innerSvg)
+      let textElement = connection.querySelector('text');
+      if (!textElement) {
+        textElement = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        textElement.setAttribute('font-size', '12px');
+        textElement.setAttribute('text-anchor', 'middle');
+        // dominantBaseline 'central' for vertical centering
+        textElement.setAttribute('dominant-baseline', 'central');
+        // prevent label from capturing pointer events (shouldn't block clicks)
+        textElement.style.pointerEvents = 'none';
+        connection.appendChild(textElement);
+      }
+
+      textElement.textContent = label;
+      textElement.setAttribute('x', String(labelX));
+      textElement.setAttribute('y', String(labelY));
+      // 色・ストロークを inline で設定（可読性のため白い縁取り）
+      textElement.style.fill = color;
+      textElement.setAttribute('stroke', 'white');
+      textElement.setAttribute('stroke-width', '0.6');
+      textElement.setAttribute('paint-order', 'stroke'); // stroke を後に描くことで縁取りを確実に
+    }
+
+    rgbToHex(rgb) {
+      if (!rgb) return '#000000';
+      if (rgb.startsWith('#')) return rgb;
+      const r = rgb.match(/\d+/g);
+      if (r && r.length >= 3) return '#' + parseInt(r[0]).toString(16).padStart(2,'0') + parseInt(r[1]).toString(16).padStart(2,'0') + parseInt(r[2]).toString(16).padStart(2,'0');
+      return '#000000';
+    }
+
+    isLineClicked(e, connectionLine) {
+      const rect = connectionLine.getBoundingClientRect();
+      const path = connectionLine.querySelector('path');
+      if (!path) return false;
+      const ptX = e.clientX - rect.left;
+      const ptY = e.clientY - rect.top;
+      const pathLength = path.getTotalLength();
+      let minDistance = Infinity;
+      for (let i=0;i<=pathLength;i+=3) {
+        const p = path.getPointAtLength(i);
+        const d = Math.hypot(ptX - p.x, ptY - p.y);
+        minDistance = Math.min(minDistance, d);
+      }
+      return minDistance <= this.lineClickThreshold;
+    }
+
+    handleClick(e) {
+      const shape = e.target.closest('.shape');
+      const connectionPoint = e.target.closest('.connection-point');
+      const resizeHandle = e.target.closest('.resize-handle');
+      const styleMenu = e.target.closest('.style-menu');
+      const toolbar = e.target.closest('.toolbar');
+
+      if (styleMenu || toolbar) {
+        return;
+      }
+
+      if (connectionPoint && this.currentMode === 'connect') {
+        e.stopPropagation();
+        this.handleConnectionPoint(connectionPoint);
+        return;
+      }
+
+      if (resizeHandle) {
+        e.stopPropagation();
+        return;
+      }
+
+      if (this.currentMode === 'select') {
+        const connectionLines = this.flowchartContent.querySelectorAll('.connection-line');
+        for (const connectionLine of connectionLines) {
+          if (this.isLineClicked(e, connectionLine)) {
+            e.stopPropagation();
+            this.selectConnection(connectionLine);
+            return;
+          }
+        }
+      }
+
+      if (shape && this.currentMode === 'select') {
+        e.stopPropagation();
+        if (this.selectedShape !== shape) this.selectShape(shape);
+        return;
+      }
+
+      this.clearSelection();
+    }
+
+    handleConnectionPoint(point) {
+      const shape = point.closest('.shape');
+      const position = point.dataset.position;
+      if (!this.connectStart) {
+        this.connectStart = { shape, position, point };
+        point.style.background = '#ff4081';
+        this.isConnecting = true;
+      } else {
+        if (this.connectStart.shape !== shape) this.createConnection(this.connectStart, { shape, position, point });
+        this.connectStart.point.style.background = '#ff4081';
+        this.connectStart = null;
+        this.isConnecting = false;
+      }
+    }
+
+    createConnection(start, end) {
+      const conn = {
+        id: Date.now(),
+        start: { shapeId: parseInt(start.shape.dataset.index), position: start.position },
+        end: { shapeId: parseInt(end.shape.dataset.index), position: end.position },
+        label: '', color: '#666666', strokeStyle: 'solid', arrow: 'end', element: null
+      };
+      this.connections.push(conn);
+      this.redrawConnections();
+    }
+
+    redrawConnections() {
+      // 既存の DOM を全部消す
+      this.flowchartContent.querySelectorAll('.connection-line').forEach(e => e.remove());
+
+      // 再作成してから、接続オブジェクトの内部フラグや端点の可視性を見て表示/非表示を決める
+      this.connections.forEach(c => {
+        // drawConnection 内で c.element を設定する
+        this.drawConnection(c);
+
+        // 生成直後に表示判定を行う
+        if (c.element) {
+          // もし「どの親によって隠されているか」の情報が残っていれば優先的に隠す
+          const hiddenSet = c._hiddenParents;
+          if (hiddenSet && hiddenSet.size > 0) {
+            c.element.style.display = 'none';
+          } else {
+            // そうでなければ端点（図形）の表示状況に基づいて表示/非表示を決定
+            const startShape = this.shapes.get(c.start.shapeId);
+            const endShape = this.shapes.get(c.end.shapeId);
+            const startVisible = startShape && startShape.element && startShape.element.style.display !== 'none';
+            const endVisible = endShape && endShape.element && endShape.element.style.display !== 'none';
+            // 表示条件は任意ですが、ここでは「どちらかの端点が見えていれば線を表示する」挙動にしています
+            if (startVisible || endVisible) c.element.style.display = '';
+            else c.element.style.display = 'none';
+          }
+        }
+      });
+    }
+
+    drawConnection(connection) {
+      const startShape = this.shapes.get(connection.start.shapeId);
+      const endShape = this.shapes.get(connection.end.shapeId);
+      if (!startShape || !endShape) return;
+      const startPoint = this.getConnectionPoint(startShape, connection.start.position);
+      const endPoint = this.getConnectionPoint(endShape, connection.end.position);
+
+      // 最小境界を計算（余白 padding を足す）
+      const pad = 16; // 必要に応じて調整（矢印やクリック許容のための余白）
+      const minX = Math.min(startPoint.x, endPoint.x);
+      const minY = Math.min(startPoint.y, endPoint.y);
+      const maxX = Math.max(startPoint.x, endPoint.x);
+      const maxY = Math.max(startPoint.y, endPoint.y);
+
+      const svgLeft = minX - pad;
+      const svgTop = minY - pad;
+      const svgW = Math.max(4, (maxX - minX) + pad * 2);
+      const svgH = Math.max(4, (maxY - minY) + pad * 2);
+
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.classList.add('connection-line');
+      svg.style.position = 'absolute';
+      svg.style.left = svgLeft + 'px';
+      svg.style.top = svgTop + 'px';
+      svg.style.width = svgW + 'px';
+      svg.style.height = svgH + 'px';
+      svg.setAttribute('viewBox', `0 0 ${svgW} ${svgH}`);
+      svg.style.overflow = 'visible';
+
+      // z-index 計算は元ロジックを踏襲
+      let computedZ = 1;
+      try {
+        let maxParentZ = 0;
+        const startParentIdx = (startShape && startShape.parent !== undefined && startShape.parent !== null) ? startShape.parent : null;
+        const endParentIdx = (endShape && endShape.parent !== undefined && endShape.parent !== null) ? endShape.parent : null;
+        if (startParentIdx !== null) {
+          const sp = this.shapes.get(startParentIdx);
+          if (sp && sp.element) maxParentZ = Math.max(maxParentZ, parseInt(sp.element.style.zIndex) || 10);
+        }
+        if (endParentIdx !== null) {
+          const ep = this.shapes.get(endParentIdx);
+          if (ep && ep.element) maxParentZ = Math.max(maxParentZ, parseInt(ep.element.style.zIndex) || 10);
+        }
+        if (maxParentZ > 0) computedZ = maxParentZ + 2;
+      } catch (err) {
+        computedZ = 1;
+      }
+      svg.style.zIndex = String(computedZ);
+      svg.style.display = '';
+
+      // path をローカル座標（svg 内）に変換して描画
+      const sX = startPoint.x - svgLeft;
+      const sY = startPoint.y - svgTop;
+      const eX = endPoint.x - svgLeft;
+      const eY = endPoint.y - svgTop;
+
+      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      const d = `M ${sX} ${sY} L ${eX} ${eY}`;
+      path.setAttribute('d', d);
+      path.setAttribute('fill', 'none');
+      path.style.stroke = (connection.color || '#666');
+      path.style.strokeWidth = '2';
+      path.style.vectorEffect = 'non-scaling-stroke';
+      path.style.strokeLinecap = 'round';
+      if (connection.strokeStyle === 'dashed') path.style.strokeDasharray = '5,5';
+      else if (connection.strokeStyle === 'dotted') path.style.strokeDasharray = '2,3';
+      else path.style.strokeDasharray = '';
+      // 重要: パスの透明領域がポインターイベントを奪わないようにする
+      path.style.pointerEvents = 'stroke';
+
+      svg.appendChild(path);
+      this.flowchartContent.appendChild(svg);
+
+      connection.element = svg;
+
+      // 矢印 polygon の生成／位置調整（内部ロジックは下の _updateArrowsForConnection 側で svg を直接扱う）
+      this._updateArrowsForConnection(connection);
+
+      if (connection.label) this.updateConnectionLabel(svg, connection.label);
+    }
+
+    getConnectionPoint(shapeData, position) {
+      const x = shapeData.x;
+      const y = shapeData.y;
+      const w = shapeData.width;
+      const h = shapeData.height;
+      switch(position) {
+        case 'top': return { x: x + w/2, y: y };
+        case 'bottom': return { x: x + w/2, y: y + h };
+        case 'left': return { x: x, y: y + h/2 };
+        case 'right': return { x: x + w, y: y + h/2 };
+      }
+    }
+
+    updateConnectionsForShape(shapeId) {
+      for (const conn of this.connections) {
+        if (conn.start.shapeId === shapeId || conn.end.shapeId === shapeId) {
+          const svg = conn.element;
+          if (!svg) continue;
+          const startShape = this.shapes.get(conn.start.shapeId);
+          const endShape = this.shapes.get(conn.end.shapeId);
+          if (!startShape || !endShape) continue;
+
+          // content 座標での接続点を取得
+          const startPoint = this.getConnectionPoint(startShape, conn.start.position);
+          const endPoint = this.getConnectionPoint(endShape, conn.end.position);
+
+          // 新しい最小境界（padding を含む）を再計算
+          const pad = 16;
+          const minX = Math.min(startPoint.x, endPoint.x);
+          const minY = Math.min(startPoint.y, endPoint.y);
+          const maxX = Math.max(startPoint.x, endPoint.x);
+          const maxY = Math.max(startPoint.y, endPoint.y);
+
+          const newLeft = minX - pad;
+          const newTop  = minY - pad;
+          const newW = Math.max(4, (maxX - minX) + pad * 2);
+          const newH = Math.max(4, (maxY - minY) + pad * 2);
+
+          // 更新: SVG の位置とサイズ（ピクセル）と viewBox を合わせる
+          svg.style.left = newLeft + 'px';
+          svg.style.top  = newTop + 'px';
+          svg.style.width = newW + 'px';
+          svg.style.height = newH + 'px';
+          svg.setAttribute('viewBox', `0 0 ${newW} ${newH}`);
+
+          // path は SVG のローカル座標に変換して再設定
+          const path = svg.querySelector('path');
+          if (!path) continue;
+          const localSX = startPoint.x - newLeft;
+          const localSY = startPoint.y - newTop;
+          const localEX = endPoint.x - newLeft;
+          const localEY = endPoint.y - newTop;
+          const d = `M ${localSX} ${localSY} L ${localEX} ${localEY}`;
+          path.setAttribute('d', d);
+
+          // style は inline で上書き（色・線種）
+          path.style.stroke = (conn.color || '#666');
+          if (conn.strokeStyle === 'dashed') path.style.strokeDasharray = '5,5';
+          else if (conn.strokeStyle === 'dotted') path.style.strokeDasharray = '2,3';
+          else path.style.strokeDasharray = '';
+
+          // 矢印とラベルの更新（これらは SVG ローカル座標を前提）
+          this._updateArrowsForConnection(conn);
+
+          // ラベル（あれば）を再配置・色更新
+          if (conn.label) this.updateConnectionLabel(svg, conn.label);
+          else {
+            // ラベルがない場合、既存の text 要素を削除する
+            const existingText = svg.querySelector('text');
+            if (existingText) existingText.remove();
+          }
+        }
+      }
+    }
+
+    // === 新機能: キャンバス自動リサイズ / シフト ===
+    updateCanvasSize() {
+      // compute bounding box of all shapes (in content coordinates)
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      this.shapes.forEach(sd => {
+        minX = Math.min(minX, sd.x);
+        minY = Math.min(minY, sd.y);
+        maxX = Math.max(maxX, sd.x + sd.width);
+        maxY = Math.max(maxY, sd.y + sd.height);
+      });
+
+      if (minX === Infinity) {
+        // no shapes, ensure minimum equals container size
+        const cw = this.canvasContainer.clientWidth;
+        const ch = this.canvasContainer.clientHeight;
+        this.flowchartContent.style.width = Math.max(cw, 800) + 'px';
+        this.flowchartContent.style.height = Math.max(ch, 600) + 'px';
+        return;
+      }
+
+      const margin = this.canvasMargin;
+
+      // if there are negative / out-of-bounds shapes on top/left, shift all shapes so minX/minY >= margin
+      let shiftX = 0, shiftY = 0;
+      if (minX < margin) shiftX = (margin - minX);
+      if (minY < margin) shiftY = (margin - minY);
+
+      if (shiftX !== 0 || shiftY !== 0) {
+        // adjust scroll to keep viewport roughly in same visual place
+        const prevScrollLeft = this.canvasContainer.scrollLeft;
+        const prevScrollTop = this.canvasContainer.scrollTop;
+
+        this.shapes.forEach(sd => {
+          sd.x += shiftX; sd.y += shiftY;
+          sd.element.style.left = sd.x + 'px';
+          sd.element.style.top = sd.y + 'px';
+        });
+
+        // adjust existing connection paths to new coordinates
+        this.redrawConnections();
+
+        // compensate scroll so content doesn't appear to jump
+        this.canvasContainer.scrollLeft = prevScrollLeft + shiftX;
+        this.canvasContainer.scrollTop = prevScrollTop + shiftY;
+
+        minX += shiftX; minY += shiftY; maxX += shiftX; maxY += shiftY;
+      }
+
+      // ensure canvas is at least as large as the visible container area
+      const containerW = this.canvasContainer.clientWidth;
+      const containerH = this.canvasContainer.clientHeight;
+
+      const desiredWidth = Math.max(maxX + margin, containerW);
+      const desiredHeight = Math.max(maxY + margin, containerH);
+
+      this.flowchartContent.style.width = Math.ceil(desiredWidth) + 'px';
+      this.flowchartContent.style.height = Math.ceil(desiredHeight) + 'px';
+    }
+
+    handleMouseDown(e) {
+      if (this.currentMode === 'pan') {
+        if (!e.target.closest('.shape') && !e.target.closest('.toolbar') && !e.target.closest('.style-menu') && !e.target.closest('.resize-handle') && !e.target.closest('.connection-point')) {
+          this.isPanning = true;
+          this.canvasContainer.classList.add('panning');
+          this.startMousePos = { x: e.clientX, y: e.clientY };
+          this.startPanOffset = { x: this.canvasContainer.scrollLeft, y: this.canvasContainer.scrollTop };
+          e.preventDefault();
+          return;
+        }
+      }
+
+      if (this.currentMode !== 'select') {
+        if (this.currentMode === 'connect') {}
+        return;
+      }
+
+      const handle = e.target.closest('.resize-handle');
+      const shape = e.target.closest('.shape');
+
+      if (handle) {
+        e.preventDefault();
+        const parentShape = handle.closest('.shape');
+        if (parentShape && this.selectedShape !== parentShape) this.selectShape(parentShape);
+
+        this.isResizing = true;
+        this.resizeHandle = handle;
+        this.startMousePos = { x: e.clientX, y: e.clientY };
+        const rect = this.selectedShape.getBoundingClientRect();
+        const contentRect = this.flowchartContent.getBoundingClientRect();
+        this.startShapeSize = { width: rect.width, height: rect.height };
+        this.startShapePos = { x: rect.left - contentRect.left, y: rect.top - contentRect.top };
+      } else if (shape && !e.target.closest('.connection-point')) {
+        e.preventDefault();
+        if (this.selectedShape !== shape) this.selectShape(shape);
+        this.isDragging = true;
+        this.selectedShape.classList.add('dragging');
+        this.startMousePos = { x: e.clientX, y: e.clientY };
+        const rect = shape.getBoundingClientRect();
+        const contentRect = this.flowchartContent.getBoundingClientRect();
+        this.startShapePos = { x: rect.left - contentRect.left, y: rect.top - contentRect.top };
+      }
+    }
+
+    handleMouseMove(e) {
+      if (this.isPanning) {
+        const deltaX = e.clientX - this.startMousePos.x;
+        const deltaY = e.clientY - this.startMousePos.y;
+        this.canvasContainer.scrollLeft = this.startPanOffset.x - deltaX;
+        this.canvasContainer.scrollTop = this.startPanOffset.y - deltaY;
+        return;
+      }
+
+      if (this.isResizing && this.resizeHandle && this.selectedShape) {
+        e.preventDefault();
+        const deltaX = e.clientX - this.startMousePos.x;
+        const deltaY = e.clientY - this.startMousePos.y;
+        const position = this.resizeHandle.dataset.position;
+        let newW = this.startShapeSize.width, newH = this.startShapeSize.height, newL = this.startShapePos.x, newT = this.startShapePos.y;
+
+        switch(position) {
+          case 'bottom-right': newW = this.startShapeSize.width + deltaX; newH = this.startShapeSize.height + deltaY; break;
+          case 'bottom-left': newW = this.startShapeSize.width - deltaX; newH = this.startShapeSize.height + deltaY; newL = this.startShapePos.x + deltaX; break;
+          case 'top-right': newW = this.startShapeSize.width + deltaX; newH = this.startShapeSize.height - deltaY; newT = this.startShapePos.y + deltaY; break;
+          case 'top-left': newW = this.startShapeSize.width - deltaX; newH = this.startShapeSize.height - deltaY; newL = this.startShapePos.x + deltaX; newT = this.startShapePos.y + deltaY; break;
+          case 'top': newH = this.startShapeSize.height - deltaY; newT = this.startShapePos.y + deltaY; break;
+          case 'bottom': newH = this.startShapeSize.height + deltaY; break;
+          case 'left': newW = this.startShapeSize.width - deltaX; newL = this.startShapePos.x + deltaX; break;
+          case 'right': newW = this.startShapeSize.width + deltaX; break;
+        }
+
+        if (newW < this.minWidth) { const ex = this.minWidth - newW; if (position.includes('left')) newL -= ex; newW = this.minWidth; }
+        if (newH < this.minHeight) { const exh = this.minHeight - newH; if (position.includes('top')) newT -= exh; newH = this.minHeight; }
+
+        this.selectedShape.style.width = newW + 'px';
+        this.selectedShape.style.height = newH + 'px';
+        this.selectedShape.style.left = newL + 'px';
+        this.selectedShape.style.top = newT + 'px';
+
+        const idx = parseInt(this.selectedShape.dataset.index);
+        const sd = this.shapes.get(idx);
+        if (sd) { sd.width = newW; sd.height = newH; sd.x = newL; sd.y = newT; if (sd.children && sd.children.length>0 && !sd.collapsed) { sd.expandedWidth = newW; sd.expandedHeight = newH; } }
+
+        this.updateConnectionsForShape(idx);
+        return;
+      } else if (this.isDragging && this.selectedShape) {
+        e.preventDefault();
+        const deltaX = e.clientX - this.startMousePos.x;
+        const deltaY = e.clientY - this.startMousePos.y;
+        const newX = this.startShapePos.x + deltaX;
+        const newY = this.startShapePos.y + deltaY;
+        this.selectedShape.style.left = newX + 'px';
+        this.selectedShape.style.top = newY + 'px';
+        const idx = parseInt(this.selectedShape.dataset.index);
+        const sd = this.shapes.get(idx);
+        if (sd) {
+          // --- ドラッグで図形を動かす（親を持つ/持たないに関わらず子孫への差分伝播を行う） ---
+          const prevX = sd.x; const prevY = sd.y;
+          sd.x = newX; sd.y = newY;
+
+          // if this shape has a parent, update local coords relative to that parent
+          if (sd.parent !== null && sd.parent !== undefined) {
+            const p = this.shapes.get(sd.parent);
+            if (p) {
+              sd.localX = sd.x - p.x;
+              sd.localY = sd.y - p.y;
+            } else {
+              // 親情報が不正なら clear
+              sd.parent = null;
+              sd.localX = undefined; sd.localY = undefined;
+            }
+          }
+
+          // compute delta and apply to its element
+          const dx = sd.x - prevX;
+          const dy = sd.y - prevY;
+          sd.element.style.left = sd.x + 'px';
+          sd.element.style.top = sd.y + 'px';
+          this.updateConnectionsForShape(idx);
+
+          // if this shape has children, shift descendants by same delta (recurse)
+          if ((sd.children && sd.children.length > 0) && (dx !== 0 || dy !== 0)) {
+            this._shiftDescendants(idx, dx, dy);
+          }
+        }
+      }
+    }
+
+    handleMouseUp(e) {
+      if (this.isPanning) { this.isPanning = false; this.canvasContainer.classList.remove('panning'); }
+      if (this.isResizing || this.isDragging) this.redrawConnections();
+
+      // if a drag just finished, handle grouping/ungrouping by drop
+      if (this.isDragging && this.selectedShape) {
+        const idx = parseInt(this.selectedShape.dataset.index);
+        this.handleGroupingOnDrop(idx);
+      }
+
+      this.isResizing = false; this.isDragging = false; this.resizeHandle = null;
+      if (this.selectedShape) this.selectedShape.classList.remove('dragging');
+
+      // after drag/resize finished, ensure canvas size updated (expands if necessary)
+      this.updateCanvasSize();
+    }
+
+    // grouping / ungrouping on drop
+    handleGroupingOnDrop(childIndex) {
+      const child = this.shapes.get(childIndex);
+      if (!child) return;
+      // center point of child
+      const cx = child.x + child.width/2;
+      const cy = child.y + child.height/2;
+
+      // find topmost shape (excluding itself) that contains this center
+      let candidate = null;
+      this.shapes.forEach((sd, idx) => {
+        if (idx === childIndex) return;
+        if (this._pointInsideRect(cx, cy, sd.x, sd.y, sd.width, sd.height)) {
+          candidate = { sd, idx };
+        }
+      });
+
+      if (candidate) {
+        const parentIndex = candidate.idx;
+        // attempt to set parent
+        const ok = this.setParent(childIndex, parentIndex);
+        if (!ok) {
+          // cycle detected or invalid - pass
+          return;
+        }
+        // 自動横並びは「初回のグループ化時のみ」行う
+        const parentSd = this.shapes.get(parentIndex);
+        if (parentSd && !parentSd._autoArranged) {
+          // 初回配置（自動横並び）
+          this.arrangeChildrenInsideParent(parentIndex);
+          // フラグを立てて以後自動横並びをしない
+          parentSd._autoArranged = true;
+        }
+        this.redrawConnections();
+        this.updateCanvasSize();
+      } else {
+        // if previously had parent and dropped outside parent's bounds -> ungroup
+        if (child.parent !== null && child.parent !== undefined) {
+          const prevParentIndex = child.parent;
+          const parentSd = this.shapes.get(prevParentIndex);
+          if (!parentSd || !this._pointInsideRect(cx, cy, parentSd.x, parentSd.y, parentSd.width, parentSd.height)) {
+            this.removeParent(childIndex);
+            this.redrawConnections();
+            this.updateCanvasSize();
+          }
+        }
+      }
+    }
+
+    _pointInsideRect(px, py, rx, ry, rw, rh) {
+      return (px >= rx && px <= rx + rw && py >= ry && py <= ry + rh);
+    }
+
+    // === setParent: when changing parent, remove connections for the moved node AND all its descendants ===
+    setParent(childIndex, parentIndex) {
+      if (childIndex === parentIndex) return false;
+      // prevent cycles: ensure parent is not descendant of child
+      if (this._wouldCreateCycle(childIndex, parentIndex)) return false;
+
+      const child = this.shapes.get(childIndex);
+      const parent = this.shapes.get(parentIndex);
+      if (!child || !parent) return false;
+
+      // if already same parent, do nothing
+      if (child.parent === parentIndex) return true;
+
+      // --- NEW: collect child and all descendants, and remove any connections associated ---
+      // include the child itself and all recursive descendants
+      const toRemove = this._collectDescendants(childIndex, true); // root included
+      this._removeConnectionsForShapes(toRemove);
+
+      // detach from previous parent if any
+      if (child.parent !== null && child.parent !== undefined) {
+        const prevP = this.shapes.get(child.parent);
+        if (prevP && prevP.children) {
+          prevP.children = prevP.children.filter(i => i !== childIndex);
+          // hide prev parent's toggle if no children left
+          const prevBtn = prevP.element.querySelector('.group-toggle'); if (prevBtn && prevP.children.length === 0) prevBtn.style.display = 'none';
+        }
+      }
+
+      // assign new parent
+      child.parent = parentIndex;
+      if (!parent.children) parent.children = [];
+      if (!parent.children.includes(childIndex)) parent.children.push(childIndex);
+
+      // ensure parent toggle visible
+      const btn = parent.element.querySelector('.group-toggle'); if (btn) btn.style.display = 'flex';
+
+      // move child inside parent if it's outside and set local coords
+      const padding = 12;
+      let newX = Math.max(parent.x + padding, child.x);
+      let newY = Math.max(parent.y + padding + 24, child.y); // leave space for controls/title
+      if (newX + child.width > parent.x + parent.width - padding) newX = parent.x + padding;
+      if (newY + child.height > parent.y + parent.height - padding) newY = parent.y + padding + 24;
+
+      child.x = newX; child.y = newY;
+      child.localX = child.x - parent.x; child.localY = child.y - parent.y;
+      child.element.style.left = child.x + 'px'; child.element.style.top = child.y + 'px';
+
+      // child and its descendants remain as children (positions unchanged relative to child)
+      // ensure z-index: child above parent
+      const parentZ = parseInt(parent.element.style.zIndex) || 10;
+      parent.element.style.zIndex = parentZ;
+      child.element.style.zIndex = (parentZ + 1);
+
+      return true;
+    }
+
+    // === removeParent: when ungrouping, also remove connections for the node and all descendants ===
+    removeParent(childIndex) {
+      const child = this.shapes.get(childIndex);
+      if (!child) return;
+      if (child.parent === null || child.parent === undefined) return;
+
+      // remove connections for child + descendants (important for nested groups)
+      const toRemove = this._collectDescendants(childIndex, true);
+      this._removeConnectionsForShapes(toRemove);
+
+      const p = this.shapes.get(child.parent);
+      if (p && p.children) {
+        p.children = p.children.filter(i => i !== childIndex);
+        // hide toggle if no children remain
+        const btn = p.element.querySelector('.group-toggle'); if (btn && p.children.length === 0) btn.style.display = 'none';
+      }
+      child.parent = null;
+      child.localX = undefined; child.localY = undefined;
+
+      // 親解除されたら z-index をデフォルトに戻す（任意）
+      child.element.style.zIndex = 10;
+    }
+
+    // === helper: collect all descendants (children, grandchildren, ...) of a given node ===
+    // returns an array of indices (NOT including the root unless includeRoot === true)
+    _collectDescendants(rootIndex, includeRoot = false) {
+      const out = [];
+      const seen = new Set();
+      const rec = (idx) => {
+        if (seen.has(idx)) return;
+        seen.add(idx);
+        const s = this.shapes.get(idx);
+        if (!s || !s.children || s.children.length === 0) return;
+        for (const ci of s.children) {
+          out.push(ci);
+          rec(ci);
+        }
+      };
+      rec(rootIndex);
+      if (includeRoot) out.unshift(rootIndex); // put root at front if caller wants it
+      return out;
+    }
+
+    // === helper: remove connections for multiple shape indices at once ===
+    _removeConnectionsForShapes(indicesArray) {
+      if (!indicesArray || indicesArray.length === 0) return;
+      const indexSet = new Set(indicesArray.map(i => parseInt(i)));
+      for (let i = this.connections.length - 1; i >= 0; i--) {
+        const c = this.connections[i];
+        if (!c) continue;
+        const a = parseInt(c.start.shapeId);
+        const b = parseInt(c.end.shapeId);
+        if (indexSet.has(a) || indexSet.has(b)) {
+          // remove DOM element if present
+          if (c.element && c.element.remove) c.element.remove();
+          // remove from array
+          this.connections.splice(i, 1);
+        }
+      }
+      // clear selectedConnection if it was removed
+      if (this.selectedConnection && !document.body.contains(this.selectedConnection)) {
+        this.selectedConnection = null;
+      }
+    }
+
+    // === keep existing API but delegate to multi-shape remover for compatibility ===
+    _removeConnectionsForShape(shapeIndex) {
+      this._removeConnectionsForShapes([shapeIndex]);
+    }
+
+    // parentIndex の直下の children を dx/dy 分だけ移動し、
+    // さらに子の子（孫）へ再帰的に伝搬する。
+    // 各子について immediate parent に対する localX/localY を更新する。
+    _shiftDescendants(parentIndex, dx, dy) {
+      const parent = this.shapes.get(parentIndex);
+      if (!parent || !parent.children || parent.children.length === 0) return;
+
+      parent.children.forEach(ci => {
+        const child = this.shapes.get(ci);
+        if (!child) return;
+        // move child by same delta
+        child.x += dx;
+        child.y += dy;
+        // update child's element position
+        if (child.element) {
+          child.element.style.left = child.x + 'px';
+          child.element.style.top = child.y + 'px';
+        }
+        // child's local coords are relative to its immediate parent (parent)
+        child.localX = child.x - parent.x;
+        child.localY = child.y - parent.y;
+        // update child's connections
+        this.updateConnectionsForShape(ci);
+        // recurse for grandchildren
+        if (child.children && child.children.length > 0) {
+          this._shiftDescendants(ci, dx, dy);
+        }
+      });
+    }
+
+    _wouldCreateCycle(childIndex, parentIndex) {
+      // walk ancestors of parentIndex to see if any equals childIndex
+      let cur = parentIndex;
+      while (cur !== null && cur !== undefined) {
+        if (cur === childIndex) return true;
+        const sd = this.shapes.get(cur);
+        if (!sd) break;
+        cur = sd.parent;
+      }
+      return false;
+    }
+
+    // arrange children inside parent neatly (simple horizontal layout)
+    arrangeChildrenInsideParent(parentIndex) {
+      const parent = this.shapes.get(parentIndex);
+      if (!parent || !parent.children || parent.children.length === 0) return;
+
+      // 既に初回自動配置済みなら何もしない
+      if (parent._autoArranged) return;
+
+      const padding = 12;
+      let offsetX = parent.x + padding;
+      const offsetY = parent.y + padding + 24; // space for title/top area
+      const gap = 12;
+
+      // 親のベース z-index を確保（数値に）
+      const parentZ = parseInt(parent.element.style.zIndex) || 10;
+      parent.element.style.zIndex = parentZ; // 明示
+      // 子は必ず親より上に（描画順） — initial arrangement 時点で設定
+      parent.children.forEach((ci, i) => {
+        const child = this.shapes.get(ci);
+        if (!child) return;
+        // set child local coords relative to parent
+        child.localX = offsetX - parent.x;
+        child.localY = offsetY - parent.y;
+        child.x = parent.x + child.localX;
+        child.y = parent.y + child.localY;
+        child.element.style.left = child.x + 'px';
+        child.element.style.top = child.y + 'px';
+        // 子を親より上に表示
+        child.element.style.zIndex = (parentZ + 1);
+        offsetX += child.width + gap;
+      });
+
+      // when arranging, optionally expand parent to contain all children
+      const rightMost = offsetX - gap;
+      const baselineW = (parent.expandedWidth !== undefined) ? parent.expandedWidth : parent.origWidth;
+      const baselineH = (parent.expandedHeight !== undefined) ? parent.expandedHeight : parent.origHeight;
+      const neededW = Math.max(baselineW, rightMost - parent.x + padding);
+      const neededH = Math.max(baselineH, (offsetY - parent.y) + this._maxChildHeight(parent) + padding);
+
+      const deltaW = neededW - parent.width;
+      const deltaH = neededH - parent.height;
+      if (deltaW !== 0 || deltaH !== 0) {
+        // expand parent
+        parent.width = neededW; parent.height = neededH;
+        parent.element.style.width = parent.width + 'px';
+        parent.element.style.height = parent.height + 'px';
+
+        // --- ここで「展開後サイズ」を保存する ---
+        parent.expandedWidth = parent.width;
+        parent.expandedHeight = parent.height;
+        parent._isExpandedSizeSaved = true; // 任意のフラグ（デバッグ用）
+
+        // shift other shapes to avoid overlap
+        this._shiftOthersForParentResize(parent, deltaW, deltaH);
+      }
+
+      // update all connections etc...
+      parent.children.forEach(ci => this.updateConnectionsForShape(ci));
+      this.updateConnectionsForShape(parentIndex);
+
+      // 初回自動配置を行ったことを示すフラグを立てる
+      parent._autoArranged = true;
+    }
+
+    _maxChildHeight(parent) {
+      let mh = 0; if (!parent.children) return 0;
+      parent.children.forEach(ci => { const c = this.shapes.get(ci); if (c) mh = Math.max(mh, c.height); });
+      return mh;
+    }
+
+    _shiftOthersForParentResize(parent, deltaW, deltaH) {
+      // Shift shapes that are to the right or below the parent by delta to avoid overlap.
+      this.shapes.forEach((sd, idx) => {
+        if (idx === parseInt(parent.element.dataset.index)) return;
+        // skip children of this parent
+        if (sd.parent === parseInt(parent.element.dataset.index)) return;
+        // if shape is to the right of old parent's right edge
+        const oldRight = parent.x + (parent.width - deltaW);
+        const oldBottom = parent.y + (parent.height - deltaH);
+        if (sd.x >= oldRight) {
+          sd.x += deltaW;
+          sd.element.style.left = sd.x + 'px';
+        }
+        if (sd.y >= oldBottom) {
+          sd.y += deltaH;
+          sd.element.style.top = sd.y + 'px';
+        }
+      });
+
+      // redraw connections after shifts
+      this.redrawConnections();
+    }
+
+    toggleCollapse(parentIndex) {
+      const parent = this.shapes.get(parentIndex);
+      if (!parent) return;
+
+      // --- ① 複層折りたたみ対応（既存の処理はそのまま） ---
+      if (!parent.collapsed) {
+        const collapseChildrenParents = (pIdx) => {
+          const p = this.shapes.get(pIdx);
+          if (!p || !p.children) return;
+          p.children.forEach(ci => {
+            const child = this.shapes.get(ci);
+            if (child && child.children && child.children.length > 0 && !child.collapsed) {
+              collapseChildrenParents(ci);
+              this.toggleCollapse(ci);
+            }
+          });
+        };
+        collapseChildrenParents(parentIndex);
+      }
+
+      parent.collapsed = !parent.collapsed;
+      const btn = parent.element.querySelector('.group-toggle');
+      if (btn) btn.textContent = parent.collapsed ? '▸' : '▾';
+
+      if (parent.collapsed) {
+        // 折りたたみ: 子孫を非表示にし、同時に子孫に接続された線も非表示にする
+        if (parent.children) {
+          parent.children.forEach(ci => {
+            const c = this.shapes.get(ci);
+            if (c) c.element.style.display = 'none';
+          });
+          // 子孫に接続された線を非表示にする（再帰的に）
+          this._setDescendantsConnectionsVisibility(parentIndex, false);
+        }
+
+        const oldW = parent.width, oldH = parent.height;
+        const targetW = (parent.sizeBeforeExpand && parent.sizeBeforeExpand.width !== undefined) ? parent.sizeBeforeExpand.width : parent.origWidth;
+        const targetH = (parent.sizeBeforeExpand && parent.sizeBeforeExpand.height !== undefined) ? parent.sizeBeforeExpand.height : parent.origHeight;
+        const deltaW = Math.abs(targetW - oldW), deltaH = Math.abs(targetH - oldH);
+
+        const isTopLevelParent = (parent.parent === null || parent.parent === undefined);
+
+        if (deltaW !== 0 || deltaH !== 0) {
+          parent.width = targetW; parent.height = targetH;
+          parent.element.style.width = parent.width + 'px'; parent.element.style.height = parent.height + 'px';
+          if (isTopLevelParent) {
+            this._shiftOthersForParentResizeOnCollapse(parent, deltaW, deltaH);
+          }
+        }
+      } else {
+        // 展開: 子孫の表示は「子が collapsed でないもののみ表示」する（子が別途折りたたまれている場合は非表示のまま）
+        if (parent.children) {
+          parent.children.forEach(ci => {
+            const c = this.shapes.get(ci);
+            if (c) {
+              // 子自体が折りたたまれている（親として collapsed==true）なら表示しない
+              if (!c.collapsed) c.element.style.display = '';
+            }
+          });
+          // 子孫に接続された線を条件付きで表示（接続先の図形が表示されているもののみ）
+          this._setDescendantsConnectionsVisibility(parentIndex, true);
+        }
+
+        const oldW = parent.width, oldH = parent.height;
+        parent.sizeBeforeExpand = { width: oldW, height: oldH };
+        if (parent.expandedWidth !== undefined && parent.expandedHeight !== undefined) {
+          parent.width = parent.expandedWidth; parent.height = parent.expandedHeight;
+        } else {
+          parent.width = parent.origWidth; parent.height = parent.origHeight;
+        }
+        parent.element.style.width = parent.width + 'px'; parent.element.style.height = parent.height + 'px';
+        parent.expandedWidth = parent.width;
+        parent.expandedHeight = parent.height;
+
+        const deltaW = parent.width - oldW;
+        const deltaH = parent.height - oldH;
+
+        // --- ② 他図形移動スキップ条件 ---
+        const isTopLevelParent = (parent.parent === null || parent.parent === undefined);
+
+        if (deltaW !== 0 || deltaH !== 0) {
+          if (isTopLevelParent) {
+            this._shiftOthersForParentResize(parent, deltaW, deltaH);
+          }
+        }
+
+        if (parent.children) {
+          parent.children.forEach(ci => {
+            const c = this.shapes.get(ci);
+            if (!c) return;
+            c.element.style.display = 'flex';
+            if (c.localX === undefined || c.localY === undefined) {
+              c.localX = c.x - parent.x;
+              c.localY = c.y - parent.y;
+            }
+            c.x = parent.x + c.localX;
+            c.y = parent.y + c.localY;
+            c.element.style.left = c.x + 'px';
+            c.element.style.top = c.y + 'px';
+            this.updateConnectionsForShape(ci);
+          });
+        }
+        this.updateConnectionsForShape(parentIndex);
+      }
+
+      this.redrawConnections();
+      this.updateCanvasSize();
+    }
+
+    _setDescendantsConnectionsVisibility(parentIndex, visible) {
+      const collectDescendants = (pIdx, out) => {
+        const p = this.shapes.get(pIdx);
+        if (!p || !p.children) return;
+        p.children.forEach(ci => {
+          out.push(ci);
+          collectDescendants(ci, out);
+        });
+      };
+      const desc = [];
+      if (!this.shapes.has(parentIndex)) return;
+      collectDescendants(parentIndex, desc);
+
+      for (const conn of this.connections) {
+        if (!conn) continue;
+        const a = conn.start.shapeId;
+        const b = conn.end.shapeId;
+
+        // 接続の端点が子孫のいずれかに含まれる場合に処理
+        if (desc.includes(a) || desc.includes(b)) {
+          // ensure the helper Set exists
+          if (!conn._hiddenParents) conn._hiddenParents = new Set();
+
+          if (!visible) {
+            // hide: 記録に parentIndex を追加して DOM も非表示にする
+            conn._hiddenParents.add(parentIndex);
+            if (conn.element) conn.element.style.display = 'none';
+          } else {
+            // show: parentIndex を削除し、まだ他の親によって隠されているかを確認
+            conn._hiddenParents.delete(parentIndex);
+
+            // if no remaining hidden-parent があれば端点の表示状況に応じて表示する
+            if (conn._hiddenParents.size === 0) {
+              const startShape = this.shapes.get(a);
+              const endShape = this.shapes.get(b);
+              const startVisible = startShape && startShape.element && startShape.element.style.display !== 'none';
+              const endVisible = endShape && endShape.element && endShape.element.style.display !== 'none';
+              if (conn.element) {
+                if (startVisible || endVisible) conn.element.style.display = '';
+                else conn.element.style.display = 'none';
+              }
+            } else {
+              // まだ別の親によって隠れている -> DOM は非表示のまま
+              if (conn.element) conn.element.style.display = 'none';
+            }
+          }
+        }
+      }
+    }
+
+    // parent に対して、現状の子たち（localX/localY または絶対座標）を踏まえた
+    // 必要な width/height を計算して返す
+    _computeNeededSizeForParent(parent) {
+      const padding = 12;
+      const offsetY = padding + 24;
+      let left = parent.x + padding;
+      let rightMost = left;
+      let maxChildHeight = 0;
+      if (parent.children && parent.children.length) {
+        parent.children.forEach(ci => {
+          const c = this.shapes.get(ci);
+          if (!c) return;
+          // child absolute pos (c.x) may already be parent.x + c.localX, but use c.x for safety
+          const relLeft = c.x - parent.x;
+          rightMost = Math.max(rightMost, parent.x + relLeft + c.width);
+          maxChildHeight = Math.max(maxChildHeight, c.height);
+        });
+      }
+      const baselineW = (parent.expandedWidth !== undefined) ? parent.expandedWidth : parent.origWidth;
+      const baselineH = (parent.expandedHeight !== undefined) ? parent.expandedHeight : parent.origHeight;
+      const neededW = Math.max(baselineW, (rightMost - parent.x) + padding);
+      const neededH = Math.max(baselineH, offsetY + maxChildHeight + padding);
+      return { neededW, neededH };
+    }
+
+    // childIndex の変更（deltaW/deltaH は child 自身の変化）を受けてその親を上へ伝搬していく。
+    // onCollapse: true -> call _shiftOthersForParentResizeOnCollapse when parent shrinks,
+    //             false -> call _shiftOthersForParentResize when parent grows.
+    _propagateResizeUpwards(childIndex, deltaWChild, deltaHChild, onCollapse) {
+      // start from the immediate parent of childIndex
+      let cur = this.shapes.get(childIndex);
+      if (!cur) return;
+      let pIndex = cur.parent;
+      while (pIndex !== null && pIndex !== undefined) {
+        const p = this.shapes.get(pIndex);
+        if (!p) break;
+        const beforeW = p.width, beforeH = p.height;
+        const needed = this._computeNeededSizeForParent(p);
+        const deltaW = needed.neededW - beforeW;
+        const deltaH = needed.neededH - beforeH;
+        if (deltaW !== 0 || deltaH !== 0) {
+          // apply parent's new size
+          p.width = needed.neededW; p.height = needed.neededH;
+          p.element.style.width = p.width + 'px'; p.element.style.height = p.height + 'px';
+          // save expanded size
+          p.expandedWidth = p.width; p.expandedHeight = p.height;
+          // move external shapes by the change for this parent (expand or collapse)
+          if (onCollapse) {
+            this._shiftOthersForParentResizeOnCollapse(p, Math.abs(deltaW), Math.abs(deltaH));
+          } else {
+            this._shiftOthersForParentResize(p, deltaW, deltaH);
+          }
+        }
+        // go up
+        pIndex = p.parent;
+      }
+    }
+
+    _shiftOthersForParentResizeOnCollapse(parent, deltaW, deltaH) {
+      // deltaW, deltaH are positive amounts to shift others by (we are shrinking parent so others move left/up)
+      this.shapes.forEach((sd, idx) => {
+        if (idx === parseInt(parent.element.dataset.index)) return;
+        // skip children of this parent
+        if (sd.parent === parseInt(parent.element.dataset.index)) return;
+        const refRight = parent.x + parent.width;
+        const refBottom = parent.y + parent.height;
+        if (sd.x >= refRight + 1) {
+          sd.x -= deltaW;
+          sd.element.style.left = sd.x + 'px';
+        }
+        if (sd.y >= refBottom + 1) {
+          sd.y -= deltaH;
+          sd.element.style.top = sd.y + 'px';
+        }
+      });
+
+      this.redrawConnections();
+    }
+
+    saveToFile() {
+      const data = { outline: this.outlineTextarea.value, shapes: [], connections: [], pan: { x: this.canvasContainer.scrollLeft, y: this.canvasContainer.scrollTop } };
+      this.connections.forEach(conn => {
+        const c = { start: { shapeId: conn.start.shapeId, position: conn.start.position }, end: { shapeId: conn.end.shapeId, position: conn.end.position }, label: conn.label, color: conn.color, strokeStyle: conn.strokeStyle, arrow: conn.arrow };
+        data.connections.push(c);
+      });
+      this.shapes.forEach((sd, idx) => data.shapes.push({
+        id: sd.id, text: sd.text,
+        x: sd.x, y: sd.y, width: sd.width, height: sd.height,
+        style: sd.style || {},
+        parent: (sd.parent !== undefined) ? sd.parent : null,
+        collapsed: sd.collapsed, 
+        expandedWidth: (sd.expandedWidth !== undefined) ? sd.expandedWidth : sd.width, 
+        expandedHeight: (sd.expandedHeight !== undefined) ? sd.expandedHeight : sd.height, 
+        localX: sd.localX, localY: sd.localY 
+        }));
+      const json = JSON.stringify(data, null, 2);
+      const blob = new Blob([json], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = 'flowchart_' + new Date().toISOString().slice(0,19).replace(/:/g,'-') + '.json';
+      document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+    }
+
+    loadFromFile(e) {
+      const file = e.target.files[0]; if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        try {
+          const data = JSON.parse(ev.target.result);
+          this.loadData(data);
+        } catch (err) { alert('ファイルの読み込みに失敗しました: ' + err.message); }
+      };
+      reader.readAsText(file);
+      e.target.value = '';
+    }
+
+    loadData(data) {
+      this.outlineTextarea.value = data.outline || '';
+      this.flowchartContent.querySelectorAll('.shape').forEach(s => s.remove());
+      this.shapes.clear();
+      if (data.shapes) data.shapes.forEach((sd, idx) => this.createShapeFromData(sd, idx));
+      this.connections = (data.connections || []).map(c => ({ ...c, start: { shapeId: c.start.shapeId, position: c.start.position }, end: { shapeId: c.end.shapeId, position: c.end.position }, element: null }));
+      // restore parent-child relations
+      this.shapes.forEach((sd, idx) => {
+        if (sd.parent !== null && sd.parent !== undefined) {
+          const p = this.shapes.get(sd.parent);
+          if (p) {
+            if (!p.children) p.children = [];
+            if (!p.children.includes(idx)) p.children.push(idx);
+            // 親子復元時に z-index を設定（親: base, 子: parentZ+1）
+            const parentZ = parseInt(p.element.style.zIndex) || 10;
+            p.element.style.zIndex = parentZ;
+            const childSd = this.shapes.get(idx);
+            if (childSd && childSd.element) childSd.element.style.zIndex = (parentZ + 1);
+          } else sd.parent = null;
+        }
+      });
+
+      // position children relative to parent (respect saved local coords if present)
+      this.shapes.forEach((sd, idx) => {
+        if (sd.parent !== null && sd.parent !== undefined) {
+          const p = this.shapes.get(sd.parent);
+          if (p) {
+            if (sd.localX === undefined || sd.localY === undefined) {
+              sd.localX = sd.x - p.x; sd.localY = sd.y - p.y;
+            }
+            sd.x = p.x + sd.localX; sd.y = p.y + sd.localY;
+            sd.element.style.left = sd.x + 'px'; sd.element.style.top = sd.y + 'px';
+            const btn = p.element.querySelector('.group-toggle'); if (btn) btn.style.display = 'flex';
+            if (p.collapsed) sd.element.style.display = 'none';
+          }
+        }
+      });
+
+      this.redrawConnections();
+      if (data.pan) { this.canvasContainer.scrollLeft = data.pan.x || 0; this.canvasContainer.scrollTop = data.pan.y || 0; }
+      this.clearSelection();
+      this.updateConnectionPoints();
+
+      // update canvas size after load
+      this.updateCanvasSize();
+    }
+
+    createShapeFromData(sd, index) {
+      const id = (sd.id !== undefined) ? sd.id : this.nextShapeId++;
+      if (id >= this.nextShapeId) this.nextShapeId = id + 1;
+      const shape = document.createElement('div');
+      shape.className = 'shape'; shape.textContent = sd.text; shape.dataset.index = id;
+      shape.style.left = sd.x + 'px'; shape.style.top = sd.y + 'px'; shape.style.width = sd.width + 'px'; shape.style.height = sd.height + 'px';
+      const style = sd.style || {}; if (style.backgroundColor) shape.style.background = style.backgroundColor;
+      if (style.borderColor) shape.style.borderColor = style.borderColor; if (style.color) shape.style.color = style.color; if (style.borderRadius) shape.style.borderRadius = style.borderRadius;
+
+      const collapsed = sd.collapsed ? true : false;
+      const parentVal = (sd.parent !== undefined && sd.parent !== null) ? sd.parent : null;
+
+      const sdObj = { id: id, element: shape, text: sd.text, x: sd.x, y: sd.y, width: sd.width, height: sd.height, style: style, parent: parentVal, children: [], collapsed: collapsed, origWidth: sd.width, origHeight: sd.height, expandedWidth: (sd.expandedWidth !== undefined) ? sd.expandedWidth : sd.width, expandedHeight: (sd.expandedHeight !== undefined) ? sd.expandedHeight : sd.height, localX: sd.localX, localY: sd.localY };
+
+      // add collapse toggle button (initially hidden; shown only when children exist)
+      const toggle = document.createElement('div');
+      toggle.className = 'group-toggle';
+      toggle.title = '折りたたみ/展開';
+      toggle.textContent = sdObj.collapsed ? '▸' : '▾';
+      toggle.style.display = 'none';
+      toggle.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        this.toggleCollapse(parseInt(shape.dataset.index));
+      });
+      shape.appendChild(toggle);
+
+      this.flowchartContent.appendChild(shape);
+      this.shapes.set(id, sdObj);
+
+      // ensure canvas size grows with loaded shape
+      this.updateCanvasSize();
+    }
+  }
+
+  new FlowchartApp();
+  </script>
+  <script>
+    FlowchartApp.prototype.diffLists = function(oldList, newList) {
+      const oldLen = oldList.length;
+      const newLen = newList.length;
+      const lcs = [];
+      const dp = Array(oldLen + 1).fill(null).map(() => Array(newLen + 1).fill(0));
+
+      for (let i = 1; i <= oldLen; i++) {
+          for (let j = 1; j <= newLen; j++) {
+              if (oldList[i - 1] === newList[j - 1]) {
+                  dp[i][j] = dp[i - 1][j - 1] + 1;
+              } else {
+                  dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
+              }
+          }
+      }
+
+      let i = oldLen, j = newLen;
+      while (i > 0 && j > 0) {
+          if (oldList[i - 1] === newList[j - 1]) {
+              lcs.unshift({ value: oldList[i - 1], oldIndex: i - 1, newIndex: j - 1 });
+              i--;
+              j--;
+          } else if (dp[i - 1][j] > dp[i][j - 1]) {
+              i--;
+          } else {
+              j--;
+          }
+      }
+
+      const result = [];
+      let oldIdx = 0;
+      let newIdx = 0;
+      lcs.forEach(match => {
+          while (oldIdx < match.oldIndex || newIdx < match.newIndex) {
+              if (newIdx < match.newIndex && oldIdx < match.oldIndex) {
+                  result.push({ type: 'changed', value: newList[newIdx], oldValue: oldList[oldIdx], oldIndex: oldIdx, newIndex: newIdx });
+                  oldIdx++;
+                  newIdx++;
+              } else if (newIdx < match.newIndex) {
+                  result.push({ type: 'added', value: newList[newIdx], newIndex: newIdx });
+                  newIdx++;
+              } else if (oldIdx < match.oldIndex) {
+                  result.push({ type: 'removed', value: oldList[oldIdx], oldIndex: oldIdx });
+                  oldIdx++;
+              }
+          }
+          result.push({ type: 'no-change', value: match.value, oldIndex: match.oldIndex, newIndex: match.newIndex });
+          oldIdx = match.oldIndex + 1;
+          newIdx = match.newIndex + 1;
+      });
+
+      while (newIdx < newLen || oldIdx < oldLen) {
+          if (newIdx < newLen && oldIdx < oldLen) {
+              result.push({ type: 'changed', value: newList[newIdx], oldValue: oldList[oldIdx], oldIndex: oldIdx, newIndex: newIdx });
+              oldIdx++;
+              newIdx++;
+          } else if (newIdx < newLen) {
+              result.push({ type: 'added', value: newList[newIdx], newIndex: newIdx });
+              newIdx++;
+          } else if (oldIdx < oldLen) {
+              result.push({ type: 'removed', value: oldList[oldIdx], oldIndex: oldIdx });
+              oldIdx++;
+          }
+      }
+      return result;
+    };
+  </script>
+
+</body>
+</html>

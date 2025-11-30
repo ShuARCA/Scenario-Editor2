@@ -1,0 +1,11 @@
+{
+  "name": "ieditweb",
+  "version": "1.0.0",
+  "description": "iEditWeb - Markdown & Flowchart Editor",
+  "scripts": {
+    "start": "serve ."
+  },
+  "dependencies": {
+    "serve": "^14.2.1"
+  }
+}

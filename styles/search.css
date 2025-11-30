@@ -1,0 +1,58 @@
+/* 検索パネル */
+#search-container {
+    position: fixed;
+    top: 60px;
+    right: 20px;
+    background-color: var(--surface-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 12px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 1000;
+    width: 300px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+#search-container.hidden {
+    display: none;
+}
+
+.search-row {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+}
+
+#search-input, #replace-input {
+    flex-grow: 1;
+    padding: 6px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+#search-container button {
+    padding: 6px 10px;
+    background-color: #f1f5f9;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+#search-container button:hover {
+    background-color: #e2e8f0;
+}
+
+#do-search-btn {
+    background-color: var(--primary-color) !important;
+    color: white;
+    border-color: var(--primary-color) !important;
+}
+
+#do-search-btn:hover {
+    background-color: #0d9488 !important; /* teal-600 */
+}

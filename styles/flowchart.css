@@ -1,0 +1,236 @@
+/* フローチャート領域 */
+#flowchart-container {
+    height: 300px;
+    min-height: 150px;
+    max-height: 60vh;
+    background-color: #f8fafc;
+    border-bottom: 1px solid var(--border-color);
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    resize: vertical;
+    overflow: hidden;
+}
+
+.flowchart-toolbar {
+    position: absolute;
+    top: 16px;
+    left: 16px;
+    background-color: var(--surface-color);
+    padding: 6px;
+    border-radius: 8px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    display: flex;
+    gap: 4px;
+    z-index: 50;
+    border: 1px solid var(--border-color);
+}
+
+.mode-btn {
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    padding: 8px;
+    cursor: pointer;
+    color: #64748b;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.mode-btn:hover {
+    background-color: #f1f5f9;
+    color: #334155;
+}
+
+.mode-btn.active {
+    background-color: #e0f2fe;
+    color: #0284c7;
+    border-color: #bae6fd;
+}
+
+#flowchart-canvas {
+    flex-grow: 1;
+    overflow: auto;
+    position: relative;
+    cursor: grab;
+    background-image: radial-gradient(#cbd5e1 1px, transparent 1px);
+    background-size: 20px 20px;
+}
+
+#flowchart-canvas.panning {
+    cursor: grabbing;
+}
+
+#canvas-content {
+    width: 3000px;
+    height: 3000px;
+    position: relative;
+    transform-origin: 0 0;
+}
+
+/* 図形 */
+.shape {
+    position: absolute;
+    background-color: var(--surface-color);
+    border: 2px solid #cbd5e1;
+    border-radius: 8px;
+    padding: 12px 16px;
+    min-width: 100px;
+    text-align: center;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    cursor: move;
+    user-select: none;
+    font-size: 14px;
+    font-weight: 500;
+    color: #334155;
+    transition: box-shadow 0.2s, border-color 0.2s;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.shape:hover {
+    border-color: #94a3b8;
+}
+
+.shape.selected {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.2);
+    z-index: 20;
+}
+
+/* グループ化スタイル */
+.shape.group-parent {
+    align-items: flex-start;
+    padding-top: 30px;
+    background-color: rgba(255, 255, 255, 0.5);
+    border-style: dashed;
+}
+
+.group-toggle {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    border-radius: 4px;
+    font-size: 12px;
+    color: #64748b;
+}
+
+.group-toggle:hover {
+    background-color: rgba(0, 0, 0, 0.05);
+}
+
+/* 接続 */
+#connections-layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 5;
+}
+
+.connection-path {
+    fill: none;
+    stroke: #94a3b8;
+    stroke-width: 2;
+    pointer-events: stroke;
+    cursor: pointer;
+}
+
+.connection-path:hover {
+    stroke: #64748b;
+    stroke-width: 3;
+}
+
+.connection-path.selected {
+    stroke: var(--primary-color);
+    stroke-width: 3;
+}
+
+/* 接続ポイント */
+.connection-point {
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    background-color: var(--surface-color);
+    border: 2px solid var(--primary-color);
+    border-radius: 50%;
+    z-index: 30;
+    opacity: 0;
+    transition: opacity 0.2s;
+    cursor: crosshair;
+}
+
+.shape:hover .connection-point,
+.mode-connect .connection-point {
+    opacity: 1;
+}
+
+.connection-point.top {
+    top: -6px;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.connection-point.bottom {
+    bottom: -6px;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.connection-point.left {
+    left: -6px;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.connection-point.right {
+    right: -6px;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+/* コンテキストメニュー */
+.context-menu {
+    position: fixed;
+    background-color: var(--surface-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 1000;
+    min-width: 150px;
+    padding: 4px 0;
+}
+
+.context-menu.hidden {
+    display: none;
+}
+
+.context-menu-item {
+    padding: 8px 16px;
+    cursor: pointer;
+    font-size: 14px;
+    color: #334155;
+    transition: background-color 0.2s;
+}
+
+.context-menu-item:hover {
+    background-color: #f1f5f9;
+}
+
+.context-menu-separator {
+    height: 1px;
+    background-color: var(--border-color);
+    margin: 4px 0;
+}
