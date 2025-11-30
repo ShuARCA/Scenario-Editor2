@@ -5,7 +5,7 @@ export class SearchManager {
     constructor(editorManager) {
         this.editorManager = editorManager;
         this.editor = editorManager.editor;
-        this.searchContainer = document.getElementById('search-container');
+        this.searchContainer = document.getElementById('search-panel');
         this.searchInput = document.getElementById('search-input');
         this.replaceInput = document.getElementById('replace-input');
         this.matches = [];
@@ -16,10 +16,11 @@ export class SearchManager {
 
     init() {
         // UIイベントリスナー
-        document.getElementById('search-btn').addEventListener('click', () => this.toggleSearchPanel());
-        document.getElementById('do-search-btn').addEventListener('click', () => this.performSearch());
-        document.getElementById('search-next-btn').addEventListener('click', () => this.nextMatch());
-        document.getElementById('search-prev-btn').addEventListener('click', () => this.prevMatch());
+        document.getElementById('searchBtn').addEventListener('click', () => this.toggleSearchPanel());
+        // document.getElementById('do-search-btn').addEventListener('click', () => this.performSearch()); // 削除: ボタンが存在しない、またはインクリメンタル検索想定?
+        this.searchInput.addEventListener('input', () => this.performSearch()); // インクリメンタル検索に変更
+        document.getElementById('find-next-btn').addEventListener('click', () => this.nextMatch());
+        document.getElementById('find-prev-btn').addEventListener('click', () => this.prevMatch());
         document.getElementById('replace-btn').addEventListener('click', () => this.replaceCurrent());
         document.getElementById('replace-all-btn').addEventListener('click', () => this.replaceAll());
         document.getElementById('close-search-btn').addEventListener('click', () => this.closeSearchPanel());
@@ -37,6 +38,20 @@ export class SearchManager {
     toggleSearchPanel() {
         this.searchContainer.classList.toggle('hidden');
         if (!this.searchContainer.classList.contains('hidden')) {
+            // ポップアップ位置の計算
+            const btn = document.getElementById('searchBtn');
+            if (!btn) return;
+            const rect = btn.getBoundingClientRect();
+
+            // ボタンの下、右揃え気味に表示
+            this.searchContainer.style.position = 'absolute';
+            this.searchContainer.style.top = `${rect.bottom + 10}px`;
+            // 画面幅からはみ出さないように調整
+            const right = window.innerWidth - rect.right;
+            this.searchContainer.style.right = `${Math.max(10, right - 10)}px`;
+            this.searchContainer.style.left = 'auto';
+            this.searchContainer.style.bottom = 'auto';
+
             this.searchInput.focus();
         } else {
             this.clearHighlights();

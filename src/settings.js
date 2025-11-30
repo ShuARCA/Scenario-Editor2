@@ -37,6 +37,23 @@ export class SettingsManager {
 
     open() {
         this.settingsModal.classList.remove('hidden');
+
+        // ポップアップ位置の計算
+        const btn = document.getElementById('settingsBtn');
+        if (!btn) return;
+        const rect = btn.getBoundingClientRect();
+        const content = this.settingsModal.querySelector('.settings-content');
+
+        // ボタンの下、右揃え気味に表示
+        content.style.position = 'absolute';
+        content.style.top = `${rect.bottom + 10}px`;
+        // 画面幅からはみ出さないように調整
+        const right = window.innerWidth - rect.right;
+        content.style.right = `${Math.max(10, right - 10)}px`;
+        content.style.left = 'auto'; // リセット
+        content.style.bottom = 'auto'; // リセット
+        content.style.transform = 'none'; // 中央揃えなどの解除
+
         // 現在の設定をフォームに反映
         document.getElementById('theme-select').value = this.settings.theme;
         document.getElementById('font-select').value = this.settings.fontFamily;

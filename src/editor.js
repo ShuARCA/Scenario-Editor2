@@ -31,6 +31,9 @@ export class EditorManager {
 
         // 画像ハンドリング
         this.setupImageHandling();
+
+        // ツールバーアクションのセットアップ
+        this.setupToolbarActions();
     }
 
     setupImageHandling() {
@@ -175,7 +178,7 @@ export class EditorManager {
             e.preventDefault();
             this.insertRuby();
         });
-        document.getElementById('codeBlockBtn').addEventListener('click', (e) => {
+        document.getElementById('codeBtn').addEventListener('click', (e) => {
             e.preventDefault();
             this.insertCodeBlock();
         });

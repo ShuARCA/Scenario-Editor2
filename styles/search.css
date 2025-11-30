@@ -1,8 +1,8 @@
 /* 検索パネル */
-#search-container {
-    position: fixed;
-    top: 60px;
-    right: 20px;
+#search-panel {
+    position: absolute;
+    /* 固定から絶対配置へ */
+    /* top, right はJSで制御 */
     background-color: var(--surface-color);
     border: 1px solid var(--border-color);
     border-radius: 8px;
@@ -13,9 +13,26 @@
     display: flex;
     flex-direction: column;
     gap: 8px;
+    top: auto;
+    left: auto;
 }
 
-#search-container.hidden {
+/* 吹き出しの矢印 */
+#search-panel::before {
+    content: '';
+    position: absolute;
+    top: -6px;
+    right: 20px;
+    /* アイコンの位置に合わせる */
+    width: 12px;
+    height: 12px;
+    background-color: var(--surface-color);
+    transform: rotate(45deg);
+    border-left: 1px solid var(--border-color);
+    border-top: 1px solid var(--border-color);
+}
+
+#search-panel.hidden {
     display: none;
 }
 
@@ -25,7 +42,8 @@
     align-items: center;
 }
 
-#search-input, #replace-input {
+#search-input,
+#replace-input {
     flex-grow: 1;
     padding: 6px;
     border: 1px solid var(--border-color);
@@ -33,7 +51,7 @@
     font-size: 14px;
 }
 
-#search-container button {
+#search-panel button {
     padding: 6px 10px;
     background-color: #f1f5f9;
     border: 1px solid var(--border-color);
@@ -43,7 +61,7 @@
     white-space: nowrap;
 }
 
-#search-container button:hover {
+#search-panel button:hover {
     background-color: #e2e8f0;
 }
 
@@ -54,5 +72,6 @@
 }
 
 #do-search-btn:hover {
-    background-color: #0d9488 !important; /* teal-600 */
+    background-color: #0d9488 !important;
+    /* teal-600 */
 }

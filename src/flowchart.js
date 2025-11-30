@@ -533,4 +533,48 @@ export class FlowchartApp {
     }
 
 
+    drawConnections() {
+        // SVGレイヤーをクリア
+        while (this.connectionsLayer.firstChild) {
+            this.connectionsLayer.removeChild(this.connectionsLayer.firstChild);
+        }
+
+        this.connections.forEach(conn => {
+            const fromShape = this.shapes.get(conn.from);
+            const toShape = this.shapes.get(conn.to);
+
+            if (!fromShape || !toShape || !fromShape.element || !toShape.element) return;
+
+            // 親が折りたたまれていて、自分が非表示の場合は描画しない
+            if (fromShape.element.style.display === 'none' || toShape.element.style.display === 'none') return;
+
+            // 接続ポイントの計算 (簡易的に中心から中心、または最近接ポイント)
+            // ここでは簡易的に各図形の中心を使用し、矩形との交点を求めるロジックなどが理想だが、
+            // まずは中心座標を使用
+            const startX = fromShape.x + fromShape.width / 2;
+            const startY = fromShape.y + fromShape.height / 2;
+            const endX = toShape.x + toShape.width / 2;
+            const endY = toShape.y + toShape.height / 2;
+
+            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+
+            // ベジェ曲線
+            const dx = Math.abs(endX - startX);
+            const cp1x = startX + dx * 0.5;
+            const cp1y = startY;
+            const cp2x = endX - dx * 0.5;
+            const cp2y = endY;
+
+            const d = `M ${startX} ${startY} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${endX} ${endY}`;
+
+            path.setAttribute('d', d);
+            path.setAttribute('stroke', '#94a3b8');
+            path.setAttribute('stroke-width', '2');
+            path.setAttribute('fill', 'none');
+
+            // 矢印マーカーなどが欲しい場合はdefsに追加が必要だが、一旦線のみ
+
+            this.connectionsLayer.appendChild(path);
+        });
+    }
 }
