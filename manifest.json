@@ -3,17 +3,16 @@
   "short_name": "iEditWeb",
   "start_url": "./index.html",
   "display": "standalone",
-  "background_color": "#fbfbff",
-  "theme_color": "#fbfbff",
-  "description": "A simple web-based editor with flowchart capabilities.",
+  "background_color": "#ffffff",
+  "theme_color": "#3b82f6",
   "icons": [
     {
-      "src": "https://cdn-icons-png.flaticon.com/512/2541/2541991.png",
+      "src": "icon/icon.png",
       "sizes": "192x192",
       "type": "image/png"
     },
     {
-      "src": "https://cdn-icons-png.flaticon.com/512/2541/2541991.png",
+      "src": "icon/icon.png",
       "sizes": "512x512",
       "type": "image/png"
     }

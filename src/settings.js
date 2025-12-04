@@ -1,6 +1,10 @@
 /**
  * 環境設定ロジック
  */
+/**
+ * 環境設定ロジック
+ * テーマ、フォント、エディタの色設定などを管理します。
+ */
 export class SettingsManager {
     constructor() {
         this.settingsModal = document.getElementById('settings-modal');
@@ -10,6 +14,7 @@ export class SettingsManager {
         // 設定値のデフォルト
         this.settings = {
             theme: 'light',
+            primaryColor: '#0d9488',
             fontFamily: 'sans-serif',
             fontSize: '16px',
             editorBgColor: '#ffffff',
@@ -56,6 +61,7 @@ export class SettingsManager {
 
         // 現在の設定をフォームに反映
         document.getElementById('theme-select').value = this.settings.theme;
+        document.getElementById('primary-color-picker').value = this.settings.primaryColor;
         document.getElementById('font-select').value = this.settings.fontFamily;
         document.getElementById('font-size-input').value = parseInt(this.settings.fontSize);
         document.getElementById('editor-bg-color').value = this.settings.editorBgColor;
@@ -66,8 +72,12 @@ export class SettingsManager {
         this.settingsModal.classList.add('hidden');
     }
 
+    /**
+     * 設定を保存し、適用します。
+     */
     saveSettings() {
         this.settings.theme = document.getElementById('theme-select').value;
+        this.settings.primaryColor = document.getElementById('primary-color-picker').value;
         this.settings.fontFamily = document.getElementById('font-select').value;
         this.settings.fontSize = document.getElementById('font-size-input').value + 'px';
         this.settings.editorBgColor = document.getElementById('editor-bg-color').value;
@@ -85,9 +95,16 @@ export class SettingsManager {
         }
     }
 
+    /**
+     * 現在の設定をDOMに適用します。
+     */
     applySettings() {
         const root = document.documentElement;
         const editor = document.getElementById('editor');
+
+        // プライマリーカラー
+        root.style.setProperty('--primary-color', this.settings.primaryColor);
+        root.style.setProperty('--primary-hover', this.settings.primaryColor + '0.8');
 
         // フォント
         let fontFamily = 'Inter, system-ui, sans-serif';
@@ -104,8 +121,8 @@ export class SettingsManager {
 
         // テーマ (簡易実装: ダークモード切り替えなどはCSS変数で行うのが理想だが、要件は「背景色・文字色の変更」が主)
         if (this.settings.theme === 'dark') {
-            root.style.setProperty('--surface-color', '#1e293b');
-            root.style.setProperty('--background-color', '#0f172a');
+            root.style.setProperty('--surface-color', '#303030ff');
+            root.style.setProperty('--background-color', '#202020ff');
             root.style.setProperty('--text-color', '#f8fafc');
             root.style.setProperty('--border-color', '#334155');
             // エディタ色がカスタム設定されていない場合のみ上書き

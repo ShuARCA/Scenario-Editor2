@@ -2,8 +2,13 @@ import { Sanitizer } from './sanitizer.js';
 
 /**
  * ストレージロジック (ZIP)
+ * プロジェクトの保存と読み込みを管理します。
  */
 export class StorageManager {
+  /**
+   * @param {import('./editor.js').EditorManager} editorManager 
+   * @param {import('./flowchart.js').FlowchartApp} flowchartApp 
+   */
   constructor(editorManager, flowchartApp) {
     this.editorManager = editorManager;
     this.flowchartApp = flowchartApp;
@@ -39,6 +44,10 @@ export class StorageManager {
     document.getElementById('hidden-file-input').click();
   }
 
+  /**
+   * プロジェクトをZIPファイルとして保存します。
+   * エディタの内容、フローチャートのデータ、画像アセットを同梱します。
+   */
   async save() {
     const zip = new JSZip();
     const imgFolder = zip.folder("assets");
@@ -125,6 +134,10 @@ export class StorageManager {
     saveAs(content, this.filename);
   }
 
+  /**
+   * ZIPファイルを読み込み、プロジェクトを復元します。
+   * @param {Event} e - ファイル入力イベント
+   */
   async load(e) {
     const file = e.target.files[0];
     if (!file) return;

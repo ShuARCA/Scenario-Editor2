@@ -1,7 +1,11 @@
 /**
  * 検索・置換ロジック
+ * エディタ内のテキスト検索と置換機能を提供します。
  */
 export class SearchManager {
+    /**
+     * @param {import('./editor.js').EditorManager} editorManager 
+     */
     constructor(editorManager) {
         this.editorManager = editorManager;
         this.editor = editorManager.editor;
@@ -63,6 +67,9 @@ export class SearchManager {
         this.clearHighlights();
     }
 
+    /**
+     * 検索を実行し、マッチした箇所をリストアップします。
+     */
     performSearch() {
         const query = this.searchInput.value;
         if (!query) return;

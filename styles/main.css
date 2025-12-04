@@ -147,7 +147,6 @@ body {
 
 .outline-item.active {
   background-color: #e0f2fe;
-  /* ライトブルー */
   color: #0284c7;
   font-weight: 500;
 }
@@ -165,6 +164,20 @@ body {
 }
 
 #resizer:hover {
+  background: var(--primary-color);
+}
+
+/* 垂直リサイザー */
+#vertical-resizer {
+  height: 4px;
+  width: 100%;
+  cursor: row-resize;
+  background: transparent;
+  z-index: 10;
+  flex-shrink: 0;
+}
+
+#vertical-resizer:hover {
   background: var(--primary-color);
 }
 

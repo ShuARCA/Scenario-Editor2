@@ -209,7 +209,7 @@
     border-radius: 8px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     z-index: 1000;
-    min-width: 150px;
+    min-width: 180px;
     padding: 4px 0;
 }
 
@@ -229,8 +229,170 @@
     background-color: #f1f5f9;
 }
 
+.context-menu-item.delete {
+    color: #dc2626;
+}
+
+.context-menu-item.delete:hover {
+    background-color: #fef2f2;
+}
+
 .context-menu-separator {
     height: 1px;
     background-color: var(--border-color);
     margin: 4px 0;
+}
+
+.context-menu-section {
+    padding: 8px 12px;
+}
+
+.context-menu-section.hidden {
+    display: none;
+}
+
+.context-menu-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 8px;
+}
+
+.context-menu-form {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.context-menu-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.context-menu-row label {
+    font-size: 13px;
+    color: #334155;
+    flex-shrink: 0;
+}
+
+.context-menu-row input[type="color"] {
+    width: 32px;
+    height: 24px;
+    padding: 0;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    cursor: pointer;
+    background: transparent;
+}
+
+.context-menu-row select {
+    flex: 1;
+    padding: 4px 8px;
+    font-size: 13px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background-color: var(--surface-color);
+    color: #334155;
+    cursor: pointer;
+}
+
+/* プロパティパネル */
+.property-panel {
+    position: absolute;
+    top: 60px;
+    right: 16px;
+    background-color: var(--surface-color);
+    padding: 12px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    border: 1px solid var(--border-color);
+    z-index: 40;
+    width: 200px;
+}
+
+.property-panel.hidden {
+    display: none;
+}
+
+.property-panel h4 {
+    margin: 0 0 12px 0;
+    font-size: 14px;
+    color: #334155;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 8px;
+}
+
+.prop-group {
+    margin-bottom: 12px;
+}
+
+.prop-group label {
+    display: block;
+    font-size: 12px;
+    color: #64748b;
+    margin-bottom: 4px;
+}
+
+.prop-group input[type="color"] {
+    width: 100%;
+    height: 32px;
+    padding: 2px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.prop-group select {
+    width: 100%;
+    padding: 6px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    font-size: 13px;
+    color: #334155;
+}
+
+/* リサイズハンドル */
+.resize-handle {
+    position: absolute;
+    width: 8px;
+    height: 8px;
+    background-color: var(--surface-color);
+    border: 1px solid var(--primary-color);
+    z-index: 40;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.shape:hover .resize-handle,
+.shape.selected .resize-handle,
+.shape.resizing .resize-handle {
+    opacity: 1;
+}
+
+.resize-handle.nw {
+    top: -4px;
+    left: -4px;
+    cursor: nw-resize;
+}
+
+.resize-handle.ne {
+    top: -4px;
+    right: -4px;
+    cursor: ne-resize;
+}
+
+.resize-handle.sw {
+    bottom: -4px;
+    left: -4px;
+    cursor: sw-resize;
+}
+
+.resize-handle.se {
+    bottom: -4px;
+    right: -4px;
+    cursor: se-resize;
 }

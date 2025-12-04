@@ -17,6 +17,11 @@ export class Sanitizer {
         ];
     }
 
+    /**
+     * HTML文字列をサニタイズします。
+     * @param {string} html - サニタイズ対象のHTML文字列
+     * @returns {string} サニタイズ後のHTML文字列
+     */
     sanitize(html) {
         const parser = new DOMParser();
         const doc = parser.parseFromString(html, 'text/html');

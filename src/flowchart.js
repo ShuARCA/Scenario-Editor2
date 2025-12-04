@@ -2,17 +2,26 @@
  * フローチャートロジック
  */
 import { generateId, rgbToHex } from './utils.js';
+import { CONFIG } from './config.js';
 
+/**
+ * フローチャートの描画と操作を管理するクラス
+ */
 export class FlowchartApp {
-    constructor(editorManager) {
+    /**
+     * @param {import('./eventBus.js').EventBus} eventBus - イベントバス
+     */
+    constructor(eventBus) {
         this.container = document.getElementById('flowchart-container');
         this.canvas = document.getElementById('flowchart-canvas');
         this.shapesLayer = document.getElementById('shapes-layer');
         this.connectionsLayer = document.getElementById('connections-layer');
-        this.editorManager = editorManager; // init後に設定されます
+        this.eventBus = eventBus;
 
-        this.shapes = new Map(); // id -> shapeData
-        this.connections = []; // { from: shapeId, to: shapeId, id: ... }
+        /** @type {Map<string, Object>} id -> shapeData */
+        this.shapes = new Map();
+        /** @type {Array<Object>} { from: shapeId, to: shapeId, id: ... } */
+        this.connections = [];
 
         this.mode = 'select'; // select, connect, pan
         this.isDragging = false;
@@ -47,20 +56,38 @@ export class FlowchartApp {
 
         // コンテキストメニューのセットアップ
         this.setupContextMenu();
+
+        // プロパティパネルのセットアップ
+        this.setupPropertyPanel();
+
+        // イベント購読
+        this.eventBus.on('editor:update', (headings) => {
+            this.syncFromEditor(headings);
+        });
     }
 
     setupContextMenu() {
         this.contextMenu = document.getElementById('flowchart-context-menu');
         this.selectedShapeForContext = null;
+        this.selectedConnectionForContext = null;
 
-        // 右クリックイベント
-        this.shapesLayer.addEventListener('contextmenu', (e) => {
+        // コンテキストメニュー内の入力フィールド
+        this.ctxShapeSection = document.getElementById('shape-edit-section');
+        this.ctxConnectionSection = document.getElementById('connection-edit-section');
+        this.ctxShapeBg = document.getElementById('ctx-shape-bg');
+        this.ctxShapeBorder = document.getElementById('ctx-shape-border');
+        this.ctxShapeText = document.getElementById('ctx-shape-text');
+        this.ctxConnectionStyle = document.getElementById('ctx-connection-style');
+
+        // 右クリックイベント (Canvas全体で捕捉し、ターゲットがshapeか判定)
+        this.canvas.addEventListener('contextmenu', (e) => {
             e.preventDefault();
             const shapeEl = e.target.closest('.shape');
             if (shapeEl) {
                 this.selectedShapeForContext = shapeEl.id;
+                this.selectedConnectionForContext = null;
                 this.selectShape(shapeEl.id);
-                this.showContextMenu(e.clientX, e.clientY);
+                this.showContextMenu(e.clientX, e.clientY, 'shape');
             }
         });
 
@@ -74,15 +101,89 @@ export class FlowchartApp {
             }
         });
 
-        // 外側クリックでメニューを閉じる
-        document.addEventListener('click', (e) => {
-            if (!this.contextMenu.contains(e.target)) {
+        // 外側クリックでメニューを閉じる (mousedown を使用して右クリック直後の問題を回避)
+        document.addEventListener('mousedown', (e) => {
+            if (this.contextMenu && !this.contextMenu.contains(e.target) && !e.target.closest('.shape')) {
                 this.hideContextMenu();
             }
         });
+
+        // シェイプ用カラー入力のリアルタイム更新
+        if (this.ctxShapeBg) {
+            this.ctxShapeBg.addEventListener('input', (e) => {
+                if (this.selectedShapeForContext) {
+                    const shape = this.shapes.get(this.selectedShapeForContext);
+                    if (shape && shape.element) {
+                        shape.backgroundColor = e.target.value;
+                        shape.element.style.backgroundColor = e.target.value;
+                    }
+                }
+            });
+        }
+
+        if (this.ctxShapeBorder) {
+            this.ctxShapeBorder.addEventListener('input', (e) => {
+                if (this.selectedShapeForContext) {
+                    const shape = this.shapes.get(this.selectedShapeForContext);
+                    if (shape && shape.element) {
+                        shape.borderColor = e.target.value;
+                        shape.element.style.borderColor = e.target.value;
+                    }
+                }
+            });
+        }
+
+        if (this.ctxShapeText) {
+            this.ctxShapeText.addEventListener('input', (e) => {
+                if (this.selectedShapeForContext) {
+                    const shape = this.shapes.get(this.selectedShapeForContext);
+                    if (shape && shape.element) {
+                        shape.color = e.target.value;
+                        shape.element.style.color = e.target.value;
+                    }
+                }
+            });
+        }
+
+        // 接続線用スタイルのリアルタイム更新
+        if (this.ctxConnectionStyle) {
+            this.ctxConnectionStyle.addEventListener('change', (e) => {
+                if (this.selectedConnectionForContext) {
+                    const conn = this.connections.find(c => c.id === this.selectedConnectionForContext);
+                    if (conn) {
+                        if (!conn.style) conn.style = {};
+                        conn.style.type = e.target.value;
+                        this.drawConnections();
+                    }
+                }
+            });
+        }
     }
 
-    showContextMenu(x, y) {
+    showContextMenu(x, y, type) {
+        // セクションの表示/非表示を切り替え
+        if (type === 'shape') {
+            if (this.ctxShapeSection) this.ctxShapeSection.classList.remove('hidden');
+            if (this.ctxConnectionSection) this.ctxConnectionSection.classList.add('hidden');
+
+            // 現在の値を設定
+            const shape = this.shapes.get(this.selectedShapeForContext);
+            if (shape) {
+                if (this.ctxShapeBg) this.ctxShapeBg.value = shape.backgroundColor || '#ffffff';
+                if (this.ctxShapeBorder) this.ctxShapeBorder.value = shape.borderColor || '#cbd5e1';
+                if (this.ctxShapeText) this.ctxShapeText.value = shape.color || '#334155';
+            }
+        } else if (type === 'connection') {
+            if (this.ctxShapeSection) this.ctxShapeSection.classList.add('hidden');
+            if (this.ctxConnectionSection) this.ctxConnectionSection.classList.remove('hidden');
+
+            // 現在の値を設定
+            const conn = this.connections.find(c => c.id === this.selectedConnectionForContext);
+            if (this.ctxConnectionStyle) {
+                this.ctxConnectionStyle.value = conn?.style?.type || 'solid';
+            }
+        }
+
         this.contextMenu.style.left = `${x}px`;
         this.contextMenu.style.top = `${y}px`;
         this.contextMenu.classList.remove('hidden');
@@ -91,48 +192,59 @@ export class FlowchartApp {
     hideContextMenu() {
         this.contextMenu.classList.add('hidden');
         this.selectedShapeForContext = null;
+        this.selectedConnectionForContext = null;
     }
 
     handleContextMenuAction(action) {
-        if (!this.selectedShapeForContext) return;
-
-        if (action === 'editStyle') {
-            // スタイル編集ダイアログを表示（簡易実装: promptを使用）
-            const shape = this.shapes.get(this.selectedShapeForContext);
-            if (shape) {
-                const bgColor = prompt('背景色を入力 (例: #ffffff):', shape.backgroundColor || '#ffffff');
-                if (bgColor) {
-                    shape.backgroundColor = bgColor;
-                    shape.element.style.backgroundColor = bgColor;
-                }
-                const textColor = prompt('文字色を入力 (例: #334155):', shape.color || '#334155');
-                if (textColor) {
-                    shape.color = textColor;
-                    shape.element.style.color = textColor;
-                }
+        if (action === 'delete') {
+            if (this.selectedShapeForContext) {
+                this.removeShape(this.selectedShapeForContext);
+            } else if (this.selectedConnectionForContext) {
+                this.removeConnection(this.selectedConnectionForContext);
             }
-        } else if (action === 'delete') {
-            this.removeShape(this.selectedShapeForContext);
         }
+    }
+
+    removeConnection(id) {
+        this.connections = this.connections.filter(c => c.id !== id);
+        // DOM要素の削除
+        const path = document.getElementById(`conn-path-${id}`);
+        const hit = document.getElementById(`conn-hit-${id}`);
+        if (path) path.remove();
+        if (hit) hit.remove();
+        this.clearSelection();
     }
 
     setupPropertyPanel() {
         this.propertiesPanel = document.getElementById('flowchart-properties');
         this.shapeBgColorInput = document.getElementById('shapeBgColor');
+        this.shapeBorderColorInput = document.getElementById('shapeBorderColor');
         this.shapeTextColorInput = document.getElementById('shapeTextColor');
         this.connectionStyleSelect = document.getElementById('connectionStyle');
 
-        this.shapeBgColorInput.addEventListener('input', (e) => {
-            this.updateSelectedShapeStyle('backgroundColor', e.target.value);
-        });
+        if (this.shapeBgColorInput) {
+            this.shapeBgColorInput.addEventListener('input', (e) => {
+                this.updateSelectedShapeStyle('backgroundColor', e.target.value);
+            });
+        }
 
-        this.shapeTextColorInput.addEventListener('input', (e) => {
-            this.updateSelectedShapeStyle('color', e.target.value);
-        });
+        if (this.shapeBorderColorInput) {
+            this.shapeBorderColorInput.addEventListener('input', (e) => {
+                this.updateSelectedShapeStyle('borderColor', e.target.value);
+            });
+        }
 
-        this.connectionStyleSelect.addEventListener('change', (e) => {
-            this.updateSelectedConnectionStyle('type', e.target.value);
-        });
+        if (this.shapeTextColorInput) {
+            this.shapeTextColorInput.addEventListener('input', (e) => {
+                this.updateSelectedShapeStyle('color', e.target.value);
+            });
+        }
+
+        if (this.connectionStyleSelect) {
+            this.connectionStyleSelect.addEventListener('change', (e) => {
+                this.updateSelectedConnectionStyle('type', e.target.value);
+            });
+        }
     }
 
     updateSelectedShapeStyle(prop, value) {
@@ -145,9 +257,14 @@ export class FlowchartApp {
     }
 
     updateSelectedConnectionStyle(prop, value) {
-        // 接続の選択状態管理はまだ不十分ですが、選択された接続に対して適用します
-        // 現在のdrawConnectionsは再描画時にスタイルをリセットするため、データを更新する必要があります
-        // 接続の選択ロジックを追加する必要があります
+        if (this.selectedConnectionId) {
+            const conn = this.connections.find(c => c.id === this.selectedConnectionId);
+            if (conn) {
+                if (!conn.style) conn.style = {};
+                conn.style[prop] = value;
+                this.drawConnections();
+            }
+        }
     }
 
     setMode(mode) {
@@ -162,26 +279,34 @@ export class FlowchartApp {
         this.clearSelection();
     }
 
-    syncFromEditor() {
-        if (!this.editorManager) return;
-        const headings = this.editorManager.getHeadings();
-
-        // 簡易同期: 新しい見出しに対して図形を作成し、既存のテキストを更新します。
-        // これは簡易版です。堅牢なバージョンではIDを追跡するか、diffアルゴリズムを使用します。
-        // このデモでは、インデックスまたはテキストで一致させようとします。
+    /**
+     * エディタの見出しとフローチャートの図形を同期します。
+     * 見出しのIDを使用して、既存の図形と紐付けを行います。
+     * @param {Array} headings - 見出し情報の配列
+     */
+    syncFromEditor(headings) {
+        if (!headings) return;
 
         // すべて未確認としてマーク
         this.shapes.forEach(s => s.seen = false);
 
         headings.forEach((h, index) => {
-            // ヒューリスティックで既存の図形を見つけようとします（例：見出し要素に保存されたID？）
-            // 今のところ、可能であれば線形マッピングを想定するか、新規作成します。
+            // IDで既存の図形を検索
+            let shape = Array.from(this.shapes.values()).find(s => s.headingId === h.id);
 
-            let shape = Array.from(this.shapes.values()).find(s => s.headingIndex === index);
+            // 後方互換性: IDがない場合はインデックスで検索（古いデータ用）
+            if (!shape) {
+                shape = Array.from(this.shapes.values()).find(s => !s.headingId && s.headingIndex === index);
+                if (shape) {
+                    // IDを紐付ける
+                    shape.headingId = h.id;
+                }
+            }
 
             if (shape) {
                 shape.text = h.text;
                 shape.seen = true;
+                shape.headingIndex = index; // インデックスも更新（順序用）
                 this.updateShapeElement(shape);
             } else {
                 // 新規作成
@@ -189,11 +314,12 @@ export class FlowchartApp {
                 const newShape = {
                     id: id,
                     text: h.text,
-                    x: 50 + (index * 150) % 800,
-                    y: 50 + Math.floor(index / 5) * 100,
-                    width: 120,
-                    height: 60,
+                    x: CONFIG.FLOWCHART.LAYOUT.START_X + (index * CONFIG.FLOWCHART.LAYOUT.STEP_X) % CONFIG.FLOWCHART.LAYOUT.WRAP_X,
+                    y: CONFIG.FLOWCHART.LAYOUT.START_Y + Math.floor(index / 5) * CONFIG.FLOWCHART.LAYOUT.STEP_Y,
+                    width: CONFIG.FLOWCHART.SHAPE.WIDTH,
+                    height: CONFIG.FLOWCHART.SHAPE.HEIGHT,
                     headingIndex: index,
+                    headingId: h.id, // IDを保存
                     seen: true,
                     children: []
                 };
@@ -202,18 +328,59 @@ export class FlowchartApp {
             }
         });
 
-        // 未確認の図形を削除しますか？ユーザーが手動で追加した可能性があります。
-        // 要件には「H1-H4見出しが自動生成される」とあります。
-        // 見出しに紐付いていたが存在しなくなった図形を削除します。
+        // エディタから削除された見出しに対応する図形を削除
+        // ただし、ユーザーが手動で追加した図形（headingIdを持たない）は残す
         const toRemove = [];
         this.shapes.forEach((s, id) => {
-            if (s.headingIndex !== undefined && !s.seen) {
+            if (s.headingId && !s.seen) {
+                toRemove.push(id);
+            } else if (s.headingIndex !== undefined && !s.headingId && !s.seen) {
+                // 古いデータ形式の場合の削除判定
                 toRemove.push(id);
             }
         });
         toRemove.forEach(id => this.removeShape(id));
 
         this.drawConnections();
+    }
+
+    removeShape(id) {
+        const shape = this.shapes.get(id);
+        if (!shape) return;
+
+        // 親子関係の解消
+        if (shape.parent) {
+            this.ungroupShape(shape);
+        }
+        if (shape.children) {
+            // 子要素の親参照を削除（グループ解除）
+            [...shape.children].forEach(childId => {
+                const child = this.shapes.get(childId);
+                if (child) {
+                    this.ungroupShape(child);
+                }
+            });
+        }
+
+        // 接続の削除
+        this.connections = this.connections.filter(c => c.from !== id && c.to !== id);
+
+        // DOM要素の削除
+        if (shape.element) {
+            shape.element.remove();
+        }
+
+        // データ削除
+        this.shapes.delete(id);
+
+        // 選択状態の解除
+        if (this.selectedShapeForContext === id) {
+            this.selectedShapeForContext = null;
+        }
+
+        // プロパティパネルを隠す（もし選択されていたら）
+        // 簡易的にクリア
+        this.clearSelection();
     }
 
     createShapeElement(shapeData) {
@@ -228,6 +395,7 @@ export class FlowchartApp {
 
         // スタイルの適用
         if (shapeData.backgroundColor) el.style.backgroundColor = shapeData.backgroundColor;
+        if (shapeData.borderColor) el.style.borderColor = shapeData.borderColor;
         if (shapeData.color) el.style.color = shapeData.color;
 
         // 接続ポイントの追加
@@ -236,6 +404,14 @@ export class FlowchartApp {
             pt.className = `connection-point ${pos}`;
             pt.dataset.pos = pos;
             el.appendChild(pt);
+        });
+
+        // リサイズハンドルの追加
+        ['nw', 'ne', 'sw', 'se'].forEach(pos => {
+            const handle = document.createElement('div');
+            handle.className = `resize-handle ${pos}`;
+            handle.dataset.pos = pos;
+            el.appendChild(handle);
         });
 
         this.shapesLayer.appendChild(el);
@@ -251,9 +427,18 @@ export class FlowchartApp {
             shape.element.classList.add('selected');
 
             // プロパティパネルの表示と値の更新
-            this.propertiesPanel.classList.remove('hidden');
-            this.shapeBgColorInput.value = rgbToHex(shape.element.style.backgroundColor) || '#ffffff';
-            this.shapeTextColorInput.value = rgbToHex(shape.element.style.color) || '#334155';
+            if (this.propertiesPanel) {
+                this.propertiesPanel.classList.remove('hidden');
+                if (this.shapeBgColorInput) {
+                    this.shapeBgColorInput.value = rgbToHex(shape.element.style.backgroundColor) || CONFIG.FLOWCHART.COLORS.DEFAULT_BG;
+                }
+                if (this.shapeBorderColorInput) {
+                    this.shapeBorderColorInput.value = rgbToHex(shape.element.style.borderColor) || CONFIG.FLOWCHART.COLORS.DEFAULT_BORDER;
+                }
+                if (this.shapeTextColorInput) {
+                    this.shapeTextColorInput.value = rgbToHex(shape.element.style.color) || CONFIG.FLOWCHART.COLORS.DEFAULT_TEXT;
+                }
+            }
         }
     }
 
@@ -261,16 +446,22 @@ export class FlowchartApp {
         this.shapes.forEach(s => {
             if (s.element) s.element.classList.remove('selected');
         });
+        this.selectedConnectionId = null;
+        this.drawConnections(); // 再描画して選択状態を解除
         // プロパティパネルを隠す
         if (this.propertiesPanel) this.propertiesPanel.classList.add('hidden');
     }
 
     updateShapeElement(shapeData) {
         if (shapeData.element) {
-            // 接続ポイントを保持
+            // 接続ポイントとリサイズハンドルを保持
             const points = Array.from(shapeData.element.querySelectorAll('.connection-point'));
+            const handles = Array.from(shapeData.element.querySelectorAll('.resize-handle'));
+
             shapeData.element.textContent = shapeData.text;
+
             points.forEach(p => shapeData.element.appendChild(p));
+            handles.forEach(h => shapeData.element.appendChild(h));
         }
     }
 
@@ -291,23 +482,28 @@ export class FlowchartApp {
         this.drawConnections();
     }
 
+    /**
+     * マウスダウンイベントを処理します。
+     * モードに応じてパン、選択、接続の開始を行います。
+     * @param {MouseEvent} e 
+     */
     handleMouseDown(e) {
         if (this.mode === 'pan') {
-            this.isPanning = true;
-            this.panStart = { x: e.clientX, y: e.clientY };
-            this.scrollStart = { left: this.container.scrollLeft, top: this.container.scrollTop };
+            this.startPan(e);
             return;
         }
 
         const target = e.target;
 
+        // リサイズハンドルのクリック処理
+        if (target.classList.contains('resize-handle')) {
+            this.startResize(e, target);
+            return;
+        }
+
         // 接続ポイントのクリック処理
         if (this.mode === 'connect' && target.classList.contains('connection-point')) {
-            const shapeEl = target.closest('.shape');
-            if (shapeEl) {
-                this.connectStartShape = shapeEl.id;
-                // ポイントをハイライト？
-            }
+            this.startConnect(target);
             return;
         }
 
@@ -315,20 +511,58 @@ export class FlowchartApp {
         const shapeEl = target.closest('.shape');
         if (shapeEl) {
             if (this.mode === 'select') {
-                this.isDragging = true;
-                this.dragTarget = shapeEl;
-                const rect = shapeEl.getBoundingClientRect();
-                // 図形の左上に対するオフセットを計算
-                this.dragOffset = {
-                    x: e.clientX - rect.left,
-                    y: e.clientY - rect.top
-                };
-                this.selectShape(shapeEl.id);
+                this.startDrag(e, shapeEl);
             }
         } else {
             // 背景をクリック
             this.clearSelection();
         }
+    }
+
+    startResize(e, handle) {
+        e.stopPropagation();
+        const shapeEl = handle.closest('.shape');
+        if (!shapeEl) return;
+
+        this.isResizing = true;
+        this.resizeTarget = this.shapes.get(shapeEl.id);
+        this.resizeHandlePos = handle.dataset.pos;
+        this.resizeStart = { x: e.clientX, y: e.clientY };
+        this.resizeStartDims = {
+            x: this.resizeTarget.x,
+            y: this.resizeTarget.y,
+            width: this.resizeTarget.width,
+            height: this.resizeTarget.height
+        };
+
+        shapeEl.classList.add('resizing');
+        this.selectShape(shapeEl.id);
+    }
+
+    startPan(e) {
+        this.isPanning = true;
+        this.panStart = { x: e.clientX, y: e.clientY };
+        this.scrollStart = { left: this.container.scrollLeft, top: this.container.scrollTop };
+    }
+
+    startConnect(target) {
+        const shapeEl = target.closest('.shape');
+        if (shapeEl) {
+            this.connectStartShape = shapeEl.id;
+            // ポイントをハイライト？
+        }
+    }
+
+    startDrag(e, shapeEl) {
+        this.isDragging = true;
+        this.dragTarget = shapeEl;
+        const rect = shapeEl.getBoundingClientRect();
+        // 図形の左上に対するオフセットを計算
+        this.dragOffset = {
+            x: e.clientX - rect.left,
+            y: e.clientY - rect.top
+        };
+        this.selectShape(shapeEl.id);
     }
 
     handleMouseMove(e) {
@@ -337,6 +571,64 @@ export class FlowchartApp {
             const dy = e.clientY - this.panStart.y;
             this.container.scrollLeft = this.scrollStart.left - dx;
             this.container.scrollTop = this.scrollStart.top - dy;
+            return;
+        }
+
+        if (this.isResizing && this.resizeTarget) {
+            const dx = e.clientX - this.resizeStart.x;
+            const dy = e.clientY - this.resizeStart.y;
+            const dims = this.resizeStartDims;
+            const minW = 50;
+            const minH = 30;
+
+            let newX = dims.x;
+            let newY = dims.y;
+            let newW = dims.width;
+            let newH = dims.height;
+
+            if (this.resizeHandlePos.includes('e')) {
+                newW = Math.max(minW, dims.width + dx);
+            }
+            if (this.resizeHandlePos.includes('w')) {
+                const w = Math.max(minW, dims.width - dx);
+                newX = dims.x + (dims.width - w);
+                newW = w;
+            }
+            if (this.resizeHandlePos.includes('s')) {
+                newH = Math.max(minH, dims.height + dy);
+            }
+            if (this.resizeHandlePos.includes('n')) {
+                const h = Math.max(minH, dims.height - dy);
+                newY = dims.y + (dims.height - h);
+                newH = h;
+            }
+
+            this.resizeTarget.x = newX;
+            this.resizeTarget.y = newY;
+            this.resizeTarget.width = newW;
+            this.resizeTarget.height = newH;
+
+            // サイズ情報を保存
+            if (this.resizeTarget.collapsed) {
+                this.resizeTarget.collapsedSize = { width: newW, height: newH };
+            } else {
+                this.resizeTarget.expandedSize = { width: newW, height: newH };
+            }
+
+            if (this.resizeTarget.element) {
+                this.resizeTarget.element.style.left = `${newX}px`;
+                this.resizeTarget.element.style.top = `${newY}px`;
+                this.resizeTarget.element.style.width = `${newW}px`;
+                this.resizeTarget.element.style.height = `${newH}px`;
+            }
+
+            // 親のサイズ更新
+            if (this.resizeTarget.parent) {
+                const parent = this.shapes.get(this.resizeTarget.parent);
+                if (parent) this.updateParentSize(parent);
+            }
+
+            this.drawConnections();
             return;
         }
 
@@ -352,6 +644,13 @@ export class FlowchartApp {
                 const dy = y - shape.y;
 
                 this.moveShape(shape, dx, dy);
+
+                // 親のサイズ更新
+                if (shape.parent) {
+                    const parent = this.shapes.get(shape.parent);
+                    if (parent) this.updateParentSize(parent);
+                }
+
                 this.drawConnections();
             }
         }
@@ -377,6 +676,16 @@ export class FlowchartApp {
     }
 
     handleMouseUp(e) {
+        if (this.isResizing) {
+            if (this.resizeTarget && this.resizeTarget.element) {
+                this.resizeTarget.element.classList.remove('resizing');
+            }
+            this.isResizing = false;
+            this.resizeTarget = null;
+            this.resizeHandlePos = null;
+            return;
+        }
+
         if (this.isDragging && this.dragTarget && this.mode === 'select') {
             // ドロップ時のグループ化判定
             const droppedShape = this.shapes.get(this.dragTarget.id);
@@ -468,7 +777,9 @@ export class FlowchartApp {
         parent.children.push(child.id);
 
         // スタイル更新
+        // スタイル更新
         this.updateShapeStyle(parent);
+        this.updateParentSize(parent);
     }
 
     ungroupShape(child) {
@@ -478,6 +789,7 @@ export class FlowchartApp {
         if (parent) {
             parent.children = parent.children.filter(id => id !== child.id);
             this.updateShapeStyle(parent);
+            this.updateParentSize(parent);
         }
         child.parent = null;
     }
@@ -506,13 +818,140 @@ export class FlowchartApp {
     }
 
     toggleCollapse(shape) {
+        // 現在の状態のサイズを保存
+        if (shape.collapsed) {
+            shape.collapsedSize = { width: shape.width, height: shape.height };
+        } else {
+            shape.expandedSize = { width: shape.width, height: shape.height };
+        }
+
+        const oldHeight = shape.height;
         shape.collapsed = !shape.collapsed;
         const toggle = shape.element.querySelector('.group-toggle');
         if (toggle) toggle.textContent = shape.collapsed ? '+' : '-';
 
         // 子要素の表示/非表示
         this.setChildrenVisibility(shape, !shape.collapsed);
+
+        // サイズ復元または再計算
+        if (shape.collapsed) {
+            if (shape.collapsedSize) {
+                shape.width = shape.collapsedSize.width;
+                shape.height = shape.collapsedSize.height;
+                this.updateShapeDOM(shape);
+            } else {
+                // デフォルト（最小）サイズ
+                shape.width = CONFIG.FLOWCHART.SHAPE.WIDTH;
+                shape.height = CONFIG.FLOWCHART.SHAPE.HEIGHT;
+                this.updateShapeDOM(shape);
+            }
+        } else {
+            if (shape.expandedSize) {
+                shape.width = shape.expandedSize.width;
+                shape.height = shape.expandedSize.height;
+                this.updateShapeDOM(shape);
+                // 必要に応じて子要素を包含するように拡張するかチェックしてもよいが
+                // ここではユーザーが設定したサイズを優先する
+                // ただし、子要素がはみ出ている場合は updateParentSize を呼んで調整する手もある
+                // 今回は updateParentSize を呼ぶと自動計算で上書きされる可能性があるため、
+                // 復元のみ行う。
+            } else {
+                this.updateParentSize(shape);
+            }
+        }
+
+        // レイアウト調整
+        const deltaY = shape.height - oldHeight;
+        if (deltaY !== 0) {
+            this.adjustLayout(shape, deltaY);
+        }
+
         this.drawConnections();
+    }
+
+    updateShapeDOM(shape) {
+        if (shape.element) {
+            shape.element.style.width = `${shape.width}px`;
+            shape.element.style.height = `${shape.height}px`;
+            shape.element.style.left = `${shape.x}px`;
+            shape.element.style.top = `${shape.y}px`;
+        }
+    }
+
+    updateParentSize(shape) {
+        if (!shape.children || shape.children.length === 0) return;
+
+        if (shape.collapsed) {
+            // 折りたたみ時はサイズ変更しない（ユーザー指定サイズまたはデフォルトを維持）
+            // ただし、初期化時などでサイズがない場合はデフォルトを設定
+            if (!shape.width) shape.width = CONFIG.FLOWCHART.SHAPE.WIDTH;
+            if (!shape.height) shape.height = CONFIG.FLOWCHART.SHAPE.HEIGHT;
+        } else {
+            // 展開時は子要素を包含する矩形を計算
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+
+            // まず子要素の範囲を取得
+            shape.children.forEach(childId => {
+                const child = this.shapes.get(childId);
+                if (child) {
+                    minX = Math.min(minX, child.x);
+                    minY = Math.min(minY, child.y);
+                    maxX = Math.max(maxX, child.x + child.width);
+                    maxY = Math.max(maxY, child.y + child.height);
+                }
+            });
+
+            const padding = CONFIG.FLOWCHART.LAYOUT.GROUP_PADDING;
+            const headerHeight = CONFIG.FLOWCHART.LAYOUT.GROUP_HEADER_HEIGHT; // 親のラベル部分
+
+            // 親の新しいRect
+            // 子要素のBoundingBoxを包む
+            let newX = Math.min(shape.x, minX - padding);
+            let newY = Math.min(shape.y, minY - headerHeight - padding);
+            let newWidth = Math.max(shape.width, (maxX - newX) + padding);
+            let newHeight = Math.max(shape.height, (maxY - newY) + padding);
+
+            // ユーザーが手動で広げたサイズ（expandedSize）があれば、それより小さくならないようにする
+            if (shape.expandedSize) {
+                newWidth = Math.max(newWidth, shape.expandedSize.width);
+                newHeight = Math.max(newHeight, shape.expandedSize.height);
+            }
+
+            shape.x = newX;
+            shape.y = newY;
+            shape.width = newWidth;
+            shape.height = newHeight;
+
+            // 現在のサイズをexpandedSizeとして更新（自動拡張された場合のため）
+            shape.expandedSize = { width: newWidth, height: newHeight };
+        }
+
+        // DOM更新
+        this.updateShapeDOM(shape);
+    }
+
+    adjustLayout(sourceShape, deltaY) {
+        // sourceShapeより下にある図形を移動
+        // 単純なY座標比較 + 水平方向の重なりチェック
+
+        const sourceBottom = sourceShape.y + sourceShape.height - deltaY; // 変更前のボトム？
+        // いや、単純に中心座標などで判定
+
+        this.shapes.forEach(shape => {
+            if (shape.id === sourceShape.id) return;
+            if (this.isDescendant(sourceShape.id, shape.id)) return; // 子孫は親と一緒に動く（サイズ変更で包含される）
+            if (shape.parent) return; // 親がいる場合は親のサイズ変更で処理されるはず（トップレベルのみ調整）
+
+            // 水平方向の重なりがあるか
+            const horizontalOverlap = (
+                shape.x < sourceShape.x + sourceShape.width &&
+                shape.x + shape.width > sourceShape.x
+            );
+
+            if (horizontalOverlap && shape.y > sourceShape.y) {
+                this.moveShape(shape, 0, deltaY);
+            }
+        });
     }
 
     setChildrenVisibility(shape, visible) {
@@ -534,10 +973,8 @@ export class FlowchartApp {
 
 
     drawConnections() {
-        // SVGレイヤーをクリア
-        while (this.connectionsLayer.firstChild) {
-            this.connectionsLayer.removeChild(this.connectionsLayer.firstChild);
-        }
+        // 既存の接続パスを追跡するためのセット
+        const activeConnectionIds = new Set();
 
         this.connections.forEach(conn => {
             const fromShape = this.shapes.get(conn.from);
@@ -546,17 +983,22 @@ export class FlowchartApp {
             if (!fromShape || !toShape || !fromShape.element || !toShape.element) return;
 
             // 親が折りたたまれていて、自分が非表示の場合は描画しない
-            if (fromShape.element.style.display === 'none' || toShape.element.style.display === 'none') return;
+            if (fromShape.element.style.display === 'none' || toShape.element.style.display === 'none') {
+                // 非表示の場合はDOM要素があれば削除
+                const existingPath = document.getElementById(`conn-path-${conn.id}`);
+                const existingHit = document.getElementById(`conn-hit-${conn.id}`);
+                if (existingPath) existingPath.remove();
+                if (existingHit) existingHit.remove();
+                return;
+            }
 
-            // 接続ポイントの計算 (簡易的に中心から中心、または最近接ポイント)
-            // ここでは簡易的に各図形の中心を使用し、矩形との交点を求めるロジックなどが理想だが、
-            // まずは中心座標を使用
+            activeConnectionIds.add(conn.id);
+
+            // 接続ポイントの計算
             const startX = fromShape.x + fromShape.width / 2;
             const startY = fromShape.y + fromShape.height / 2;
             const endX = toShape.x + toShape.width / 2;
             const endY = toShape.y + toShape.height / 2;
-
-            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
 
             // ベジェ曲線
             const dx = Math.abs(endX - startX);
@@ -567,14 +1009,88 @@ export class FlowchartApp {
 
             const d = `M ${startX} ${startY} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${endX} ${endY}`;
 
+            // パス要素の取得または作成
+            let path = document.getElementById(`conn-path-${conn.id}`);
+            let hitPath = document.getElementById(`conn-hit-${conn.id}`);
+
+            if (!path) {
+                path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                path.id = `conn-path-${conn.id}`;
+                path.setAttribute('fill', 'none');
+                this.connectionsLayer.appendChild(path);
+
+                hitPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                hitPath.id = `conn-hit-${conn.id}`;
+                hitPath.setAttribute('stroke', 'transparent');
+                hitPath.setAttribute('stroke-width', '10');
+                hitPath.setAttribute('fill', 'none');
+                hitPath.style.cursor = 'pointer';
+                hitPath.style.pointerEvents = 'stroke';
+                hitPath.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this.selectConnection(conn.id);
+                });
+                hitPath.addEventListener('contextmenu', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    this.selectedConnectionForContext = conn.id;
+                    this.selectedShapeForContext = null;
+                    this.selectConnection(conn.id);
+                    this.showContextMenu(e.clientX, e.clientY, 'connection');
+                });
+                this.connectionsLayer.appendChild(hitPath);
+            }
+
+            // 属性の更新
             path.setAttribute('d', d);
-            path.setAttribute('stroke', '#94a3b8');
-            path.setAttribute('stroke-width', '2');
-            path.setAttribute('fill', 'none');
+            hitPath.setAttribute('d', d);
 
-            // 矢印マーカーなどが欲しい場合はdefsに追加が必要だが、一旦線のみ
+            if (this.selectedConnectionId === conn.id) {
+                path.setAttribute('stroke', CONFIG.FLOWCHART.COLORS.CONNECTION_SELECTED);
+                path.setAttribute('stroke-width', '3');
+                path.setAttribute('marker-end', 'url(#arrow-head-selected)');
+            } else {
+                path.setAttribute('stroke', conn.style?.color || CONFIG.FLOWCHART.COLORS.CONNECTION_DEFAULT);
+                path.setAttribute('stroke-width', '2');
+                path.setAttribute('marker-end', 'url(#arrow-head)');
+            }
 
-            this.connectionsLayer.appendChild(path);
+            if (conn.style?.type === 'dashed') {
+                path.setAttribute('stroke-dasharray', '5,5');
+            } else {
+                path.removeAttribute('stroke-dasharray');
+            }
         });
+
+        // 存在しなくなった接続のDOM要素を削除
+        Array.from(this.connectionsLayer.children).forEach(child => {
+            // IDから接続IDを抽出
+            const match = child.id.match(/^conn-(path|hit)-(.*)$/);
+            if (match) {
+                const connId = match[2];
+                if (!activeConnectionIds.has(connId)) {
+                    child.remove();
+                }
+            }
+        });
+    }
+
+    selectConnection(id) {
+        this.clearSelection();
+        this.selectedConnectionId = id;
+        this.drawConnections();
+
+        // プロパティパネル表示
+        if (this.propertiesPanel) {
+            this.propertiesPanel.classList.remove('hidden');
+        }
+        // 接続用の設定を表示、シェイプ用を隠すなどの制御が必要だが
+        // ここでは簡易的に全部表示
+        const conn = this.connections.find(c => c.id === id);
+        if (conn && conn.style && this.connectionStyleSelect) {
+            this.connectionStyleSelect.value = conn.style.type || 'solid';
+        } else if (this.connectionStyleSelect) {
+            this.connectionStyleSelect.value = 'solid';
+        }
     }
 }

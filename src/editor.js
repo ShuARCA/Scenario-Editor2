@@ -1,17 +1,25 @@
 /**
  * エディタロジック
  */
-import { debounce, rgbToHex } from './utils.js';
+import { debounce, rgbToHex, generateId } from './utils.js';
 import { Sanitizer } from './sanitizer.js';
+import { CONFIG } from './config.js';
 
+/**
+ * エディタのロジックを管理するクラス
+ * テキストの入力、画像の挿入、ツールバーの操作などを担当します。
+ */
 export class EditorManager {
-    constructor(flowchartApp) {
+    /**
+     * @param {import('./eventBus.js').EventBus} eventBus - イベントバス
+     */
+    constructor(eventBus) {
         this.editor = document.getElementById('editor');
         this.outlineList = document.getElementById('outline-list');
         this.floatToolbar = document.getElementById('float-toolbar');
         this.textColorPicker = document.getElementById('textColorPicker');
         this.highlightPicker = document.getElementById('highlightPicker');
-        this.flowchartApp = flowchartApp;
+        this.eventBus = eventBus;
         this.sanitizer = new Sanitizer();
 
         this.savedSelection = null;
@@ -23,8 +31,9 @@ export class EditorManager {
         // 入力処理
         this.editor.addEventListener('input', debounce(() => {
             this.updateOutline();
-            if (this.flowchartApp) this.flowchartApp.syncFromEditor();
-        }, 500));
+            // イベント発火
+            this.eventBus.emit('editor:update', this.getHeadings());
+        }, CONFIG.EDITOR.DEBOUNCE_WAIT));
 
         // 浮動ツールバーのための選択処理
         document.addEventListener('selectionchange', () => this.handleSelectionChange());
@@ -103,7 +112,86 @@ export class EditorManager {
     insertImage(src) {
         const container = document.createElement('div');
         container.className = 'resizable-container';
-        container.contentEditable = 'false'; // コンテナ自体は編集不可にすることでリサイズハンドルを有効化
+        container.contentEditable = 'false';
+        container.style.position = 'relative';
+        container.style.display = 'inline-block';
+        container.style.margin = '10px';
+
+        const img = document.createElement('img');
+        img.src = src;
+        img.style.maxWidth = '100%';
+        img.style.display = 'block';
+
+        // デフォルトサイズ（大きすぎないように）
+        img.onload = () => {
+            if (img.width > CONFIG.EDITOR.MAX_IMAGE_WIDTH) img.style.width = `${CONFIG.EDITOR.MAX_IMAGE_WIDTH}px`;
+        };
+
+        container.appendChild(img);
+
+        // リサイズハンドル
+        const handle = document.createElement('div');
+        handle.className = 'resize-handle';
+        handle.style.position = 'absolute';
+        handle.style.bottom = '0';
+        handle.style.right = '0';
+        handle.style.width = '10px';
+        handle.style.height = '10px';
+        handle.style.backgroundColor = '#3b82f6';
+        handle.style.cursor = 'nwse-resize';
+
+        container.appendChild(handle);
+
+        // 挿入
+        const selection = window.getSelection();
+        if (selection.rangeCount) {
+            const range = selection.getRangeAt(0);
+            range.insertNode(container);
+            range.collapse(false);
+        } else {
+            this.editor.appendChild(container);
+        }
+
+        // リサイズイベント
+        this.setupResizeHandler(container, img, handle);
+    }
+
+    setupResizeHandler(container, img, handle) {
+        let isResizing = false;
+        let startX, startY, startWidth, startHeight;
+
+        handle.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            isResizing = true;
+            startX = e.clientX;
+            startY = e.clientY;
+            startWidth = img.offsetWidth;
+            startHeight = img.offsetHeight;
+
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mouseup', onMouseUp);
+        });
+
+        const onMouseMove = (e) => {
+            if (!isResizing) return;
+            const dx = e.clientX - startX;
+            const dy = e.clientY - startY;
+
+            // アスペクト比を維持するかどうか？
+            // ここでは簡易的に幅だけ変更し、高さはautoにする
+            const newWidth = startWidth + dx;
+            if (newWidth > 50) {
+                img.style.width = `${newWidth}px`;
+                img.style.height = 'auto';
+            }
+        };
+
+        const onMouseUp = () => {
+            isResizing = false;
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+        };
     }
 
     handleSelectionChange() {
@@ -188,10 +276,7 @@ export class EditorManager {
         const btn = document.getElementById(btnId);
         const picker = document.getElementById(pickerId);
 
-        const colors = [
-            '#000000', '#4b5563', '#ef4444', '#f59e0b', '#10b981',
-            '#3b82f6', '#6366f1', '#8b5cf6', '#ec4899', '#ffffff'
-        ];
+        const colors = CONFIG.EDITOR.COLORS;
 
         // ピッカーの生成
         picker.innerHTML = '';
@@ -268,11 +353,82 @@ export class EditorManager {
         });
     }
 
+    /**
+     * エディタ内の見出し要素を取得します。
+     * 各見出しに一意のIDを付与し、フローチャートとの同期に使用します。
+     * @returns {Array<{text: string, level: number, element: HTMLElement, id: string}>} 見出し情報の配列
+     */
     getHeadings() {
-        return Array.from(this.editor.querySelectorAll('h1, h2, h3, h4')).map(h => ({
-            text: h.textContent,
-            level: parseInt(h.tagName[1]),
-            element: h
-        }));
+        return Array.from(this.editor.querySelectorAll('h1, h2, h3, h4'))
+            .map(h => {
+                // IDがなければ生成して付与
+                if (!h.id) {
+                    h.id = generateId();
+                }
+                return {
+                    text: h.textContent,
+                    level: parseInt(h.tagName[1]),
+                    element: h,
+                    id: h.id
+                };
+            });
+    }
+    insertRuby() {
+        const selection = window.getSelection();
+        if (!selection.rangeCount) return;
+
+        const range = selection.getRangeAt(0);
+        const text = range.toString();
+
+        if (!text) {
+            alert('ルビを振るテキストを選択してください。');
+            return;
+        }
+
+        const rubyText = prompt('ルビを入力してください:', '');
+        if (rubyText) {
+            const ruby = document.createElement('ruby');
+            ruby.textContent = text;
+            const rt = document.createElement('rt');
+            rt.textContent = rubyText;
+            ruby.appendChild(rt);
+
+            range.deleteContents();
+            range.insertNode(ruby);
+
+            // カーソルをルビの後ろに移動
+            range.setStartAfter(ruby);
+            range.setEndAfter(ruby);
+            selection.removeAllRanges();
+            selection.addRange(range);
+        }
+    }
+
+    insertCodeBlock() {
+        const selection = window.getSelection();
+        if (!selection.rangeCount) return;
+
+        const range = selection.getRangeAt(0);
+        const pre = document.createElement('pre');
+        const code = document.createElement('code');
+
+        const text = range.toString();
+        code.textContent = text || 'コードを入力...';
+
+        pre.appendChild(code);
+
+        if (text) {
+            range.deleteContents();
+            range.insertNode(pre);
+        } else {
+            range.insertNode(pre);
+        }
+
+        // カーソルをコードブロック内に移動したいが、contentEditableの挙動が怪しいので
+        // 一旦後ろに移動するか、そのままにする
+        range.setStartAfter(pre);
+        range.setEndAfter(pre);
+        selection.removeAllRanges();
+        selection.addRange(range);
     }
 }
