@@ -8,12 +8,12 @@ export class Sanitizer {
     constructor() {
         this.allowedTags = [
             'h1', 'h2', 'h3', 'h4', 'p', 'br', 'hr',
-            'b', 'i', 'u', 's', 'strong', 'em', 'span', 'div',
+            'b', 'i', 'u', 's', 'strong', 'em', 'span', 'div', 'font',
             'ul', 'ol', 'li', 'blockquote', 'pre', 'code',
             'img', 'ruby', 'rt', 'rp'
         ];
         this.allowedAttributes = [
-            'class', 'id', 'style', 'src', 'alt', 'title', 'href', 'target'
+            'class', 'id', 'style', 'src', 'alt', 'title', 'href', 'target', 'color'
         ];
     }
 

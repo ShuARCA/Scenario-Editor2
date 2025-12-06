@@ -43,6 +43,11 @@ export class EditorManager {
 
         // ツールバーアクションのセットアップ
         this.setupToolbarActions();
+
+        // フローチャートノードクリック時のスクロールイベント
+        this.eventBus.on('editor:scrollToHeading', (headingId) => {
+            this.scrollToHeading(headingId);
+        });
     }
 
     setupImageHandling() {
@@ -430,5 +435,26 @@ export class EditorManager {
         range.setEndAfter(pre);
         selection.removeAllRanges();
         selection.addRange(range);
+    }
+
+    /**
+     * 指定されたIDの見出し要素までスクロールします。
+     * @param {string} headingId - 見出し要素のID
+     */
+    scrollToHeading(headingId) {
+        const heading = document.getElementById(headingId);
+        if (heading && this.editor.contains(heading)) {
+            heading.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+            // アウトラインのアクティブ状態も更新
+            this.outlineList.querySelectorAll('.outline-item').forEach((item, index) => {
+                const headings = this.editor.querySelectorAll('h1, h2, h3, h4');
+                if (headings[index] === heading) {
+                    item.classList.add('active');
+                } else {
+                    item.classList.remove('active');
+                }
+            });
+        }
     }
 }

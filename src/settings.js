@@ -126,7 +126,7 @@ export class SettingsManager {
             root.style.setProperty('--text-color', '#f8fafc');
             root.style.setProperty('--border-color', '#334155');
             // エディタ色がカスタム設定されていない場合のみ上書き
-            if (this.settings.editorBgColor === '#ffffff') editor.style.backgroundColor = '#1e293b';
+            if (this.settings.editorBgColor === '#ffffff') editor.style.backgroundColor = '#303030ff';
             if (this.settings.editorTextColor === '#334155') editor.style.color = '#f8fafc';
         } else {
             root.style.setProperty('--surface-color', '#ffffff');

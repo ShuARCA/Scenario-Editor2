@@ -34,6 +34,13 @@ export class FlowchartApp {
 
         this.connectStartShape = null;
 
+        // ズーム機能
+        this.zoomLevel = 1.0;
+        this.zoomMin = 0.1;
+        this.zoomMax = 2.0;
+        this.zoomStep = 0.1;
+        this.canvasContent = document.getElementById('canvas-content');
+
         this.init();
     }
 
@@ -44,10 +51,27 @@ export class FlowchartApp {
     init() {
         // ツールバー
         document.querySelectorAll('.mode-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                this.setMode(btn.dataset.mode);
-            });
+            if (btn.dataset.mode) {
+                btn.addEventListener('click', () => {
+                    this.setMode(btn.dataset.mode);
+                });
+            }
         });
+
+        // ズームボタン
+        const zoomInBtn = document.getElementById('zoom-in-btn');
+        const zoomOutBtn = document.getElementById('zoom-out-btn');
+        const fitViewBtn = document.getElementById('fit-view-btn');
+
+        if (zoomInBtn) {
+            zoomInBtn.addEventListener('click', () => this.zoomIn());
+        }
+        if (zoomOutBtn) {
+            zoomOutBtn.addEventListener('click', () => this.zoomOut());
+        }
+        if (fitViewBtn) {
+            fitViewBtn.addEventListener('click', () => this.fitView());
+        }
 
         // キャンバスイベント
         this.canvas.addEventListener('mousedown', (e) => this.handleMouseDown(e));
@@ -158,6 +182,53 @@ export class FlowchartApp {
                 }
             });
         }
+
+        // 接続線用の追加入力フィールド
+        this.ctxConnectionArrow = document.getElementById('ctx-connection-arrow');
+        this.ctxConnectionColor = document.getElementById('ctx-connection-color');
+        this.ctxConnectionLabel = document.getElementById('ctx-connection-label');
+
+        // 矢印スタイルのリアルタイム更新
+        if (this.ctxConnectionArrow) {
+            this.ctxConnectionArrow.addEventListener('change', (e) => {
+                if (this.selectedConnectionForContext) {
+                    const conn = this.connections.find(c => c.id === this.selectedConnectionForContext);
+                    if (conn) {
+                        if (!conn.style) conn.style = {};
+                        conn.style.arrow = e.target.value;
+                        this.drawConnections();
+                    }
+                }
+            });
+        }
+
+        // 線色のリアルタイム更新
+        if (this.ctxConnectionColor) {
+            this.ctxConnectionColor.addEventListener('input', (e) => {
+                if (this.selectedConnectionForContext) {
+                    const conn = this.connections.find(c => c.id === this.selectedConnectionForContext);
+                    if (conn) {
+                        if (!conn.style) conn.style = {};
+                        conn.style.color = e.target.value;
+                        this.drawConnections();
+                    }
+                }
+            });
+        }
+
+        // ラベルのリアルタイム更新
+        if (this.ctxConnectionLabel) {
+            this.ctxConnectionLabel.addEventListener('input', (e) => {
+                if (this.selectedConnectionForContext) {
+                    const conn = this.connections.find(c => c.id === this.selectedConnectionForContext);
+                    if (conn) {
+                        if (!conn.style) conn.style = {};
+                        conn.style.label = e.target.value;
+                        this.drawConnections();
+                    }
+                }
+            });
+        }
     }
 
     showContextMenu(x, y, type) {
@@ -181,6 +252,15 @@ export class FlowchartApp {
             const conn = this.connections.find(c => c.id === this.selectedConnectionForContext);
             if (this.ctxConnectionStyle) {
                 this.ctxConnectionStyle.value = conn?.style?.type || 'solid';
+            }
+            if (this.ctxConnectionArrow) {
+                this.ctxConnectionArrow.value = conn?.style?.arrow || 'end';
+            }
+            if (this.ctxConnectionColor) {
+                this.ctxConnectionColor.value = conn?.style?.color || '#94a3b8';
+            }
+            if (this.ctxConnectionLabel) {
+                this.ctxConnectionLabel.value = conn?.style?.label || '';
             }
         }
 
@@ -342,6 +422,12 @@ export class FlowchartApp {
         toRemove.forEach(id => this.removeShape(id));
 
         this.drawConnections();
+
+        // z-index更新
+        this.updateAllZIndexes();
+
+        // キャンバスサイズを更新
+        this.updateCanvasSize();
     }
 
     removeShape(id) {
@@ -549,18 +635,39 @@ export class FlowchartApp {
         const shapeEl = target.closest('.shape');
         if (shapeEl) {
             this.connectStartShape = shapeEl.id;
-            // ポイントをハイライト？
+            // 接続ポイントの位置を保存（top, bottom, left, right）
+            if (target.classList.contains('connection-point')) {
+                if (target.classList.contains('top')) {
+                    this.connectStartPoint = 'top';
+                } else if (target.classList.contains('bottom')) {
+                    this.connectStartPoint = 'bottom';
+                } else if (target.classList.contains('left')) {
+                    this.connectStartPoint = 'left';
+                } else if (target.classList.contains('right')) {
+                    this.connectStartPoint = 'right';
+                } else {
+                    this.connectStartPoint = 'bottom'; // デフォルト
+                }
+            } else {
+                this.connectStartPoint = 'bottom'; // デフォルト
+            }
         }
     }
 
     startDrag(e, shapeEl) {
         this.isDragging = true;
         this.dragTarget = shapeEl;
-        const rect = shapeEl.getBoundingClientRect();
-        // 図形の左上に対するオフセットを計算
+        // クリック判定用：開始位置と移動フラグ
+        this.dragStartPos = { x: e.clientX, y: e.clientY };
+        this.hasMoved = false;
+        // ズームレベルを考慮したオフセット計算
+        const shape = this.shapes.get(shapeEl.id);
+        const canvasRect = this.canvas.getBoundingClientRect();
+        const mouseX = (e.clientX - canvasRect.left + this.container.scrollLeft) / this.zoomLevel;
+        const mouseY = (e.clientY - canvasRect.top + this.container.scrollTop) / this.zoomLevel;
         this.dragOffset = {
-            x: e.clientX - rect.left,
-            y: e.clientY - rect.top
+            x: mouseX - shape.x,
+            y: mouseY - shape.y
         };
         this.selectShape(shapeEl.id);
     }
@@ -575,8 +682,8 @@ export class FlowchartApp {
         }
 
         if (this.isResizing && this.resizeTarget) {
-            const dx = e.clientX - this.resizeStart.x;
-            const dy = e.clientY - this.resizeStart.y;
+            const dx = (e.clientX - this.resizeStart.x) / this.zoomLevel;
+            const dy = (e.clientY - this.resizeStart.y) / this.zoomLevel;
             const dims = this.resizeStartDims;
             const minW = 50;
             const minH = 30;
@@ -633,10 +740,19 @@ export class FlowchartApp {
         }
 
         if (this.isDragging && this.dragTarget && this.mode === 'select') {
-            // canvas-content に対する新しい位置を計算
+            // 移動判定：閾値（5px）を超えたらドラッグとみなす
+            if (this.dragStartPos) {
+                const dx = Math.abs(e.clientX - this.dragStartPos.x);
+                const dy = Math.abs(e.clientY - this.dragStartPos.y);
+                if (dx > 5 || dy > 5) {
+                    this.hasMoved = true;
+                }
+            }
+
+            // canvas-content に対する新しい位置を計算（ズームレベルで補正）
             const canvasRect = this.canvas.getBoundingClientRect();
-            const x = e.clientX - canvasRect.left + this.container.scrollLeft - this.dragOffset.x;
-            const y = e.clientY - canvasRect.top + this.container.scrollTop - this.dragOffset.y;
+            const x = (e.clientX - canvasRect.left + this.container.scrollLeft) / this.zoomLevel - this.dragOffset.x;
+            const y = (e.clientY - canvasRect.top + this.container.scrollTop) / this.zoomLevel - this.dragOffset.y;
 
             const shape = this.shapes.get(this.dragTarget.id);
             if (shape) {
@@ -645,11 +761,11 @@ export class FlowchartApp {
 
                 this.moveShape(shape, dx, dy);
 
-                // 親のサイズ更新
-                if (shape.parent) {
-                    const parent = this.shapes.get(shape.parent);
-                    if (parent) this.updateParentSize(parent);
-                }
+                // 親のサイズ更新（自動リサイズを削除: グループ解除機能を妨げないようにするため）
+                // if (shape.parent) {
+                //     const parent = this.shapes.get(shape.parent);
+                //     if (parent) this.updateParentSize(parent);
+                // }
 
                 this.drawConnections();
             }
@@ -683,36 +799,62 @@ export class FlowchartApp {
             this.isResizing = false;
             this.resizeTarget = null;
             this.resizeHandlePos = null;
+            // キャンバスサイズを更新
+            this.updateCanvasSize();
             return;
         }
 
         if (this.isDragging && this.dragTarget && this.mode === 'select') {
-            // ドロップ時のグループ化判定
             const droppedShape = this.shapes.get(this.dragTarget.id);
-            if (droppedShape) {
+
+            if (!this.hasMoved && droppedShape && droppedShape.headingId) {
+                // クリック（ドラッグなし）：エディタの対応する見出しにスクロール
+                this.eventBus.emit('editor:scrollToHeading', droppedShape.headingId);
+            } else if (droppedShape) {
+                // ドロップ時のグループ化判定
                 this.handleDrop(droppedShape);
             }
         }
 
         this.isDragging = false;
         this.dragTarget = null;
+        this.dragStartPos = null;
+        this.hasMoved = false;
         this.isPanning = false;
+
+        // キャンバスサイズを更新
+        this.updateCanvasSize();
 
         if (this.mode === 'connect' && this.connectStartShape) {
             const target = e.target;
             if (target.classList.contains('connection-point')) {
                 const shapeEl = target.closest('.shape');
                 if (shapeEl && shapeEl.id !== this.connectStartShape) {
-                    // 接続を作成
+                    // 終点の接続ポイントを判定
+                    let toPoint = 'top'; // デフォルト
+                    if (target.classList.contains('top')) {
+                        toPoint = 'top';
+                    } else if (target.classList.contains('bottom')) {
+                        toPoint = 'bottom';
+                    } else if (target.classList.contains('left')) {
+                        toPoint = 'left';
+                    } else if (target.classList.contains('right')) {
+                        toPoint = 'right';
+                    }
+
+                    // 接続を作成（始点・終点のポイント情報も保存）
                     this.connections.push({
                         id: generateId(),
                         from: this.connectStartShape,
-                        to: shapeEl.id
+                        to: shapeEl.id,
+                        fromPoint: this.connectStartPoint || 'bottom',
+                        toPoint: toPoint
                     });
                     this.drawConnections();
                 }
             }
             this.connectStartShape = null;
+            this.connectStartPoint = null;
         }
     }
 
@@ -777,9 +919,11 @@ export class FlowchartApp {
         parent.children.push(child.id);
 
         // スタイル更新
-        // スタイル更新
         this.updateShapeStyle(parent);
         this.updateParentSize(parent);
+
+        // z-index更新
+        this.updateAllZIndexes();
     }
 
     ungroupShape(child) {
@@ -792,6 +936,9 @@ export class FlowchartApp {
             this.updateParentSize(parent);
         }
         child.parent = null;
+
+        // z-index更新
+        this.updateAllZIndexes();
     }
 
     updateShapeStyle(shape) {
@@ -930,6 +1077,40 @@ export class FlowchartApp {
         this.updateShapeDOM(shape);
     }
 
+    /**
+     * 全てのシェイプのz-indexを親子関係に基づいて更新します。
+     * 子ノードは親ノードより高いz-indexを持ちます。
+     */
+    updateAllZIndexes() {
+        const baseZIndex = 10;
+
+        /**
+         * 再帰的にシェイプとその子のz-indexを設定します。
+         * @param {Object} shape - シェイプオブジェクト
+         * @param {number} level - 親子階層のレベル
+         */
+        const setZIndex = (shape, level) => {
+            if (shape.element) {
+                shape.element.style.zIndex = baseZIndex + level;
+            }
+            if (shape.children) {
+                shape.children.forEach(childId => {
+                    const child = this.shapes.get(childId);
+                    if (child) {
+                        setZIndex(child, level + 1);
+                    }
+                });
+            }
+        };
+
+        // ルートシェイプ（親を持たない）を特定して処理
+        this.shapes.forEach(shape => {
+            if (!shape.parent) {
+                setZIndex(shape, 0);
+            }
+        });
+    }
+
     adjustLayout(sourceShape, deltaY) {
         // sourceShapeより下にある図形を移動
         // 単純なY座標比較 + 水平方向の重なりチェック
@@ -994,18 +1175,110 @@ export class FlowchartApp {
 
             activeConnectionIds.add(conn.id);
 
-            // 接続ポイントの計算
-            const startX = fromShape.x + fromShape.width / 2;
-            const startY = fromShape.y + fromShape.height / 2;
-            const endX = toShape.x + toShape.width / 2;
-            const endY = toShape.y + toShape.height / 2;
+            // 接続ポイントの座標を計算（保存されたfromPoint/toPointを使用）
+            const fromPoint = conn.fromPoint || 'bottom';
+            const toPoint = conn.toPoint || 'top';
 
-            // ベジェ曲線
+            // 始点座標の計算
+            let startX, startY;
+            switch (fromPoint) {
+                case 'top':
+                    startX = fromShape.x + fromShape.width / 2;
+                    startY = fromShape.y;
+                    break;
+                case 'bottom':
+                    startX = fromShape.x + fromShape.width / 2;
+                    startY = fromShape.y + fromShape.height;
+                    break;
+                case 'left':
+                    startX = fromShape.x;
+                    startY = fromShape.y + fromShape.height / 2;
+                    break;
+                case 'right':
+                    startX = fromShape.x + fromShape.width;
+                    startY = fromShape.y + fromShape.height / 2;
+                    break;
+                default:
+                    startX = fromShape.x + fromShape.width / 2;
+                    startY = fromShape.y + fromShape.height;
+            }
+
+            // 終点座標の計算
+            let endX, endY;
+            switch (toPoint) {
+                case 'top':
+                    endX = toShape.x + toShape.width / 2;
+                    endY = toShape.y;
+                    break;
+                case 'bottom':
+                    endX = toShape.x + toShape.width / 2;
+                    endY = toShape.y + toShape.height;
+                    break;
+                case 'left':
+                    endX = toShape.x;
+                    endY = toShape.y + toShape.height / 2;
+                    break;
+                case 'right':
+                    endX = toShape.x + toShape.width;
+                    endY = toShape.y + toShape.height / 2;
+                    break;
+                default:
+                    endX = toShape.x + toShape.width / 2;
+                    endY = toShape.y;
+            }
+
+            // ベジェ曲線の制御点を計算
             const dx = Math.abs(endX - startX);
-            const cp1x = startX + dx * 0.5;
-            const cp1y = startY;
-            const cp2x = endX - dx * 0.5;
-            const cp2y = endY;
+            const dy = Math.abs(endY - startY);
+            const offset = Math.max(dx, dy) * 0.5;
+
+            let cp1x, cp1y, cp2x, cp2y;
+
+            // 始点の制御点
+            switch (fromPoint) {
+                case 'top':
+                    cp1x = startX;
+                    cp1y = startY - offset;
+                    break;
+                case 'bottom':
+                    cp1x = startX;
+                    cp1y = startY + offset;
+                    break;
+                case 'left':
+                    cp1x = startX - offset;
+                    cp1y = startY;
+                    break;
+                case 'right':
+                    cp1x = startX + offset;
+                    cp1y = startY;
+                    break;
+                default:
+                    cp1x = startX;
+                    cp1y = startY + offset;
+            }
+
+            // 終点の制御点
+            switch (toPoint) {
+                case 'top':
+                    cp2x = endX;
+                    cp2y = endY - offset;
+                    break;
+                case 'bottom':
+                    cp2x = endX;
+                    cp2y = endY + offset;
+                    break;
+                case 'left':
+                    cp2x = endX - offset;
+                    cp2y = endY;
+                    break;
+                case 'right':
+                    cp2x = endX + offset;
+                    cp2y = endY;
+                    break;
+                default:
+                    cp2x = endX;
+                    cp2y = endY - offset;
+            }
 
             const d = `M ${startX} ${startY} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${endX} ${endY}`;
 
@@ -1045,20 +1318,95 @@ export class FlowchartApp {
             path.setAttribute('d', d);
             hitPath.setAttribute('d', d);
 
-            if (this.selectedConnectionId === conn.id) {
-                path.setAttribute('stroke', CONFIG.FLOWCHART.COLORS.CONNECTION_SELECTED);
-                path.setAttribute('stroke-width', '3');
-                path.setAttribute('marker-end', 'url(#arrow-head-selected)');
+            const arrowStyle = conn.style?.arrow || 'end';
+            const lineColor = conn.style?.color || CONFIG.FLOWCHART.COLORS.CONNECTION_DEFAULT;
+            const isSelected = this.selectedConnectionId === conn.id;
+            const displayColor = isSelected ? CONFIG.FLOWCHART.COLORS.CONNECTION_SELECTED : lineColor;
+
+            // 接続線ごとに動的にマーカーを作成
+            const defs = this.connectionsLayer.querySelector('defs');
+            const markerId = `arrow-${conn.id}`;
+            const markerTailId = `arrow-tail-${conn.id}`;
+
+            // 終点マーカー
+            let marker = document.getElementById(markerId);
+            if (!marker) {
+                marker = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
+                marker.id = markerId;
+                marker.setAttribute('markerWidth', '6');
+                marker.setAttribute('markerHeight', '6');
+                marker.setAttribute('refX', '6');
+                marker.setAttribute('refY', '3');
+                marker.setAttribute('orient', 'auto');
+                const markerPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                markerPath.setAttribute('d', 'M0,0 L6,3 L0,6');
+                marker.appendChild(markerPath);
+                defs.appendChild(marker);
+            }
+            marker.querySelector('path').setAttribute('fill', displayColor);
+
+            // 始点マーカー
+            let markerTail = document.getElementById(markerTailId);
+            if (!markerTail) {
+                markerTail = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
+                markerTail.id = markerTailId;
+                markerTail.setAttribute('markerWidth', '6');
+                markerTail.setAttribute('markerHeight', '6');
+                markerTail.setAttribute('refX', '6');
+                markerTail.setAttribute('refY', '3');
+                markerTail.setAttribute('orient', 'auto');
+                const markerTailPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                markerTailPath.setAttribute('d', 'M0,0 L6,3 L0,6');
+                markerTail.appendChild(markerTailPath);
+                defs.appendChild(markerTail);
+            }
+            markerTail.querySelector('path').setAttribute('fill', displayColor);
+
+            // パスのスタイル設定
+            path.setAttribute('stroke', displayColor);
+            path.setAttribute('stroke-width', isSelected ? '3' : '2');
+
+            // 終点矢印
+            if (arrowStyle === 'end' || arrowStyle === 'both') {
+                path.setAttribute('marker-end', `url(#${markerId})`);
             } else {
-                path.setAttribute('stroke', conn.style?.color || CONFIG.FLOWCHART.COLORS.CONNECTION_DEFAULT);
-                path.setAttribute('stroke-width', '2');
-                path.setAttribute('marker-end', 'url(#arrow-head)');
+                path.removeAttribute('marker-end');
+            }
+            // 始点矢印
+            if (arrowStyle === 'both') {
+                path.setAttribute('marker-start', `url(#${markerTailId})`);
+            } else {
+                path.removeAttribute('marker-start');
             }
 
             if (conn.style?.type === 'dashed') {
                 path.setAttribute('stroke-dasharray', '5,5');
             } else {
                 path.removeAttribute('stroke-dasharray');
+            }
+
+            // ラベルの描画
+            let labelText = document.getElementById(`conn-label-${conn.id}`);
+            const labelContent = conn.style?.label || '';
+            if (labelContent) {
+                if (!labelText) {
+                    labelText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                    labelText.id = `conn-label-${conn.id}`;
+                    labelText.setAttribute('class', 'connection-label');
+                    labelText.setAttribute('text-anchor', 'middle');
+                    labelText.setAttribute('dominant-baseline', 'middle');
+                    this.connectionsLayer.appendChild(labelText);
+                }
+                // パスの中間点を計算
+                const pathLength = path.getTotalLength();
+                const midPoint = path.getPointAtLength(pathLength / 2);
+                labelText.setAttribute('x', midPoint.x);
+                labelText.setAttribute('y', midPoint.y);
+                labelText.textContent = labelContent;
+                // 線色と同じ色を設定
+                labelText.setAttribute('fill', lineColor);
+            } else if (labelText) {
+                labelText.remove();
             }
         });
 
@@ -1092,5 +1440,175 @@ export class FlowchartApp {
         } else if (this.connectionStyleSelect) {
             this.connectionStyleSelect.value = 'solid';
         }
+    }
+
+    /**
+     * ズームレベルを設定します。
+     * @param {number} level - 新しいズームレベル (0.1 ~ 2.0)
+     */
+    setZoom(level) {
+        // 範囲制限
+        this.zoomLevel = Math.max(this.zoomMin, Math.min(this.zoomMax, level));
+
+        // canvas-content に transform を適用
+        if (this.canvasContent) {
+            this.canvasContent.style.transform = `scale(${this.zoomLevel})`;
+        }
+
+        // 接続線を再描画（座標はそのまま、scaleでスケールされる）
+        this.drawConnections();
+    }
+
+    /**
+     * ズームイン (拡大)
+     */
+    zoomIn() {
+        this.setZoom(this.zoomLevel + this.zoomStep);
+    }
+
+    /**
+     * ズームアウト (縮小)
+     */
+    zoomOut() {
+        this.setZoom(this.zoomLevel - this.zoomStep);
+    }
+
+    /**
+     * すべてのシェイプが表示されるようにズームとスクロールを調整します。
+     * 一番上、左、右、下のノードを参照して表示エリアに収めます。
+     * 最小10%で収まらない場合は上と左を優先します。
+     */
+    fitView() {
+        if (this.shapes.size === 0) {
+            // シェイプがない場合は1.0にリセット
+            this.setZoom(1.0);
+            this.container.scrollLeft = 0;
+            this.container.scrollTop = 0;
+            return;
+        }
+
+        // 全シェイプのバウンディングボックスを計算（上下左右の端）
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+
+        this.shapes.forEach(shape => {
+            // 非表示のシェイプは除外
+            if (shape.element && shape.element.style.display === 'none') return;
+
+            // 一番左
+            minX = Math.min(minX, shape.x);
+            // 一番上
+            minY = Math.min(minY, shape.y);
+            // 一番右
+            maxX = Math.max(maxX, shape.x + shape.width);
+            // 一番下
+            maxY = Math.max(maxY, shape.y + shape.height);
+        });
+
+        // 有効なシェイプがない場合
+        if (minX === Infinity) {
+            this.setZoom(1.0);
+            this.container.scrollLeft = 0;
+            this.container.scrollTop = 0;
+            return;
+        }
+
+        // バウンディングボックスのサイズ
+        const boundingWidth = maxX - minX;
+        const boundingHeight = maxY - minY;
+
+        // コンテナ（表示エリア）のサイズを取得
+        const containerWidth = this.container.clientWidth;
+        const containerHeight = this.container.clientHeight;
+
+        // パディング（余白）
+        const padding = 20;
+
+        // 最適なスケールを計算（全体が表示エリアに収まるように）
+        const availableWidth = containerWidth - padding * 2;
+        const availableHeight = containerHeight - padding * 2;
+
+        let scaleX = availableWidth / boundingWidth;
+        let scaleY = availableHeight / boundingHeight;
+        let optimalScale = Math.min(scaleX, scaleY);
+
+        // スケール範囲を制限（最小10%、最大200%）
+        optimalScale = Math.max(this.zoomMin, Math.min(this.zoomMax, optimalScale));
+
+        // ズームを適用
+        this.setZoom(optimalScale);
+
+        // スクロール位置を計算
+        // 左上を優先するため、minX, minY を基準にスクロール
+        // ノードの左上がパディング分の位置に来るようにする
+        const scrollLeft = minX * optimalScale - padding;
+        const scrollTop = minY * optimalScale - padding;
+
+        // 最小10%で収まらない場合は左上を優先（scrollを0に近づける）
+        this.container.scrollLeft = Math.max(0, scrollLeft);
+        this.container.scrollTop = Math.max(0, scrollTop);
+    }
+
+    /**
+     * キャンバスサイズをノードの位置に応じて自動調整します。
+     * 最小サイズは表示エリアのサイズとなります。
+     * 負の座標にノードがある場合、すべてのノードを正の座標にシフトします。
+     */
+    updateCanvasSize() {
+        if (!this.canvasContent) return;
+
+        // コンテナの表示サイズを取得（最小サイズ）
+        const containerWidth = this.container.clientWidth;
+        const containerHeight = this.container.clientHeight;
+
+        if (this.shapes.size === 0) {
+            // シェイプがない場合は表示エリアサイズに設定
+            this.canvasContent.style.width = `${containerWidth}px`;
+            this.canvasContent.style.height = `${containerHeight}px`;
+            return;
+        }
+
+        // 全シェイプのバウンディングボックスを計算
+        let minX = Infinity, minY = Infinity, maxX = 0, maxY = 0;
+
+        this.shapes.forEach(shape => {
+            minX = Math.min(minX, shape.x);
+            minY = Math.min(minY, shape.y);
+            maxX = Math.max(maxX, shape.x + shape.width);
+            maxY = Math.max(maxY, shape.y + shape.height);
+        });
+
+        // 負の座標がある場合、すべてのノードをシフト
+        const padding = 50; // 左上の余白
+        const shiftX = minX < padding ? padding - minX : 0;
+        const shiftY = minY < padding ? padding - minY : 0;
+
+        if (shiftX > 0 || shiftY > 0) {
+            // すべてのノードをシフト
+            this.shapes.forEach(shape => {
+                shape.x += shiftX;
+                shape.y += shiftY;
+                if (shape.element) {
+                    shape.element.style.left = `${shape.x}px`;
+                    shape.element.style.top = `${shape.y}px`;
+                }
+            });
+
+            // バウンディングボックスを再計算
+            maxX += shiftX;
+            maxY += shiftY;
+
+            // 接続線を再描画
+            this.drawConnections();
+        }
+
+        // 余白を追加
+        const canvasPadding = 200;
+
+        // 最小サイズは表示エリアサイズ
+        const newWidth = Math.max(containerWidth / this.zoomLevel, maxX + canvasPadding);
+        const newHeight = Math.max(containerHeight / this.zoomLevel, maxY + canvasPadding);
+
+        this.canvasContent.style.width = `${newWidth}px`;
+        this.canvasContent.style.height = `${newHeight}px`;
     }
 }

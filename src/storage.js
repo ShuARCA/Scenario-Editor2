@@ -122,10 +122,14 @@ export class StorageManager {
     zip.file("content.html", viewerHtml);
     zip.file("content.md", document.getElementById('editor').innerText); // フォールバック
 
-    // 2. メタデータ
+    // エディタ内容を個別に保存（読み込み用：画像パスは相対パスに変換済み）
+    zip.file("editor.html", processedEditorContent);
+
+    // フローチャートメタデータ
     const metadata = {
       shapes: Array.from(this.flowchartApp.shapes.entries()),
-      connections: this.flowchartApp.connections
+      connections: this.flowchartApp.connections,
+      zoomLevel: this.flowchartApp.zoomLevel || 1.0
     };
     zip.file("metadata.json", JSON.stringify(metadata, null, 2));
 
@@ -146,15 +150,15 @@ export class StorageManager {
     try {
       const zip = await JSZip.loadAsync(file);
 
-      // HTMLの読み込み
-      const htmlFile = zip.file("content.html");
-      if (htmlFile) {
-        let html = await htmlFile.async("string");
+      // エディタ内容の読み込み（editor.htmlから復元）
+      const editorFile = zip.file("editor.html");
+      if (editorFile) {
+        let editorHtml = await editorFile.async("string");
 
         // 画像の復元 (assetsフォルダから読み込んでdataURLに戻す)
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(html, 'text/html');
-        const images = doc.querySelectorAll('img');
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = editorHtml;
+        const images = tempDiv.querySelectorAll('img');
 
         for (const img of images) {
           const src = img.getAttribute('src');
@@ -162,14 +166,18 @@ export class StorageManager {
             const imgFile = zip.file(src);
             if (imgFile) {
               const base64 = await imgFile.async('base64');
-              const mimeType = src.endsWith('.png') ? 'image/png' : 'image/jpeg'; // 簡易判定
+              const ext = src.split('.').pop().toLowerCase();
+              let mimeType = 'image/png';
+              if (ext === 'jpg' || ext === 'jpeg') mimeType = 'image/jpeg';
+              else if (ext === 'gif') mimeType = 'image/gif';
+              else if (ext === 'webp') mimeType = 'image/webp';
               img.src = `data:${mimeType};base64,${base64}`;
             }
           }
         }
 
         // サニタイズしてセット
-        const cleanHtml = this.sanitizer.sanitize(doc.body.innerHTML);
+        const cleanHtml = this.sanitizer.sanitize(tempDiv.innerHTML);
         this.editorManager.editor.innerHTML = cleanHtml;
 
         // タイトル更新
@@ -182,23 +190,36 @@ export class StorageManager {
 
         this.editorManager.updateOutline();
       } else if (zip.file("content.md")) {
+        // フォールバック: プレーンテキスト
         const text = await zip.file("content.md").async("string");
         this.editorManager.editor.innerText = text;
         this.editorManager.updateOutline();
       }
 
       // フローチャートデータの読み込み
-      const flowFile = zip.file("flowchart.json") || zip.file("metadata.json"); // metadata.json for backward compatibility
+      const flowFile = zip.file("metadata.json");
       if (flowFile) {
         const json = await flowFile.async("string");
         const data = JSON.parse(json);
+
+        // 既存のフローチャート要素をクリア
+        this.flowchartApp.shapesLayer.innerHTML = '';
+        this.flowchartApp.connectionsLayer.querySelectorAll('path, text').forEach(el => el.remove());
 
         // Mapに復元
         this.flowchartApp.shapes = new Map(data.shapes);
         this.flowchartApp.connections = data.connections || [];
 
+        // ズームレベルの復元
+        if (data.zoomLevel) {
+          this.flowchartApp.zoomLevel = data.zoomLevel;
+          if (this.flowchartApp.canvasContent) {
+            this.flowchartApp.canvasContent.style.transform = `scale(${data.zoomLevel})`;
+            this.flowchartApp.canvasContent.style.transformOrigin = 'top left';
+          }
+        }
+
         // DOM要素の再生成
-        this.flowchartApp.shapesLayer.innerHTML = '';
         this.flowchartApp.shapes.forEach(shape => {
           this.flowchartApp.createShapeElement(shape);
           // グループ化状態の復元
@@ -210,7 +231,14 @@ export class StorageManager {
             if (toggle) toggle.textContent = '+';
           }
         });
+
+        // z-indexの更新
+        this.flowchartApp.updateAllZIndexes();
+
         this.flowchartApp.drawConnections();
+
+        // キャンバスサイズの更新
+        this.flowchartApp.updateCanvasSize();
       }
 
       alert('読み込み完了');
