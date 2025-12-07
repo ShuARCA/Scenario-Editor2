@@ -1,16 +1,14 @@
 /**
  * 環境設定ロジック
- */
-/**
- * 環境設定ロジック
- * テーマ、フォント、エディタの色設定などを管理します。
+ * テーマ、フォント、エディタの色設定、背景画像などを管理します。
  */
 export class SettingsManager {
-    constructor() {
-        this.settingsModal = document.getElementById('settings-modal');
-        this.closeBtn = document.getElementById('close-settings-btn');
-        this.saveBtn = document.getElementById('save-settings-btn');
-
+    /**
+     * SettingsManagerのコンストラクタ
+     * @param {Object} options - オプション設定
+     * @param {boolean} options.skipDomInit - DOM初期化をスキップするか（テスト用）
+     */
+    constructor(options = {}) {
         // 設定値のデフォルト
         this.settings = {
             theme: 'light',
@@ -18,10 +16,17 @@ export class SettingsManager {
             fontFamily: 'sans-serif',
             fontSize: '16px',
             editorBgColor: '#ffffff',
-            editorTextColor: '#334155'
+            editorTextColor: '#334155',
+            backgroundImage: null
         };
 
-        this.init();
+        // DOM初期化をスキップするオプション（テスト用）
+        if (!options.skipDomInit) {
+            this.settingsModal = document.getElementById('settings-modal');
+            this.closeBtn = document.getElementById('close-settings-btn');
+            this.saveBtn = document.getElementById('save-settings-btn');
+            this.init();
+        }
     }
 
     init() {
@@ -88,6 +93,9 @@ export class SettingsManager {
         this.close();
     }
 
+    /**
+     * localStorageから設定を読み込みます。
+     */
     loadSettings() {
         const saved = localStorage.getItem('ieditweb-settings');
         if (saved) {
@@ -96,11 +104,94 @@ export class SettingsManager {
     }
 
     /**
+     * テーマを設定します。
+     * @param {string} theme - テーマ名（'light' | 'dark'）
+     */
+    setTheme(theme) {
+        if (theme !== 'light' && theme !== 'dark') {
+            throw new Error(`無効なテーマ: ${theme}。'light' または 'dark' を指定してください。`);
+        }
+        this.settings.theme = theme;
+        this.applySettings();
+    }
+
+    /**
+     * 現在のテーマを取得します。
+     * @returns {string} 現在のテーマ（'light' | 'dark'）
+     */
+    getTheme() {
+        return this.settings.theme;
+    }
+
+    /**
+     * フォントファミリを設定します。
+     * @param {string} family - フォントファミリ（'sans-serif' | 'serif' | 'monospace'）
+     */
+    setFontFamily(family) {
+        const validFamilies = ['sans-serif', 'serif', 'monospace'];
+        if (!validFamilies.includes(family)) {
+            throw new Error(`無効なフォントファミリ: ${family}。${validFamilies.join(', ')} のいずれかを指定してください。`);
+        }
+        this.settings.fontFamily = family;
+        this.applySettings();
+    }
+
+    /**
+     * フォントサイズを設定します。
+     * @param {string|number} size - フォントサイズ（例: '16px' または 16）
+     */
+    setFontSize(size) {
+        // 数値の場合は 'px' を付加
+        const sizeStr = typeof size === 'number' ? `${size}px` : size;
+        // 数値部分を抽出して検証
+        const numericSize = parseInt(sizeStr, 10);
+        if (isNaN(numericSize) || numericSize < 10 || numericSize > 32) {
+            throw new Error(`無効なフォントサイズ: ${size}。10〜32の範囲で指定してください。`);
+        }
+        this.settings.fontSize = sizeStr;
+        this.applySettings();
+    }
+
+    /**
+     * 背景画像を設定します。
+     * @param {string} dataUrl - 背景画像のBase64データURL
+     */
+    setBackgroundImage(dataUrl) {
+        if (!dataUrl || typeof dataUrl !== 'string') {
+            throw new Error('背景画像のデータURLが無効です。');
+        }
+        this.settings.backgroundImage = dataUrl;
+        this.applySettings();
+    }
+
+    /**
+     * 背景画像をクリアします。
+     */
+    clearBackgroundImage() {
+        this.settings.backgroundImage = null;
+        this.applySettings();
+    }
+
+    /**
+     * 現在の設定を取得します。
+     * @returns {Object} 現在の設定オブジェクト
+     */
+    getSettings() {
+        return { ...this.settings };
+    }
+
+    /**
      * 現在の設定をDOMに適用します。
      */
     applySettings() {
         const root = document.documentElement;
         const editor = document.getElementById('editor');
+        const mainContent = document.getElementById('main-content');
+
+        // DOM要素が存在しない場合は早期リターン（テスト環境対応）
+        if (!root || !editor) {
+            return;
+        }
 
         // プライマリーカラー
         root.style.setProperty('--primary-color', this.settings.primaryColor);
@@ -133,6 +224,21 @@ export class SettingsManager {
             root.style.setProperty('--background-color', '#fbfbff');
             root.style.setProperty('--text-color', '#334155');
             root.style.setProperty('--border-color', '#e2e8f0');
+        }
+
+        // 背景画像の適用
+        if (mainContent) {
+            if (this.settings.backgroundImage) {
+                mainContent.style.backgroundImage = `url(${this.settings.backgroundImage})`;
+                mainContent.style.backgroundSize = 'cover';
+                mainContent.style.backgroundPosition = 'center';
+                mainContent.style.backgroundRepeat = 'no-repeat';
+            } else {
+                mainContent.style.backgroundImage = '';
+                mainContent.style.backgroundSize = '';
+                mainContent.style.backgroundPosition = '';
+                mainContent.style.backgroundRepeat = '';
+            }
         }
     }
 }

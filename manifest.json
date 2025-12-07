@@ -1,20 +1,39 @@
 {
-  "name": "iEditWeb",
+  "name": "iEditWeb - リッチテキストエディタ＆フローチャート",
   "short_name": "iEditWeb",
+  "description": "Markdownベースのリッチテキスト編集とフローチャート可視化を統合したPWAアプリケーション",
   "start_url": "./index.html",
+  "scope": "./",
   "display": "standalone",
+  "orientation": "any",
   "background_color": "#ffffff",
-  "theme_color": "#ffffff",
+  "theme_color": "#0d9488",
+  "lang": "ja",
+  "categories": ["productivity", "utilities"],
   "icons": [
     {
       "src": "icon/icon.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     },
     {
       "src": "icon/icon.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     }
-  ]
+  ],
+  "screenshots": [],
+  "shortcuts": [
+    {
+      "name": "新規ドキュメント",
+      "short_name": "新規",
+      "description": "新しいドキュメントを作成",
+      "url": "./index.html",
+      "icons": [{ "src": "icon/icon.png", "sizes": "192x192" }]
+    }
+  ],
+  "related_applications": [],
+  "prefer_related_applications": false
 }

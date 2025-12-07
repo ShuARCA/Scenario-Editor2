@@ -2,10 +2,20 @@
   "name": "ieditweb",
   "version": "1.0.0",
   "description": "iEditWeb - Markdown & Flowchart Editor",
+  "type": "module",
   "scripts": {
-    "start": "serve ."
+    "start": "serve .",
+    "test": "vitest --run",
+    "test:watch": "vitest",
+    "test:ui": "vitest --ui"
   },
   "dependencies": {
     "serve": "^14.2.1"
+  },
+  "devDependencies": {
+    "vitest": "^2.1.0",
+    "fast-check": "^3.22.0",
+    "@vitest/ui": "^2.1.0",
+    "jsdom": "^25.0.0"
   }
 }

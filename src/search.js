@@ -12,8 +12,13 @@ export class SearchManager {
         this.searchContainer = document.getElementById('search-panel');
         this.searchInput = document.getElementById('search-input');
         this.replaceInput = document.getElementById('replace-input');
+        this.regexModeCheckbox = document.getElementById('regex-mode-checkbox');
+        this.caseSensitiveCheckbox = document.getElementById('case-sensitive-checkbox');
+        this.searchInfo = document.getElementById('search-info');
         this.matches = [];
         this.currentMatchIndex = -1;
+        this.regexMode = false;
+        this.caseSensitive = false;
 
         this.init();
     }
@@ -21,13 +26,42 @@ export class SearchManager {
     init() {
         // UIイベントリスナー
         document.getElementById('searchBtn').addEventListener('click', () => this.toggleSearchPanel());
-        // document.getElementById('do-search-btn').addEventListener('click', () => this.performSearch()); // 削除: ボタンが存在しない、またはインクリメンタル検索想定?
-        this.searchInput.addEventListener('input', () => this.performSearch()); // インクリメンタル検索に変更
+        
+        // 検索ボタンで検索実行
+        const doSearchBtn = document.getElementById('do-search-btn');
+        if (doSearchBtn) {
+            doSearchBtn.addEventListener('click', () => this.performSearchWithoutFocusChange());
+        }
+        
+        // Enterキーで検索実行
+        this.searchInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                if (this.matches.length > 0) {
+                    this.nextMatch();
+                } else {
+                    this.performSearchWithoutFocusChange();
+                }
+            }
+        });
+        
         document.getElementById('find-next-btn').addEventListener('click', () => this.nextMatch());
         document.getElementById('find-prev-btn').addEventListener('click', () => this.prevMatch());
         document.getElementById('replace-btn').addEventListener('click', () => this.replaceCurrent());
         document.getElementById('replace-all-btn').addEventListener('click', () => this.replaceAll());
         document.getElementById('close-search-btn').addEventListener('click', () => this.closeSearchPanel());
+
+        // 正規表現モードと大文字/小文字区別のチェックボックス
+        if (this.regexModeCheckbox) {
+            this.regexModeCheckbox.addEventListener('change', () => {
+                this.regexMode = this.regexModeCheckbox.checked;
+            });
+        }
+        if (this.caseSensitiveCheckbox) {
+            this.caseSensitiveCheckbox.addEventListener('change', () => {
+                this.caseSensitive = this.caseSensitiveCheckbox.checked;
+            });
+        }
 
         // ショートカットキー (Ctrl+F)
         document.addEventListener('keydown', (e) => {
@@ -38,6 +72,7 @@ export class SearchManager {
             }
         });
     }
+
 
     toggleSearchPanel() {
         this.searchContainer.classList.toggle('hidden');
@@ -68,15 +103,48 @@ export class SearchManager {
     }
 
     /**
-     * 検索を実行し、マッチした箇所をリストアップします。
+     * 正規表現モードを設定します。
+     * @param {boolean} enabled - 正規表現モードを有効にするかどうか
      */
-    performSearch() {
-        const query = this.searchInput.value;
-        if (!query) return;
+    setRegexMode(enabled) {
+        this.regexMode = enabled;
+        if (this.regexModeCheckbox) {
+            this.regexModeCheckbox.checked = enabled;
+        }
+    }
+
+    /**
+     * 大文字/小文字区別を設定します。
+     * @param {boolean} enabled - 大文字/小文字を区別するかどうか
+     */
+    setCaseSensitive(enabled) {
+        this.caseSensitive = enabled;
+        if (this.caseSensitiveCheckbox) {
+            this.caseSensitiveCheckbox.checked = enabled;
+        }
+    }
+
+    /**
+     * 検索を実行します。
+     * @param {string} [query] - 検索クエリ（省略時は入力フィールドの値を使用）
+     * @param {Object} [options] - 検索オプション
+     * @param {boolean} [options.regex] - 正規表現モード
+     * @param {boolean} [options.caseSensitive] - 大文字/小文字区別
+     * @returns {Array} マッチした箇所の配列
+     */
+    search(query, options = {}) {
+        const searchQuery = query !== undefined ? query : this.searchInput.value;
+        const useRegex = options.regex !== undefined ? options.regex : this.regexMode;
+        const useCaseSensitive = options.caseSensitive !== undefined ? options.caseSensitive : this.caseSensitive;
 
         this.clearHighlights();
         this.matches = [];
         this.currentMatchIndex = -1;
+
+        if (!searchQuery) {
+            this.updateSearchInfo();
+            return this.matches;
+        }
 
         // テキストノードを走査して検索
         const walker = document.createTreeWalker(this.editor, NodeFilter.SHOW_TEXT, null, false);
@@ -85,12 +153,20 @@ export class SearchManager {
             const text = node.nodeValue;
             let regex;
             try {
-                // 正規表現として扱うか、単純文字列として扱うか
-                // ここでは単純文字列検索とします（要件には正規表現対応とあるが、まずは基本実装）
-                // 正規表現対応にするならUIにチェックボックスが必要
-                regex = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+                if (useRegex) {
+                    // 正規表現モード
+                    const flags = useCaseSensitive ? 'g' : 'gi';
+                    regex = new RegExp(searchQuery, flags);
+                } else {
+                    // 通常検索モード（特殊文字をエスケープ）
+                    const escapedQuery = searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                    const flags = useCaseSensitive ? 'g' : 'gi';
+                    regex = new RegExp(escapedQuery, flags);
+                }
             } catch (e) {
-                continue;
+                // 無効な正規表現の場合はスキップ
+                this.updateSearchInfo('無効な正規表現です');
+                return this.matches;
             }
 
             let match;
@@ -101,17 +177,64 @@ export class SearchManager {
                     length: match[0].length,
                     text: match[0]
                 });
+                // 空文字列にマッチした場合の無限ループ防止
+                if (match[0].length === 0) {
+                    regex.lastIndex++;
+                }
             }
         }
+
+        this.updateSearchInfo();
+        return this.matches;
+    }
+
+    /**
+     * 検索を実行し、マッチした箇所をリストアップします。
+     */
+    performSearch() {
+        this.search();
 
         if (this.matches.length > 0) {
             this.highlightMatches();
             this.nextMatch();
-        } else {
-            alert('見つかりませんでした。');
         }
     }
 
+    /**
+     * 検索を実行しますが、フォーカスを検索入力欄に保持します。
+     * ボタン/Enterキーでの検索用。
+     */
+    performSearchWithoutFocusChange() {
+        this.search();
+
+        if (this.matches.length > 0) {
+            this.highlightMatches();
+            // 最初のマッチを選択するが、スクロールのみ行いフォーカスは移動しない
+            this.currentMatchIndex = 0;
+            this.scrollToMatch(this.matches[this.currentMatchIndex]);
+            this.updateSearchInfo();
+        }
+        
+        // 検索入力欄にフォーカスを戻す
+        if (this.searchInput && document.activeElement !== this.searchInput) {
+            this.searchInput.focus();
+        }
+    }
+
+    /**
+     * 指定されたマッチ位置にスクロールします（選択はしない）。
+     * @param {Object} match - マッチ情報
+     */
+    scrollToMatch(match) {
+        if (match.node.parentElement && typeof match.node.parentElement.scrollIntoView === 'function') {
+            match.node.parentElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    }
+
+
+    /**
+     * マッチした箇所をハイライト表示します。
+     */
     highlightMatches() {
         // ハイライト処理は複雑（DOM構造を変更するため）
         // ここでは簡易的に、現在のマッチのみを選択状態にする実装とします
@@ -119,18 +242,30 @@ export class SearchManager {
         // contenteditableの動作を不安定にする可能性があるため慎重に行う必要があります
     }
 
+    /**
+     * 次のマッチに移動します。
+     */
     nextMatch() {
         if (this.matches.length === 0) return;
         this.currentMatchIndex = (this.currentMatchIndex + 1) % this.matches.length;
         this.selectMatch(this.matches[this.currentMatchIndex]);
+        this.updateSearchInfo();
     }
 
+    /**
+     * 前のマッチに移動します。
+     */
     prevMatch() {
         if (this.matches.length === 0) return;
         this.currentMatchIndex = (this.currentMatchIndex - 1 + this.matches.length) % this.matches.length;
         this.selectMatch(this.matches[this.currentMatchIndex]);
+        this.updateSearchInfo();
     }
 
+    /**
+     * 指定されたマッチを選択状態にします。
+     * @param {Object} match - マッチ情報
+     */
     selectMatch(match) {
         const range = document.createRange();
         range.setStart(match.node, match.index);
@@ -140,54 +275,100 @@ export class SearchManager {
         selection.removeAllRanges();
         selection.addRange(range);
 
-        match.node.parentElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        // scrollIntoViewが存在する場合のみ呼び出す（テスト環境対応）
+        if (match.node.parentElement && typeof match.node.parentElement.scrollIntoView === 'function') {
+            match.node.parentElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
     }
 
-    replaceCurrent() {
-        if (this.currentMatchIndex === -1 || this.matches.length === 0) return;
+    /**
+     * 現在のマッチを置換します。
+     * @param {string} [replacement] - 置換文字列（省略時は入力フィールドの値を使用）
+     * @returns {boolean} 置換が成功したかどうか
+     */
+    replace(replacement) {
+        if (this.currentMatchIndex === -1 || this.matches.length === 0) return false;
 
         const match = this.matches[this.currentMatchIndex];
-        const replacement = this.replaceInput.value;
+        const replaceText = replacement !== undefined ? replacement : this.replaceInput.value;
 
         const range = document.createRange();
         range.setStart(match.node, match.index);
         range.setEnd(match.node, match.index + match.length);
         range.deleteContents();
-        range.insertNode(document.createTextNode(replacement));
+        range.insertNode(document.createTextNode(replaceText));
 
         // マッチリストを更新する必要があるが、DOMが変わってしまったため
         // 再検索するのが最も安全
         this.performSearch();
+        return true;
     }
 
-    replaceAll() {
+    /**
+     * 現在のマッチを置換します（UIボタン用）。
+     */
+    replaceCurrent() {
+        this.replace();
+    }
+
+    /**
+     * すべてのマッチを置換します。
+     * @param {string} [replacement] - 置換文字列（省略時は入力フィールドの値を使用）
+     * @returns {number} 置換した件数
+     */
+    replaceAll(replacement) {
         const query = this.searchInput.value;
-        const replacement = this.replaceInput.value;
-        if (!query) return;
+        const replaceText = replacement !== undefined ? replacement : this.replaceInput.value;
+        if (!query) return 0;
 
-        // innerHTMLで一括置換（注意: イベントリスナーなどが消える可能性があるが、テキストエディタ内なら許容範囲か？）
-        // しかし、タグの中身まで置換してしまうリスクがあるため、テキストノードを走査する方が安全
-
-        // 下から順に置換していく（インデックスずれを防ぐため）
         // まず検索を実行して最新のマッチリストを取得
-        this.performSearch();
+        this.search();
 
-        // 逆順に処理
+        const count = this.matches.length;
+
+        // 逆順に処理（インデックスずれを防ぐため）
         for (let i = this.matches.length - 1; i >= 0; i--) {
             const match = this.matches[i];
             const range = document.createRange();
             range.setStart(match.node, match.index);
             range.setEnd(match.node, match.index + match.length);
             range.deleteContents();
-            range.insertNode(document.createTextNode(replacement));
+            range.insertNode(document.createTextNode(replaceText));
         }
 
         this.matches = [];
         this.currentMatchIndex = -1;
+        this.updateSearchInfo();
+
+        return count;
     }
 
+    /**
+     * ハイライトをクリアします。
+     */
     clearHighlights() {
         // ハイライト解除（今回は選択解除のみ）
         window.getSelection().removeAllRanges();
+        this.updateSearchInfo();
+    }
+
+    /**
+     * 検索情報を更新します。
+     * @param {string} [message] - カスタムメッセージ
+     */
+    updateSearchInfo(message) {
+        if (!this.searchInfo) return;
+
+        if (message) {
+            this.searchInfo.textContent = message;
+        } else if (this.matches.length === 0) {
+            if (this.searchInput.value) {
+                this.searchInfo.textContent = '見つかりませんでした';
+            } else {
+                this.searchInfo.textContent = '';
+            }
+        } else {
+            this.searchInfo.textContent = `${this.currentMatchIndex + 1} / ${this.matches.length} 件`;
+        }
     }
 }

@@ -85,16 +85,17 @@
     display: inline-block;
     max-width: 100%;
     margin: 10px;
-    resize: both;
-    overflow: hidden;
+    /* resize: both は削除（JavaScriptでハンドル操作によるリサイズを実装） */
+    overflow: visible;
     vertical-align: top;
 }
 
 .resizable-container img {
-    width: 100%;
-    height: 100%;
     margin: 0;
     display: block;
+    /* ウィンドウ幅に応じてレスポンシブに縮小（元のサイズを超えない） */
+    max-width: 100%;
+    height: auto;
 }
 
 .resizable-container:hover .resize-handle {
@@ -218,4 +219,138 @@
 .color-option:hover {
     transform: scale(1.1);
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+
+/* ============================================
+   ルビパネル
+   ============================================ */
+.ruby-panel {
+    position: absolute;
+    background-color: var(--surface-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    padding: 12px;
+    z-index: 1002;
+    min-width: 200px;
+}
+
+.ruby-panel.hidden {
+    display: none;
+}
+
+.ruby-panel-content {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+#ruby-input {
+    padding: 8px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    font-size: 14px;
+    background-color: var(--surface-color);
+    color: var(--text-color);
+    outline: none;
+}
+
+#ruby-input:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(13, 148, 136, 0.2);
+}
+
+.ruby-panel-buttons {
+    display: flex;
+    gap: 8px;
+}
+
+.ruby-btn {
+    flex: 1;
+    padding: 6px 12px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background-color 0.2s, transform 0.1s;
+}
+
+.ruby-btn:hover {
+    transform: translateY(-1px);
+}
+
+.ruby-btn:active {
+    transform: translateY(0);
+}
+
+.ruby-btn.primary {
+    background-color: var(--primary-color);
+    color: white;
+}
+
+.ruby-btn.primary:hover {
+    background-color: var(--primary-hover-color, #0f766e);
+}
+
+.ruby-btn.danger {
+    background-color: #ef4444;
+    color: white;
+}
+
+.ruby-btn.danger:hover {
+    background-color: #dc2626;
+}
+
+/* ============================================
+   ルビ要素のスタイル
+   ============================================ */
+/* ルビテキスト（rt要素）を選択不可にする */
+#editor ruby rt {
+    /* ユーザー選択を無効化 */
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+    /* ポインターイベントを無効化（クリックやドラッグを防止） */
+    pointer-events: none;
+}
+
+/* rt要素の選択時のハイライトを非表示にする */
+#editor ruby rt::selection {
+    background: transparent;
+    color: inherit;
+}
+
+/* rt要素内のテキストの選択ハイライトも非表示 */
+#editor ruby rt *::selection {
+    background: transparent;
+    color: inherit;
+}
+
+/* ベーステキスト（ruby要素内のテキスト）は選択可能 */
+#editor ruby {
+    /* ルビ要素自体は選択可能 */
+    -webkit-user-select: text;
+    -moz-user-select: text;
+    -ms-user-select: text;
+    user-select: text;
+}
+
+/* レスポンシブ対応: 小さい画面でのルビパネル調整 */
+@media (max-width: 480px) {
+    .ruby-panel {
+        min-width: 160px;
+        padding: 8px;
+    }
+
+    #ruby-input {
+        padding: 6px;
+        font-size: 13px;
+    }
+
+    .ruby-btn {
+        padding: 5px 10px;
+        font-size: 13px;
+    }
 }

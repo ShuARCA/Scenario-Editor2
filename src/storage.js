@@ -3,6 +3,8 @@ import { Sanitizer } from './sanitizer.js';
 /**
  * ストレージロジック (ZIP)
  * プロジェクトの保存と読み込みを管理します。
+ * 
+ * 要件: 10.1, 10.2, 10.3, 10.4
  */
 export class StorageManager {
   /**
@@ -45,6 +47,91 @@ export class StorageManager {
   }
 
   /**
+   * ビューアHTMLを生成します。
+   * 生成されるHTMLは読み取り専用のビューアとして機能し、
+   * インラインスクリプトを含まない安全なHTML/CSSのみで構成されます。
+   * 
+   * 要件: 10.4
+   * - ビューアHTMLはインラインスクリプトを含まない
+   * - 安全なHTML/CSSのみで構成される
+   * 
+   * @param {string} editorContent - エディタのHTMLコンテンツ（サニタイズ済み）
+   * @param {string} flowchartContent - フローチャートのHTMLコンテンツ
+   * @param {string} css - 結合されたCSSスタイル
+   * @param {Object} metadata - メタデータ
+   * @param {string} metadata.title - ドキュメントタイトル
+   * @returns {string} 生成されたビューアHTML
+   */
+  generateViewerHtml(editorContent, flowchartContent, css, metadata) {
+    const { title } = metadata;
+    
+    // エディタコンテンツをサニタイズ（XSS対策）
+    const sanitizedEditorContent = this.sanitizer.sanitize(editorContent);
+    
+    // フローチャートコンテンツもサニタイズ
+    const sanitizedFlowchartContent = this.sanitizer.sanitize(flowchartContent);
+    
+    // ビューア用HTML構築（インラインスクリプトなし）
+    const viewerHtml = `<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>${this.escapeHtml(title)}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    ${css}
+    /* ビューワー用追加スタイル */
+    body { overflow: auto; }
+    #container { height: 100vh; }
+    #flowchart-container { resize: none; border-bottom: 2px solid #ccc; }
+    #editor { outline: none; }
+    .flowchart-toolbar, .header-controls, #toggleSidebar, #float-toolbar { display: none !important; }
+  </style>
+</head>
+<body>
+  <header id="toolbar" style="justify-content: center;">
+    <div id="filename">${this.escapeHtml(title)}</div>
+  </header>
+  <div id="container">
+    <main id="main-content">
+      <div id="flowchart-container" style="height: 40%; min-height: 200px;">
+        <div id="flowchart-canvas">
+          ${sanitizedFlowchartContent}
+        </div>
+      </div>
+      <div id="editor-container">
+        <div id="editor">
+          ${sanitizedEditorContent}
+        </div>
+      </div>
+    </main>
+  </div>
+</body>
+</html>`;
+
+    return viewerHtml;
+  }
+
+  /**
+   * HTML特殊文字をエスケープします。
+   * @param {string} text - エスケープ対象のテキスト
+   * @returns {string} エスケープ後のテキスト
+   */
+  escapeHtml(text) {
+    if (!text || typeof text !== 'string') {
+      return '';
+    }
+    const escapeMap = {
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;'
+    };
+    return text.replace(/[&<>"']/g, char => escapeMap[char]);
+  }
+
+  /**
    * プロジェクトをZIPファイルとして保存します。
    * エディタの内容、フローチャートのデータ、画像アセットを同梱します。
    */
@@ -80,44 +167,13 @@ export class StorageManager {
     const flowchartContent = document.getElementById('flowchart-canvas').innerHTML;
     const filename = this.filename.replace('.zip', '');
 
-    // ビューワー用HTML構築
-    const viewerHtml = `
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-  <meta charset="UTF-8">
-  <title>${filename}</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <style>
-    ${combinedCss}
-    /* ビューワー用追加スタイル */
-    body { overflow: auto; }
-    #container { height: 100vh; }
-    #flowchart-container { resize: none; border-bottom: 2px solid #ccc; }
-    #editor { outline: none; }
-    .flowchart-toolbar, .header-controls, #toggleSidebar, #float-toolbar { display: none !important; }
-  </style>
-</head>
-<body>
-  <header id="toolbar" style="justify-content: center;">
-    <div id="filename">${filename}</div>
-  </header>
-  <div id="container">
-    <main id="main-content">
-      <div id="flowchart-container" style="height: 40%; min-height: 200px;">
-        <div id="flowchart-canvas">
-          ${flowchartContent}
-        </div>
-      </div>
-      <div id="editor-container">
-        <div id="editor">
-          ${processedEditorContent}
-        </div>
-      </div>
-    </main>
-  </div>
-</body>
-</html>`;
+    // ビューワー用HTML構築（generateViewerHtmlメソッドを使用）
+    const viewerHtml = this.generateViewerHtml(
+      processedEditorContent,
+      flowchartContent,
+      combinedCss,
+      { title: filename }
+    );
 
     zip.file("content.html", viewerHtml);
     zip.file("content.md", document.getElementById('editor').innerText); // フォールバック

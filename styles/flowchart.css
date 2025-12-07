@@ -206,6 +206,16 @@
     stroke-width: 3;
 }
 
+/* 接続線プレビュー */
+.connection-preview {
+    fill: none;
+    stroke: var(--primary-color);
+    stroke-width: 2;
+    stroke-dasharray: 5, 5;
+    pointer-events: none;
+    opacity: 0.7;
+}
+
 /* ============================================
    接続ポイント
    ============================================ */
@@ -220,11 +230,29 @@
     opacity: 0;
     transition: opacity 0.2s;
     cursor: crosshair;
+    pointer-events: none;
 }
 
-.shape:hover .connection-point,
-.mode-connect .connection-point {
+/* 接続モード時のみ接続ポイントを表示 */
+.connect-mode .shape .connection-point {
     opacity: 1;
+    pointer-events: auto;
+}
+
+/* 接続モード時、接続ポイントにホバーした際のハイライト */
+.connect-mode .shape .connection-point:hover {
+    background-color: var(--primary-color);
+    transform: translateX(-50%) scale(1.3);
+}
+
+.connect-mode .shape .connection-point.top:hover,
+.connect-mode .shape .connection-point.bottom:hover {
+    transform: translateX(-50%) scale(1.3);
+}
+
+.connect-mode .shape .connection-point.left:hover,
+.connect-mode .shape .connection-point.right:hover {
+    transform: translateY(-50%) scale(1.3);
 }
 
 .connection-point.top {

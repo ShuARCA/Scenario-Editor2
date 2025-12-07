@@ -353,9 +353,13 @@ export class FlowchartApp {
             btn.classList.toggle('active', btn.dataset.mode === mode);
         });
         this.canvas.classList.toggle('panning', mode === 'pan');
+        // 接続モード時にクラスを追加（接続ポイントの表示制御用）
+        this.canvas.classList.toggle('connect-mode', mode === 'connect');
 
         // 状態のリセット
         this.connectStartShape = null;
+        this.connectStartPoint = null;
+        this.clearConnectionPreview();
         this.clearSelection();
     }
 
@@ -770,6 +774,14 @@ export class FlowchartApp {
                 this.drawConnections();
             }
         }
+
+        // 接続モードでドラッグ中の場合、プレビュー線を描画
+        if (this.mode === 'connect' && this.connectStartShape) {
+            const canvasRect = this.canvas.getBoundingClientRect();
+            const mouseX = (e.clientX - canvasRect.left + this.container.scrollLeft) / this.zoomLevel;
+            const mouseY = (e.clientY - canvasRect.top + this.container.scrollTop) / this.zoomLevel;
+            this.drawConnectionPreview(mouseX, mouseY);
+        }
     }
 
     moveShape(shape, dx, dy) {
@@ -853,6 +865,8 @@ export class FlowchartApp {
                     this.drawConnections();
                 }
             }
+            // プレビューをクリア
+            this.clearConnectionPreview();
             this.connectStartShape = null;
             this.connectStartPoint = null;
         }
@@ -972,6 +986,7 @@ export class FlowchartApp {
             shape.expandedSize = { width: shape.width, height: shape.height };
         }
 
+        const oldWidth = shape.width;
         const oldHeight = shape.height;
         shape.collapsed = !shape.collapsed;
         const toggle = shape.element.querySelector('.group-toggle');
@@ -1007,10 +1022,14 @@ export class FlowchartApp {
             }
         }
 
-        // レイアウト調整
+        // レイアウト調整（水平・垂直両方向）
+        const deltaX = shape.width - oldWidth;
         const deltaY = shape.height - oldHeight;
-        if (deltaY !== 0) {
-            this.adjustLayout(shape, deltaY);
+        
+        if (deltaX !== 0 || deltaY !== 0) {
+            // 折りたたみ時は変更前のサイズで重なりをチェックする必要があるため、
+            // 一時的に変更前のサイズを渡す
+            this.adjustLayout(shape, deltaX, deltaY, oldWidth, oldHeight);
         }
 
         this.drawConnections();
@@ -1111,26 +1130,73 @@ export class FlowchartApp {
         });
     }
 
-    adjustLayout(sourceShape, deltaY) {
-        // sourceShapeより下にある図形を移動
-        // 単純なY座標比較 + 水平方向の重なりチェック
+    /**
+     * グループの展開/折りたたみに伴うレイアウト調整
+     * サイズ変化量（deltaX, deltaY）に基づいて周囲のノードを移動する
+     * - 展開時: deltaが正の値 → ノードを外側へ移動
+     * - 折りたたみ時: deltaが負の値 → ノードを内側へ移動
+     * 
+     * 判定基準：各ノードの左上座標とソースノードの右端/下端を比較
+     * - 水平移動: ノードの左上X座標がソースの右端以上の場合、すべて移動
+     * - 垂直移動: ノードの左上Y座標がソースの下端以上の場合、すべて移動
+     * 
+     * @param {Object} sourceShape - サイズが変更されたグループShape
+     * @param {number} deltaX - X方向の変化量（正: 拡大, 負: 縮小）
+     * @param {number} deltaY - Y方向の変化量（正: 拡大, 負: 縮小）
+     * @param {number} [oldWidth] - 変更前の幅（折りたたみ時の判定用）
+     * @param {number} [oldHeight] - 変更前の高さ（折りたたみ時の判定用）
+     */
+    adjustLayout(sourceShape, deltaX, deltaY, oldWidth, oldHeight) {
+        // 判定用のサイズを決定
+        // 常に変更前のサイズで判定する（展開・折りたたみ両方）
+        // これにより、ソースノードに近いノードも確実に移動対象になる
+        const checkWidth = (oldWidth !== undefined) ? oldWidth : sourceShape.width;
+        const checkHeight = (oldHeight !== undefined) ? oldHeight : sourceShape.height;
 
-        const sourceBottom = sourceShape.y + sourceShape.height - deltaY; // 変更前のボトム？
-        // いや、単純に中心座標などで判定
+        // ソースノードの右端と下端の座標（変更前のサイズで計算）
+        const sourceRight = sourceShape.x + checkWidth;
+        const sourceBottom = sourceShape.y + checkHeight;
+
+        // ソースノードが親を持つ場合、同じ親を持つ兄弟ノードのみを移動対象とする
+        // ソースノードがルート（親なし）の場合、他のルートノードを移動対象とする
+        const sourceParentId = sourceShape.parent;
 
         this.shapes.forEach(shape => {
             if (shape.id === sourceShape.id) return;
             if (this.isDescendant(sourceShape.id, shape.id)) return; // 子孫は親と一緒に動く（サイズ変更で包含される）
-            if (shape.parent) return; // 親がいる場合は親のサイズ変更で処理されるはず（トップレベルのみ調整）
 
-            // 水平方向の重なりがあるか
-            const horizontalOverlap = (
-                shape.x < sourceShape.x + sourceShape.width &&
-                shape.x + shape.width > sourceShape.x
-            );
+            // 移動対象の判定：
+            // - ソースがルートノードの場合：他のルートノードのみ移動
+            // - ソースが子ノードの場合：同じ親を持つ兄弟ノードのみ移動
+            if (sourceParentId) {
+                // ソースが子ノードの場合、同じ親を持つ兄弟のみ対象
+                if (shape.parent !== sourceParentId) return;
+            } else {
+                // ソースがルートノードの場合、他のルートノードのみ対象
+                if (shape.parent) return;
+            }
 
-            if (horizontalOverlap && shape.y > sourceShape.y) {
-                this.moveShape(shape, 0, deltaY);
+            let dx = 0;
+            let dy = 0;
+
+            // ノードの左上X座標がソースの右端以上の場合、水平移動
+            const isRightOfSource = shape.x >= sourceRight;
+
+            // ノードの左上Y座標がソースの下端以上の場合、垂直移動
+            const isBelowSource = shape.y >= sourceBottom;
+
+            // 右側にあるノードを水平移動（deltaXの符号に従う）
+            if (isRightOfSource) {
+                dx = deltaX;
+            }
+
+            // 下側にあるノードを垂直移動（deltaYの符号に従う）
+            if (isBelowSource) {
+                dy = deltaY;
+            }
+
+            if (dx !== 0 || dy !== 0) {
+                this.moveShape(shape, dx, dy);
             }
         });
     }
@@ -1345,20 +1411,25 @@ export class FlowchartApp {
             }
             marker.querySelector('path').setAttribute('fill', displayColor);
 
-            // 始点マーカー
+            // 始点マーカー（矢印は終点と反対向き、図形の外側に描画）
             let markerTail = document.getElementById(markerTailId);
             if (!markerTail) {
                 markerTail = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
                 markerTail.id = markerTailId;
                 markerTail.setAttribute('markerWidth', '6');
                 markerTail.setAttribute('markerHeight', '6');
-                markerTail.setAttribute('refX', '6');
+                markerTail.setAttribute('refX', '0');
                 markerTail.setAttribute('refY', '3');
                 markerTail.setAttribute('orient', 'auto');
                 const markerTailPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-                markerTailPath.setAttribute('d', 'M0,0 L6,3 L0,6');
+                // 矢印を反対向きに（終点マーカーと逆方向）
+                markerTailPath.setAttribute('d', 'M6,0 L0,3 L6,6');
                 markerTail.appendChild(markerTailPath);
                 defs.appendChild(markerTail);
+            } else {
+                // 既存のマーカーの属性を更新（refXが古い値の場合に対応）
+                markerTail.setAttribute('refX', '0');
+                markerTail.querySelector('path').setAttribute('d', 'M6,0 L0,3 L6,6');
             }
             markerTail.querySelector('path').setAttribute('fill', displayColor);
 
@@ -1610,5 +1681,96 @@ export class FlowchartApp {
 
         this.canvasContent.style.width = `${newWidth}px`;
         this.canvasContent.style.height = `${newHeight}px`;
+    }
+
+    /**
+     * 接続線のプレビューを描画します。
+     * 始点の図形から現在のマウス位置まで破線を描画します。
+     * @param {number} mouseX - マウスのX座標（キャンバス座標系）
+     * @param {number} mouseY - マウスのY座標（キャンバス座標系）
+     */
+    drawConnectionPreview(mouseX, mouseY) {
+        const fromShape = this.shapes.get(this.connectStartShape);
+        if (!fromShape) return;
+
+        // 始点座標の計算
+        const fromPoint = this.connectStartPoint || 'bottom';
+        let startX, startY;
+        switch (fromPoint) {
+            case 'top':
+                startX = fromShape.x + fromShape.width / 2;
+                startY = fromShape.y;
+                break;
+            case 'bottom':
+                startX = fromShape.x + fromShape.width / 2;
+                startY = fromShape.y + fromShape.height;
+                break;
+            case 'left':
+                startX = fromShape.x;
+                startY = fromShape.y + fromShape.height / 2;
+                break;
+            case 'right':
+                startX = fromShape.x + fromShape.width;
+                startY = fromShape.y + fromShape.height / 2;
+                break;
+            default:
+                startX = fromShape.x + fromShape.width / 2;
+                startY = fromShape.y + fromShape.height;
+        }
+
+        // ベジェ曲線の制御点を計算
+        const dx = Math.abs(mouseX - startX);
+        const dy = Math.abs(mouseY - startY);
+        const offset = Math.max(dx, dy) * 0.5;
+
+        let cp1x, cp1y;
+        switch (fromPoint) {
+            case 'top':
+                cp1x = startX;
+                cp1y = startY - offset;
+                break;
+            case 'bottom':
+                cp1x = startX;
+                cp1y = startY + offset;
+                break;
+            case 'left':
+                cp1x = startX - offset;
+                cp1y = startY;
+                break;
+            case 'right':
+                cp1x = startX + offset;
+                cp1y = startY;
+                break;
+            default:
+                cp1x = startX;
+                cp1y = startY + offset;
+        }
+
+        // 終点の制御点（マウス位置に向かって）
+        const cp2x = mouseX;
+        const cp2y = mouseY;
+
+        const d = `M ${startX} ${startY} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${mouseX} ${mouseY}`;
+
+        // プレビュー要素の取得または作成
+        let previewPath = document.getElementById('connection-preview');
+        if (!previewPath) {
+            previewPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            previewPath.id = 'connection-preview';
+            previewPath.classList.add('connection-preview');
+            this.connectionsLayer.appendChild(previewPath);
+        }
+
+        previewPath.setAttribute('d', d);
+    }
+
+    /**
+     * 接続線のプレビューをクリアします。
+     */
+    clearConnectionPreview() {
+        const previewPath = document.getElementById('connection-preview');
+        if (previewPath) {
+            previewPath.remove();
+        }
     }
 }

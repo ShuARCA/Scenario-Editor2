@@ -4,6 +4,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Markdownベースのリッチテキスト編集とフローチャート可視化を統合したPWAアプリケーション">
+    <meta name="theme-color" content="#0d9488">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="iEditWeb">
+    <link rel="apple-touch-icon" href="icon/icon.png">
     <title>iEditWeb</title>
     <link rel="manifest" href="manifest.json">
     <link rel="stylesheet" href="styles/main.css">
@@ -12,13 +18,32 @@
     <link rel="stylesheet" href="styles/search.css">
     <link rel="stylesheet" href="styles/settings.css">
     <script>
-        // Service Worker cleanup (if needed for debugging)
-        if (window.location.hostname === 'localhost') {
-            navigator.serviceWorker.getRegistrations().then(function (registrations) {
-                for (let registration of registrations) {
-                    registration.unregister();
-                    console.log('Service Worker unregistered.');
-                }
+        /**
+         * Service Worker登録
+         * 要件 12.1: PWAとしてインストール可能
+         * 要件 12.2: オフラインキャッシュ機能
+         */
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./service-worker.js')
+                    .then((registration) => {
+                        console.log('Service Worker登録成功:', registration.scope);
+                        
+                        // 更新があった場合の処理
+                        registration.addEventListener('updatefound', () => {
+                            const newWorker = registration.installing;
+                            console.log('新しいService Workerが見つかりました');
+                            
+                            newWorker.addEventListener('statechange', () => {
+                                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                    console.log('新しいコンテンツが利用可能です。ページを更新してください。');
+                                }
+                            });
+                        });
+                    })
+                    .catch((error) => {
+                        console.error('Service Worker登録失敗:', error);
+                    });
             });
         }
     </script>
@@ -207,6 +232,17 @@
         </button>
     </div>
 
+    <!-- Ruby Panel (ルビパネル) -->
+    <div id="ruby-panel" class="ruby-panel hidden">
+        <div class="ruby-panel-content">
+            <input type="text" id="ruby-input" placeholder="ルビを入力..." />
+            <div class="ruby-panel-buttons">
+                <button id="ruby-apply-btn" class="ruby-btn primary">適用</button>
+                <button id="ruby-delete-btn" class="ruby-btn danger">削除</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Color Picker -->
     <div id="textColorPicker" class="color-picker hidden"></div>
     <div id="highlightPicker" class="color-picker hidden"></div>
@@ -215,6 +251,7 @@
     <div id="search-panel" class="hidden">
         <div class="search-row">
             <input type="text" id="search-input" placeholder="検索...">
+            <button id="do-search-btn" title="検索">検索</button>
             <button id="find-prev-btn" title="前へ">↑</button>
             <button id="find-next-btn" title="次へ">↓</button>
             <button id="close-search-btn" title="閉じる">×</button>
@@ -223,6 +260,16 @@
             <input type="text" id="replace-input" placeholder="置換...">
             <button id="replace-btn">置換</button>
             <button id="replace-all-btn">すべて置換</button>
+        </div>
+        <div class="search-options">
+            <label class="search-option">
+                <input type="checkbox" id="regex-mode-checkbox">
+                <span>正規表現</span>
+            </label>
+            <label class="search-option">
+                <input type="checkbox" id="case-sensitive-checkbox">
+                <span>大文字/小文字を区別</span>
+            </label>
         </div>
         <div class="search-info" id="search-info"></div>
     </div>

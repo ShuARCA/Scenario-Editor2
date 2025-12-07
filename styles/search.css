@@ -75,3 +75,32 @@
     background-color: #0d9488 !important;
     /* teal-600 */
 }
+
+/* 検索オプション */
+.search-options {
+    display: flex;
+    gap: 12px;
+    padding: 4px 0;
+}
+
+.search-option {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    color: var(--text-color);
+    cursor: pointer;
+}
+
+.search-option input[type="checkbox"] {
+    width: 14px;
+    height: 14px;
+    cursor: pointer;
+}
+
+/* 検索情報 */
+.search-info {
+    font-size: 12px;
+    color: var(--text-muted);
+    padding: 4px 0;
+}
