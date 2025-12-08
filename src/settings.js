@@ -208,6 +208,7 @@ export class SettingsManager {
 
         // エディタ色
         editor.style.backgroundColor = this.settings.editorBgColor;
+        root.style.setProperty('--bg-color', this.settings.editorBgColor);
         editor.style.color = this.settings.editorTextColor;
 
         // テーマ (簡易実装: ダークモード切り替えなどはCSS変数で行うのが理想だが、要件は「背景色・文字色の変更」が主)

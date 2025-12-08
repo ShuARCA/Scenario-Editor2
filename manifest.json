@@ -6,10 +6,13 @@
   "scope": "./",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#ffffff",
-  "theme_color": "#0d9488",
+  "background_color": "#feffff",
+  "theme_color": "var(--primary-color)",
   "lang": "ja",
-  "categories": ["productivity", "utilities"],
+  "categories": [
+    "productivity",
+    "utilities"
+  ],
   "icons": [
     {
       "src": "icon/icon.png",
@@ -31,7 +34,12 @@
       "short_name": "新規",
       "description": "新しいドキュメントを作成",
       "url": "./index.html",
-      "icons": [{ "src": "icon/icon.png", "sizes": "192x192" }]
+      "icons": [
+        {
+          "src": "icon/icon.png",
+          "sizes": "192x192"
+        }
+      ]
     }
   ],
   "related_applications": [],

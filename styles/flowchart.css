@@ -33,7 +33,7 @@
     height: 300px;
     min-height: 150px;
     max-height: 60vh;
-    background-color: var(--flowchart-bg);
+    background-color: transparent;
     border-bottom: 1px solid var(--border-color);
     position: relative;
     display: flex;
