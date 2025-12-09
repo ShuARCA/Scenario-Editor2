@@ -121,7 +121,7 @@
     background-color: var(--surface-color);
     border: 2px solid var(--flowchart-grid-color);
     border-radius: 8px;
-    padding: 12px;
+    padding: 6px 24px;
     min-width: 100px;
     text-align: center;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
@@ -152,13 +152,13 @@
    ============================================ */
 .shape.group-parent {
     align-items: flex-start;
-    padding-top: 12px;
+    padding-top: 6px;
     background-color: var(--surface-color);
 }
 
 .group-toggle {
     position: absolute;
-    top: 4px;
+    top: 6px;
     right: 4px;
     width: 20px;
     height: 20px;
@@ -408,63 +408,6 @@
     background-color: var(--surface-color);
     color: var(--flowchart-text-color);
     cursor: pointer;
-}
-
-/* ============================================
-   プロパティパネル
-   ============================================ */
-.property-panel {
-    position: absolute;
-    top: 60px;
-    right: 16px;
-    background-color: var(--surface-color);
-    padding: 12px;
-    border-radius: 8px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-    border: 1px solid var(--border-color);
-    z-index: 40;
-    width: 200px;
-}
-
-.property-panel.hidden {
-    display: none;
-}
-
-.property-panel h4 {
-    margin: 0 0 12px 0;
-    font-size: 14px;
-    color: var(--flowchart-text-color);
-    border-bottom: 1px solid var(--border-color);
-    padding-bottom: 8px;
-}
-
-.prop-group {
-    margin-bottom: 12px;
-}
-
-.prop-group label {
-    display: block;
-    font-size: 12px;
-    color: var(--flowchart-muted-color);
-    margin-bottom: 4px;
-}
-
-.prop-group input[type="color"] {
-    width: 100%;
-    height: 32px;
-    padding: 2px;
-    border: 1px solid var(--border-color);
-    cursor: pointer;
-    border-radius: 4px;
-}
-
-.prop-group select {
-    width: 100%;
-    padding: 6px;
-    border: 1px solid var(--border-color);
-    border-radius: 4px;
-    font-size: 13px;
-    color: var(--flowchart-text-color);
 }
 
 /* ============================================

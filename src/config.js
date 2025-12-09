@@ -8,9 +8,9 @@ export const CONFIG = {
     FLOWCHART: {
         SHAPE: {
             WIDTH: 120,
-            HEIGHT: 60,
+            HEIGHT: 36,
             MIN_WIDTH: 120,
-            MIN_HEIGHT: 60
+            MIN_HEIGHT: 36
         },
         LAYOUT: {
             START_X: 50,
@@ -25,9 +25,9 @@ export const CONFIG = {
             DEFAULT_BG: '#ffffff',
             DEFAULT_BORDER: '#cbd5e1',
             DEFAULT_TEXT: '#334155',
-            SELECTED_BORDER: '#3b82f6',
+            SELECTED_BORDER: 'var(--primary-color)',
             CONNECTION_DEFAULT: '#94a3b8',
-            CONNECTION_SELECTED: '#3b82f6'
+            CONNECTION_SELECTED: 'var(--primary-color)'
         }
     },
     // エディタ設定

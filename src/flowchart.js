@@ -81,9 +81,6 @@ export class FlowchartApp {
         // コンテキストメニューのセットアップ
         this.setupContextMenu();
 
-        // プロパティパネルのセットアップ
-        this.setupPropertyPanel();
-
         // イベント購読
         this.eventBus.on('editor:update', (headings) => {
             this.syncFromEditor(headings);
@@ -293,38 +290,6 @@ export class FlowchartApp {
         if (path) path.remove();
         if (hit) hit.remove();
         this.clearSelection();
-    }
-
-    setupPropertyPanel() {
-        this.propertiesPanel = document.getElementById('flowchart-properties');
-        this.shapeBgColorInput = document.getElementById('shapeBgColor');
-        this.shapeBorderColorInput = document.getElementById('shapeBorderColor');
-        this.shapeTextColorInput = document.getElementById('shapeTextColor');
-        this.connectionStyleSelect = document.getElementById('connectionStyle');
-
-        if (this.shapeBgColorInput) {
-            this.shapeBgColorInput.addEventListener('input', (e) => {
-                this.updateSelectedShapeStyle('backgroundColor', e.target.value);
-            });
-        }
-
-        if (this.shapeBorderColorInput) {
-            this.shapeBorderColorInput.addEventListener('input', (e) => {
-                this.updateSelectedShapeStyle('borderColor', e.target.value);
-            });
-        }
-
-        if (this.shapeTextColorInput) {
-            this.shapeTextColorInput.addEventListener('input', (e) => {
-                this.updateSelectedShapeStyle('color', e.target.value);
-            });
-        }
-
-        if (this.connectionStyleSelect) {
-            this.connectionStyleSelect.addEventListener('change', (e) => {
-                this.updateSelectedConnectionStyle('type', e.target.value);
-            });
-        }
     }
 
     updateSelectedShapeStyle(prop, value) {
@@ -1025,7 +990,7 @@ export class FlowchartApp {
         // レイアウト調整（水平・垂直両方向）
         const deltaX = shape.width - oldWidth;
         const deltaY = shape.height - oldHeight;
-        
+
         if (deltaX !== 0 || deltaY !== 0) {
             // 折りたたみ時は変更前のサイズで重なりをチェックする必要があるため、
             // 一時的に変更前のサイズを渡す

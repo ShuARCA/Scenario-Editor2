@@ -7,7 +7,7 @@
   "display": "standalone",
   "orientation": "any",
   "background_color": "#feffff",
-  "theme_color": "var(--primary-color)",
+  "theme_color": "#feffff",
   "lang": "ja",
   "categories": [
     "productivity",
