@@ -1,20 +1,21 @@
 /* 検索パネル */
 #search-panel {
     position: absolute;
-    /* 固定から絶対配置へ */
-    /* top, right はJSで制御 */
     background-color: var(--surface-color);
     border: 1px solid var(--border-color);
     border-radius: 8px;
-    padding: 12px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    padding: 16px;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
     z-index: 1000;
-    width: 300px;
+    width: 380px;
     display: flex;
     flex-direction: column;
     gap: 8px;
     top: auto;
     left: auto;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    opacity: 1;
+    transform: translateY(0);
 }
 
 /* 吹き出しの矢印 */
@@ -34,73 +35,120 @@
 
 #search-panel.hidden {
     display: none;
+    opacity: 0;
+    transform: translateY(-10px);
 }
 
 .search-row {
     display: flex;
-    gap: 4px;
+    gap: 6px;
     align-items: center;
 }
 
 #search-input,
 #replace-input {
     flex-grow: 1;
-    padding: 6px;
+    padding: 6px 10px;
     border: 1px solid var(--border-color);
-    border-radius: 4px;
+    border-radius: 6px;
     font-size: 14px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    background-color: var(--surface-color);
+    color: var(--text-color);
+    max-width: 180px;
+}
+
+#search-input:focus,
+#replace-input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(13, 148, 136, 0.2);
 }
 
 #search-panel button {
     padding: 6px 10px;
-    background-color: #f1f5f9;
+    background-color: var(--bg-color);
     border: 1px solid var(--border-color);
-    border-radius: 4px;
+    border-radius: 6px;
     cursor: pointer;
-    font-size: 12px;
+    font-size: 13px;
     white-space: nowrap;
+    transition: all 0.2s;
+    color: var(--text-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 #search-panel button:hover {
-    background-color: #e2e8f0;
+    background-color: var(--border-color);
+    transform: translateY(-1px);
 }
 
-#do-search-btn {
+#search-panel button:active {
+    transform: translateY(0);
+}
+
+#do-search-btn,
+#replace-btn,
+#replace-all-btn {
     background-color: var(--primary-color) !important;
-    color: white;
+    color: white !important;
     border-color: var(--primary-color) !important;
+    font-weight: 500;
 }
 
-#do-search-btn:hover {
-    background-color: #0d9488 !important;
-    /* teal-600 */
+#do-search-btn:hover,
+#replace-btn:hover,
+#replace-all-btn:hover {
+    background-color: var(--primary-hover) !important;
+    color: var(--primary-color) !important;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* 閉じるボタン */
+#close-search-btn {
+    padding: 8px;
+    width: 32px;
+    color: #9ca3af !important;
+    background: transparent !important;
+    border: none !important;
+}
+
+#close-search-btn:hover {
+    color: #ef4444 !important;
+    background-color: #fee2e2 !important;
 }
 
 /* 検索オプション */
 .search-options {
     display: flex;
-    gap: 12px;
+    gap: 16px;
     padding: 4px 0;
 }
 
 .search-option {
     display: flex;
     align-items: center;
-    gap: 4px;
-    font-size: 12px;
+    gap: 6px;
+    font-size: 13px;
     color: var(--text-color);
     cursor: pointer;
+    user-select: none;
 }
 
 .search-option input[type="checkbox"] {
-    width: 14px;
-    height: 14px;
+    width: 16px;
+    height: 16px;
     cursor: pointer;
+    accent-color: var(--primary-color);
 }
 
 /* 検索情報 */
 .search-info {
     font-size: 12px;
-    color: var(--text-muted);
-    padding: 4px 0;
+    color: #64748b;
+    padding: 0 4px;
+    min-height: 1.5em;
+    /* ちらつき防止 */
 }

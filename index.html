@@ -98,6 +98,9 @@
             </div>
         </aside>
 
+        <!-- Outline Icon Picker -->
+        <div id="outline-icon-picker" class="hidden"></div>
+
         <!-- Main Content -->
         <main id="main-content">
             <!-- Flowchart Area -->
@@ -114,12 +117,7 @@
                                 d="M10.59,13.41C11,13.8 11,14.44 10.59,14.83C10.2,15.22 9.56,15.22 9.17,14.83C7.22,12.88 7.22,9.71 9.17,7.76V7.76L12.71,4.22C14.66,2.27 17.83,2.27 19.78,4.22C21.73,6.17 21.73,9.34 19.78,11.29L18.29,12.78C18.3,11.96 18.17,11.14 17.89,10.36L18.36,9.88C19.54,8.71 19.54,6.81 18.36,5.64C17.19,4.46 15.29,4.46 14.12,5.64L10.59,9.17C9.41,10.34 9.41,12.24 10.59,13.41M13.41,9.17C13.8,8.78 14.44,8.78 14.83,9.17C16.78,11.12 16.78,14.29 14.83,16.24V16.24L11.29,19.78C9.34,21.73 6.17,21.73 4.22,19.78C2.27,17.83 2.27,14.66 4.22,12.71L5.71,11.22C5.7,12.04 5.83,12.86 6.11,13.64L5.64,14.12C4.46,15.29 4.46,17.19 5.64,18.36C6.81,19.54 8.71,19.54 9.88,18.36L13.41,14.83C14.59,13.66 14.59,11.76 13.41,10.59C13,10.2 13,9.56 13.41,9.17Z" />
                         </svg>
                     </button>
-                    <button class="mode-btn" data-mode="pan" title="移動">
-                        <svg class="icon" viewBox="0 0 24 24">
-                            <path
-                                d="M23,5.5V20C23,22.2 21.2,24 19,24H10C7.8,24 6,22.2 6,20V19H5V18H6V14.5L4.2,16.3C3.8,16.7 3.2,16.7 2.8,16.3L2.1,15.6L8.1,9.6C8.5,9.2 9,9 9.5,9H10V5.5C10,4.7 10.7,4 11.5,4C12.3,4 13,4.7 13,5.5V9H14V5.5C14,4.7 14.7,4 15.5,4C16.3,4 17,4.7 17,5.5V9H18V5.5C18,4.7 18.7,4 19.5,4C20.3,4 21,4.7 21,5.5V9H22V5.5C22,4.7 22.7,4 23.5,4C24.3,4 25,4.7 25,5.5H23M13,2H11V0H13V2M17,2H15V0H17V2M21,2H19V0H21V2Z" />
-                        </svg>
-                    </button>
+
                     <div class="toolbar-separator"></div>
                     <button id="zoom-in-btn" class="mode-btn" title="拡大">
                         <svg class="icon" viewBox="0 0 24 24">
@@ -315,6 +313,18 @@
                 <div class="setting-item">
                     <label>文字色</label>
                     <input type="color" id="editor-text-color" value="#334155">
+                </div>
+                <div class="setting-item">
+                    <label>背景画像</label>
+                    <div class="background-image-settings">
+                        <div id="bg-image-preview" class="bg-preview hidden"></div>
+                        <div class="bg-controls">
+                            <label for="bg-image-input" class="file-upload-btn">ファイルを選択</label>
+                            <input type="file" id="bg-image-input" accept="image/png, image/jpeg, image/gif, image/webp"
+                                class="hidden">
+                            <button id="delete-bg-image-btn" class="danger-btn hidden">画像を削除</button>
+                        </div>
+                    </div>
                 </div>
                 <div class="settings-footer">
                     <button id="save-settings-btn" class="primary-btn">保存して適用</button>

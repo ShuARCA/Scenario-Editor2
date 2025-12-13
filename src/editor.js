@@ -5,6 +5,7 @@
 import { debounce, rgbToHex, generateId } from './utils.js';
 import { Sanitizer } from './sanitizer.js';
 import { CONFIG } from './config.js';
+import { TOGGLE_ICONS, OUTLINE_ICONS, getIconList } from './outlineIcons.js';
 
 /**
  * エディタのロジックを管理するクラス
@@ -17,6 +18,11 @@ export class EditorManager {
         this.eventBus = eventBus;
         this.sanitizer = new Sanitizer();
         this.savedSelection = null;
+
+        // アウトライン機能の状態管理
+        this.outlineCollapsedState = new Map(); // 折りたたみ状態を保持 (headingId => boolean)
+        this.currentIconTarget = null; // 現在アイコンを編集中の見出し要素
+        this.lastActiveHeadingId = null; // 前回のハイライト状態をキャッシュ
 
         // DOM要素の参照を取得
         this._initDOMReferences();
@@ -44,6 +50,9 @@ export class EditorManager {
         this.rubyApplyBtn = document.getElementById('ruby-apply-btn');
         this.rubyDeleteBtn = document.getElementById('ruby-delete-btn');
         this.rubyBtn = document.getElementById('rubyBtn');
+
+        // アイコンピッカー関連
+        this.iconPicker = document.getElementById('outline-icon-picker');
     }
 
     /**
@@ -58,6 +67,7 @@ export class EditorManager {
         this._setupRubyPanel();
         this._setupCopyHandler();
         this._setupEventBusListeners();
+        this._setupIconPicker();
     }
 
     /**
@@ -76,7 +86,27 @@ export class EditorManager {
      * @private
      */
     _setupSelectionHandler() {
-        document.addEventListener('selectionchange', () => this._handleSelectionChange());
+        // アウトラインハイライト更新用のデバウンス処理（10ms）
+        const debouncedOutlineUpdate = debounce((node) => {
+            this._updateOutlineHighlightByPosition(node);
+        }, 10);
+
+        document.addEventListener('selectionchange', () => {
+            const selection = window.getSelection();
+            if (!selection.rangeCount) return;
+
+            const range = selection.getRangeAt(0);
+            const container = range.commonAncestorContainer;
+            const isInsideEditor = this.editor.contains(container) || container === this.editor;
+
+            // アウトラインハイライト更新（デバウンス付き）
+            if (isInsideEditor) {
+                debouncedOutlineUpdate(range.startContainer);
+            }
+
+            // フローティングツールバーの処理は即時実行
+            this._handleFloatToolbar(selection, range, isInsideEditor);
+        });
     }
 
     /**
@@ -165,13 +195,13 @@ export class EditorManager {
         this.editor.focus();
         const rubyElements = this._getRubyElementsInSelection();
         const result = document.execCommand('foreColor', false, color);
-        
+
         // ルビ要素のrt要素にも色を適用
         rubyElements.forEach(ruby => {
             const rt = ruby.querySelector('rt');
             if (rt) rt.style.color = color;
         });
-        
+
         return result;
     }
 
@@ -184,13 +214,13 @@ export class EditorManager {
         this.editor.focus();
         const rubyElements = this._getRubyElementsInSelection();
         const result = document.execCommand('hiliteColor', false, color);
-        
+
         // ルビ要素のrt要素にも色を適用
         rubyElements.forEach(ruby => {
             const rt = ruby.querySelector('rt');
             if (rt) rt.style.backgroundColor = color;
         });
-        
+
         return result;
     }
 
@@ -273,21 +303,10 @@ export class EditorManager {
     }
 
     /**
-     * 選択変更時の処理を行います。
+     * 選択変更時のフローティングツールバー処理を行います。
      * @private
      */
-    _handleSelectionChange() {
-        const selection = window.getSelection();
-
-        if (!selection.rangeCount) {
-            this._hideFloatToolbar();
-            return;
-        }
-
-        const range = selection.getRangeAt(0);
-        const container = range.commonAncestorContainer;
-        const isInsideEditor = this.editor.contains(container) || container === this.editor;
-
+    _handleFloatToolbar(selection, range, isInsideEditor) {
         if (!isInsideEditor || selection.isCollapsed) {
             this._hideFloatToolbar();
             return;
@@ -295,6 +314,137 @@ export class EditorManager {
 
         this._showFloatToolbar(range);
         this._updateToolbarState();
+    }
+
+    /**
+     * カーソル位置に応じてアウトラインのハイライトを更新します。
+     * @private
+     * @param {Node} cursorNode - カーソルがあるノード
+     */
+    _updateOutlineHighlightByPosition(cursorNode) {
+        if (!cursorNode) return;
+
+        // カーソル位置から最も近い親の見出しを見つける（現在位置が属するセクション）
+        const headings = Array.from(this.editor.querySelectorAll('h1, h2, h3, h4'));
+        if (headings.length === 0) return;
+
+        // カーソル位置を取得
+        let currentNode = cursorNode;
+        if (currentNode.nodeType === Node.TEXT_NODE) {
+            currentNode = currentNode.parentNode;
+        }
+
+        // 各見出しとカーソル位置の関係を判定
+        let activeHeadingId = null;
+
+        for (let i = headings.length - 1; i >= 0; i--) {
+            const heading = headings[i];
+
+            // カーソル位置がこの見出し以降にあるかをチェック
+            const position = heading.compareDocumentPosition(currentNode);
+
+            // currentNodeがheadingの後ろにある、またはheading自体である
+            if (position & Node.DOCUMENT_POSITION_FOLLOWING ||
+                position === 0 ||
+                heading.contains(currentNode) ||
+                currentNode === heading) {
+                activeHeadingId = heading.id;
+                break;
+            }
+        }
+
+        // 前回と同じ場合は更新をスキップ（チカチカ防止）
+        if (this.lastActiveHeadingId === activeHeadingId) {
+            return;
+        }
+
+        // 一元的なハイライト管理メソッドを呼び出し
+        this._setOutlineHighlight(activeHeadingId);
+    }
+
+    /**
+     * アウトラインのハイライト状態を設定します。
+     * これはハイライト管理の唯一のエントリーポイントです。
+     * @private
+     * @param {string|null} headingId - ハイライトする見出しのID、nullの場合はハイライトを解除
+     * @param {boolean} skipCache - キャッシュチェックをスキップするか（デフォルト: false）
+     */
+    _setOutlineHighlight(headingId, skipCache = false) {
+        // キャッシュを更新
+        this.lastActiveHeadingId = headingId;
+
+        // まず全てのactiveとhas-hidden-activeクラスを削除
+        this.outlineList.querySelectorAll('.outline-item').forEach(item => {
+            item.classList.remove('active', 'has-hidden-active');
+        });
+
+        if (!headingId) return;
+
+        // 該当するアウトラインアイテムを検索
+        const activeItem = this.outlineList.querySelector(
+            `.outline-item[data-heading-id="${headingId}"]`
+        );
+
+        if (activeItem) {
+            // 該当アイテムが表示されているかチェック
+            const wrapper = activeItem.closest('.outline-item-wrapper');
+            const isVisible = this._isOutlineItemVisible(wrapper);
+
+            if (isVisible) {
+                // 表示されている場合は通常のハイライト
+                activeItem.classList.add('active');
+            } else {
+                // 折りたたまれている場合は、表示されている親にインジケーターを追加
+                const visibleParent = this._findVisibleParentOutlineItem(wrapper);
+                if (visibleParent) {
+                    visibleParent.classList.add('has-hidden-active');
+                }
+            }
+        }
+    }
+
+    /**
+     * アウトラインアイテムが表示されているかどうかを判定します。
+     * @private
+     * @param {HTMLElement} wrapper - アウトラインアイテムのラッパー要素
+     * @returns {boolean} 表示されている場合true
+     */
+    _isOutlineItemVisible(wrapper) {
+        if (!wrapper) return false;
+
+        // wrapperが折りたたまれたコンテナ内にあるかチェック
+        let parent = wrapper.parentElement;
+        while (parent && parent !== this.outlineList) {
+            if (parent.classList.contains('outline-children') &&
+                parent.classList.contains('collapsed')) {
+                return false;
+            }
+            parent = parent.parentElement;
+        }
+        return true;
+    }
+
+    /**
+     * 表示されている親のアウトラインアイテムを見つけます。
+     * @private
+     * @param {HTMLElement} wrapper - アウトラインアイテムのラッパー要素
+     * @returns {HTMLElement|null} 表示されている親のoutline-item要素
+     */
+    _findVisibleParentOutlineItem(wrapper) {
+        if (!wrapper) return null;
+
+        let parent = wrapper.parentElement;
+        while (parent && parent !== this.outlineList) {
+            // 親のwrapperを見つける
+            if (parent.classList.contains('outline-item-wrapper')) {
+                const parentItem = parent.querySelector(':scope > .outline-item');
+                if (parentItem && this._isOutlineItemVisible(parent)) {
+                    return parentItem;
+                }
+            }
+            parent = parent.parentElement;
+        }
+        return null;
     }
 
     /**
@@ -378,25 +528,266 @@ export class EditorManager {
 
     /**
      * アウトラインを更新します。
+     * 階層構造、折りたたみ・展開、アイコン設定に対応
      */
     updateOutline() {
         this.outlineList.innerHTML = '';
-        const headings = this.editor.querySelectorAll('h1, h2, h3, h4');
+        const headings = Array.from(this.editor.querySelectorAll('h1, h2, h3, h4'));
 
+        if (headings.length === 0) return;
+
+        // 各見出しにIDを付与
         headings.forEach(h => {
-            const item = document.createElement('div');
-            item.className = 'outline-item';
-            item.textContent = h.textContent || '(タイトルなし)';
-            item.style.paddingLeft = `${(parseInt(h.tagName[1]) - 1) * 12 + 8}px`;
+            if (!h.id) h.id = generateId();
+        });
 
-            item.addEventListener('click', () => {
-                h.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                this.outlineList.querySelectorAll('.outline-item').forEach(i => i.classList.remove('active'));
-                item.classList.add('active');
+        // 階層構造を構築
+        const rootItems = this._buildOutlineHierarchy(headings);
+
+        // DOM要素を生成
+        rootItems.forEach(item => {
+            const element = this._createOutlineItemElement(item);
+            this.outlineList.appendChild(element);
+        });
+
+        // DOM再構築後にハイライト状態を再適用
+        // キャッシュをリセットして強制的に更新
+        this.lastActiveHeadingId = null;
+        const selection = window.getSelection();
+        if (selection.rangeCount) {
+            const range = selection.getRangeAt(0);
+            if (this.editor.contains(range.startContainer)) {
+                this._updateOutlineHighlightByPosition(range.startContainer);
+            }
+        }
+    }
+
+    /**
+     * 見出しリストから階層構造を構築します。
+     * @private
+     * @param {HTMLElement[]} headings - 見出し要素の配列
+     * @returns {Array} 階層構造化されたアウトラインアイテム
+     */
+    _buildOutlineHierarchy(headings) {
+        const items = headings.map(h => ({
+            element: h,
+            id: h.id,
+            text: h.textContent || '(タイトルなし)',
+            level: parseInt(h.tagName[1]),
+            icon: h.dataset.outlineIcon || 'document',
+            children: []
+        }));
+
+        const root = [];
+        const stack = [{ level: 0, children: root }];
+
+        items.forEach(item => {
+            // 現在のアイテムのレベル以上の要素をスタックから削除
+            while (stack.length > 1 && stack[stack.length - 1].level >= item.level) {
+                stack.pop();
+            }
+
+            // 親の子リストに追加
+            stack[stack.length - 1].children.push(item);
+
+            // このアイテムを将来の子のためにスタックに追加
+            stack.push({ level: item.level, children: item.children });
+        });
+
+        return root;
+    }
+
+    /**
+     * アウトライン項目のDOM要素を作成します。
+     * @private
+     * @param {Object} item - アウトラインアイテム
+     * @returns {HTMLElement} 作成されたDOM要素
+     */
+    _createOutlineItemElement(item) {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'outline-item-wrapper';
+        wrapper.dataset.headingId = item.id;
+        wrapper.style.paddingLeft = `${(item.level - 1) * 12}px`;
+
+        // メインのアウトラインアイテム
+        const itemEl = document.createElement('div');
+        itemEl.className = 'outline-item';
+        itemEl.dataset.headingId = item.id;
+
+        // アイコン（クリックで変更可能）
+        const iconEl = document.createElement('div');
+        iconEl.className = 'outline-icon';
+        if (item.icon && item.icon !== 'none' && OUTLINE_ICONS[item.icon]) {
+            iconEl.innerHTML = OUTLINE_ICONS[item.icon].svg;
+        }
+        // 未設定の場合は空欄のままにする
+        iconEl.title = 'クリックでアイコンを変更';
+        iconEl.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this._showIconPicker(item.element, iconEl);
+        });
+
+        // テキスト
+        const textEl = document.createElement('span');
+        textEl.className = 'outline-text';
+        textEl.textContent = item.text;
+
+        itemEl.appendChild(iconEl);
+        itemEl.appendChild(textEl);
+
+        // 子要素がある場合は折りたたみトグルを追加
+        if (item.children.length > 0) {
+            const toggleEl = document.createElement('div');
+            toggleEl.className = 'outline-toggle';
+
+            const isCollapsed = this.outlineCollapsedState.get(item.id) || false;
+            toggleEl.innerHTML = isCollapsed ? TOGGLE_ICONS.collapsed : TOGGLE_ICONS.expanded;
+
+            toggleEl.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this._toggleOutlineItem(item.id, toggleEl, wrapper);
             });
 
-            this.outlineList.appendChild(item);
+            itemEl.appendChild(toggleEl);
+        }
+
+        // クリックで見出しにスクロール
+        itemEl.addEventListener('click', () => {
+            item.element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            // 一元的なハイライト管理メソッドを使用
+            this._setOutlineHighlight(item.id);
         });
+
+        wrapper.appendChild(itemEl);
+
+        // 子要素を再帰的に追加
+        if (item.children.length > 0) {
+            const childrenContainer = document.createElement('div');
+            childrenContainer.className = 'outline-children';
+
+            const isCollapsed = this.outlineCollapsedState.get(item.id) || false;
+            if (isCollapsed) {
+                childrenContainer.classList.add('collapsed');
+            }
+
+            item.children.forEach(child => {
+                const childElement = this._createOutlineItemElement(child);
+                childrenContainer.appendChild(childElement);
+            });
+
+            wrapper.appendChild(childrenContainer);
+        }
+
+        return wrapper;
+    }
+
+    /**
+     * アウトライン項目の折りたたみ・展開を切り替えます。
+     * @private
+     */
+    _toggleOutlineItem(headingId, toggleEl, wrapper) {
+        const childrenContainer = wrapper.querySelector('.outline-children');
+        if (!childrenContainer) return;
+
+        const isCollapsed = this.outlineCollapsedState.get(headingId) || false;
+        const newState = !isCollapsed;
+
+        this.outlineCollapsedState.set(headingId, newState);
+
+        if (newState) {
+            childrenContainer.classList.add('collapsed');
+            toggleEl.innerHTML = TOGGLE_ICONS.collapsed;
+        } else {
+            childrenContainer.classList.remove('collapsed');
+            toggleEl.innerHTML = TOGGLE_ICONS.expanded;
+        }
+    }
+
+    /**
+     * アイコンピッカーをセットアップします。
+     * @private
+     */
+    _setupIconPicker() {
+        if (!this.iconPicker) return;
+
+        // アイコンオプションを動的に生成
+        const icons = getIconList();
+        this.iconPicker.innerHTML = '';
+
+        icons.forEach(icon => {
+            const item = document.createElement('div');
+            item.className = 'icon-picker-item';
+            item.dataset.iconId = icon.id;
+            item.title = icon.name;
+
+            if (icon.svg) {
+                item.innerHTML = icon.svg;
+            } else {
+                item.textContent = '×'; // "なし" の場合
+            }
+
+            item.addEventListener('click', () => {
+                this._selectIcon(icon.id);
+            });
+
+            this.iconPicker.appendChild(item);
+        });
+
+        // クリック外で閉じる
+        document.addEventListener('click', (e) => {
+            if (!this.iconPicker.contains(e.target) &&
+                !e.target.closest('.outline-icon')) {
+                this._hideIconPicker();
+            }
+        });
+    }
+
+    /**
+     * アイコンピッカーを表示します。
+     * @private
+     */
+    _showIconPicker(headingElement, iconEl) {
+        this.currentIconTarget = headingElement;
+
+        // 現在のアイコンをハイライト
+        const currentIcon = headingElement.dataset.outlineIcon || 'document';
+        this.iconPicker.querySelectorAll('.icon-picker-item').forEach(item => {
+            item.classList.toggle('active', item.dataset.iconId === currentIcon);
+        });
+
+        // 位置を設定
+        const rect = iconEl.getBoundingClientRect();
+        this.iconPicker.style.top = `${rect.bottom + 5}px`;
+        this.iconPicker.style.left = `${rect.left}px`;
+
+        this.iconPicker.classList.remove('hidden');
+    }
+
+    /**
+     * アイコンピッカーを非表示にします。
+     * @private
+     */
+    _hideIconPicker() {
+        if (this.iconPicker) {
+            this.iconPicker.classList.add('hidden');
+        }
+        this.currentIconTarget = null;
+    }
+
+    /**
+     * アイコンを選択して適用します。
+     * @private
+     */
+    _selectIcon(iconId) {
+        if (!this.currentIconTarget) return;
+
+        // 見出し要素にdata属性として保存
+        this.currentIconTarget.dataset.outlineIcon = iconId;
+
+        this._hideIconPicker();
+
+        // アウトラインを更新
+        this.updateOutline();
     }
 
     /**
@@ -408,10 +799,8 @@ export class EditorManager {
         if (heading && this.editor.contains(heading)) {
             heading.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
-            const headings = this.editor.querySelectorAll('h1, h2, h3, h4');
-            this.outlineList.querySelectorAll('.outline-item').forEach((item, index) => {
-                item.classList.toggle('active', headings[index] === heading);
-            });
+            // 一元的なハイライト管理メソッドを使用
+            this._setOutlineHighlight(headingId);
         }
     }
 
@@ -645,7 +1034,7 @@ export class EditorManager {
 
             e.clipboardData.setData('text/plain', textWithoutRt);
             e.clipboardData.setData('text/html', htmlWithoutRt);
-            
+
             if (shouldDelete) range.deleteContents();
             e.preventDefault();
         };
@@ -1173,7 +1562,7 @@ export class EditorManager {
     _setupRubyProtection() {
         // 既存のrt要素にcontenteditable="false"を設定
         this._ensureRtNotEditable();
-        
+
         // DOMの変更を監視して、新しいrt要素にもcontenteditable="false"を設定
         this._setupRubyMutationObserver();
     }
@@ -1251,10 +1640,10 @@ export class EditorManager {
      * @private
      */
     _moveCursorToBaseTextEnd(rtOrRubyElement) {
-        const rubyElement = rtOrRubyElement.tagName === 'RT' 
-            ? rtOrRubyElement.closest('ruby') 
+        const rubyElement = rtOrRubyElement.tagName === 'RT'
+            ? rtOrRubyElement.closest('ruby')
             : rtOrRubyElement;
-        
+
         if (!rubyElement) return;
 
         const baseTextNode = this._findBaseTextNode(rubyElement);
@@ -1381,7 +1770,7 @@ export class EditorManager {
     _findFirstTextNode(node) {
         if (node.nodeType === Node.TEXT_NODE && node.textContent.trim()) return node;
         if (node.nodeType === Node.ELEMENT_NODE && node.tagName === 'RT') return null;
-        
+
         for (const child of node.childNodes) {
             const textNode = this._findFirstTextNode(child);
             if (textNode) return textNode;
@@ -1396,7 +1785,7 @@ export class EditorManager {
     _findLastTextNode(node) {
         if (node.nodeType === Node.TEXT_NODE && node.textContent.trim()) return node;
         if (node.nodeType === Node.ELEMENT_NODE && node.tagName === 'RT') return null;
-        
+
         for (let i = node.childNodes.length - 1; i >= 0; i--) {
             const textNode = this._findLastTextNode(node.childNodes[i]);
             if (textNode) return textNode;

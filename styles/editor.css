@@ -12,8 +12,8 @@
     --heading-border-color: #eee;
     --toolbar-button-color: #4b5563;
     --toolbar-button-hover-bg: #f3f4f6;
-    --toolbar-active-bg: #e0f2fe;
-    --toolbar-active-color: #0284c7;
+    --toolbar-active-bg: color-mix(in srgb, var(--primary-color) 15%, transparent);
+    --toolbar-active-color: var(--primary-color);
 }
 
 /* ============================================
@@ -33,6 +33,7 @@
    ============================================ */
 #editor {
     width: 100%;
+    height: max-content;
     max-width: var(--editor-max-width);
     min-height: calc(100% - 48px);
     background-color: var(--bg-color);
@@ -42,6 +43,7 @@
     outline: none;
     line-height: var(--editor-line-height);
     font-size: var(--editor-font-size);
+    cursor: text;
 }
 
 /* ============================================
@@ -75,6 +77,21 @@
 
 #editor p {
     margin: 0.2em auto;
+}
+
+#editor blockquote {
+    margin: 0.5em 1em;
+    padding: 0.5em 1em;
+    border-left: 2px solid var(--primary-color);
+}
+
+#editor pre {
+    padding: 0.5em 1em;
+    background-color: rgba(210, 210, 210, 0.5);
+}
+
+#editor rt {
+    font-size: 0.7em;
 }
 
 /* ============================================

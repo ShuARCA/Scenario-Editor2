@@ -17,7 +17,8 @@ export class SettingsManager {
             fontSize: '16px',
             editorBgColor: '#ffffff',
             editorTextColor: '#334155',
-            backgroundImage: null
+            editorTextColor: '#334155',
+            backgroundImage: null // メモリ保持のみ
         };
 
         // DOM初期化をスキップするオプション（テスト用）
@@ -33,7 +34,19 @@ export class SettingsManager {
         // 設定ボタンイベント
         document.getElementById('settingsBtn').addEventListener('click', () => this.open());
         this.closeBtn.addEventListener('click', () => this.close());
+        this.closeBtn.addEventListener('click', () => this.close());
         this.saveBtn.addEventListener('click', () => this.saveSettings());
+
+        // 背景画像設定
+        const bgInput = document.getElementById('bg-image-input');
+        const deleteBgBtn = document.getElementById('delete-bg-image-btn');
+
+        if (bgInput) {
+            bgInput.addEventListener('change', (e) => this.handleImageSelect(e));
+        }
+        if (deleteBgBtn) {
+            deleteBgBtn.addEventListener('click', () => this.clearBackgroundImage());
+        }
 
         // 外側クリックで閉じる
         this.settingsModal.addEventListener('click', (e) => {
@@ -47,6 +60,7 @@ export class SettingsManager {
 
     open() {
         this.settingsModal.classList.remove('hidden');
+        this.updateBgImagePreview();
 
         // ポップアップ位置の計算
         const btn = document.getElementById('settingsBtn');
@@ -88,7 +102,15 @@ export class SettingsManager {
         this.settings.editorBgColor = document.getElementById('editor-bg-color').value;
         this.settings.editorTextColor = document.getElementById('editor-text-color').value;
 
-        localStorage.setItem('ieditweb-settings', JSON.stringify(this.settings));
+        this.settings.editorTextColor = document.getElementById('editor-text-color').value;
+
+        // 背景画像以外の設定を保存
+        const settingsToSave = { ...this.settings };
+        delete settingsToSave.backgroundImage;
+        localStorage.setItem('ieditweb-settings', JSON.stringify(settingsToSave));
+
+        this.applySettings();
+        this.close();
         this.applySettings();
         this.close();
     }
@@ -99,7 +121,10 @@ export class SettingsManager {
     loadSettings() {
         const saved = localStorage.getItem('ieditweb-settings');
         if (saved) {
-            this.settings = { ...this.settings, ...JSON.parse(saved) };
+            const parsed = JSON.parse(saved);
+            // 背景画像はlocalStorageから読み込まない（セキュリティと容量と要件のため）
+            if (parsed.backgroundImage) delete parsed.backgroundImage;
+            this.settings = { ...this.settings, ...parsed };
         }
     }
 
@@ -152,16 +177,56 @@ export class SettingsManager {
         this.applySettings();
     }
 
+    handleImageSelect(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            this.setBackgroundImage(event.target.result);
+            this.updateBgImagePreview();
+        };
+        reader.readAsDataURL(file);
+
+        // inputをリセットして同じファイルを再選択可能にする
+        e.target.value = '';
+    }
+
+    updateBgImagePreview() {
+        const preview = document.getElementById('bg-image-preview');
+        const deleteBtn = document.getElementById('delete-bg-image-btn');
+        if (!preview || !deleteBtn) return;
+
+        if (this.settings.backgroundImage) {
+            preview.style.backgroundImage = `url(${this.settings.backgroundImage})`;
+            preview.classList.remove('hidden');
+            deleteBtn.classList.remove('hidden');
+        } else {
+            preview.style.backgroundImage = '';
+            preview.classList.add('hidden');
+            deleteBtn.classList.add('hidden');
+        }
+    }
+
     /**
      * 背景画像を設定します。
+     * メモリ上でのみ保持し、localStorageには保存しません。
      * @param {string} dataUrl - 背景画像のBase64データURL
      */
     setBackgroundImage(dataUrl) {
         if (!dataUrl || typeof dataUrl !== 'string') {
-            throw new Error('背景画像のデータURLが無効です。');
+            console.error('背景画像のデータURLが無効です。');
+            return;
         }
         this.settings.backgroundImage = dataUrl;
-        this.applySettings();
+        // 即時プレビュー反映したい場合はここでapplySettingsを呼ぶ手もあるが、
+        // 「保存して適用」で一括適用のUIフローなので、プレビューのみ更新でもよい。
+        // ただし現状のUIフローでは設定変更即反映ではないが、
+        // 背景画像だけはプレビューで見せる形にする。
+        // ここでは内部状態の更新にとどめ、実際の画面反映はapplySettingsで行うのが整合性がいいが
+        // ユーザー体験的には選択した時点で背景が変わってもいいかもしれない。
+        // しかし他の設定項目（フォントなど）は「保存」まで適用されないUIなので、それに合わせる。
+        this.updateBgImagePreview();
     }
 
     /**
@@ -169,7 +234,28 @@ export class SettingsManager {
      */
     clearBackgroundImage() {
         this.settings.backgroundImage = null;
+        this.updateBgImagePreview();
+    }
+
+    /**
+     * 設定を一括で取り込み、適用します。
+     * @param {Object} newSettings - 新しい設定オブジェクト
+     */
+    importSettings(newSettings) {
+        if (!newSettings || typeof newSettings !== 'object') return;
+
+        // 既存の設定にマージ（未知のキーは無視するなどのバリデーションも可能だが、
+        // ここでは単純に上書きし、applySettingsで利用するものだけが反映される前提とする）
+        // ただし、this.settingsのキーのみを対象とすることで余計なデータの混入を防ぐ
+        Object.keys(this.settings).forEach(key => {
+            if (Object.prototype.hasOwnProperty.call(newSettings, key)) {
+                this.settings[key] = newSettings[key];
+            }
+        });
+
         this.applySettings();
+        // プレビューなども更新
+        this.updateBgImagePreview();
     }
 
     /**
@@ -187,17 +273,17 @@ export class SettingsManager {
         const root = document.documentElement;
         const editor = document.getElementById('editor');
         const mainContent = document.getElementById('main-content');
+        const editorContainer = document.getElementById('editor-container');
 
-        // DOM要素が存在しない場合は早期リターン（テスト環境対応）
+        // DOM要素が存在しない場合は早期リターン
         if (!root || !editor) {
             return;
         }
 
-        // プライマリーカラー
+        // --- 1. 基本設定 (フォント、プライマリーカラー) ---
         root.style.setProperty('--primary-color', this.settings.primaryColor);
         root.style.setProperty('--primary-hover', this.settings.primaryColor + '0.8');
 
-        // フォント
         let fontFamily = 'Inter, system-ui, sans-serif';
         if (this.settings.fontFamily === 'serif') fontFamily = 'Merriweather, serif';
         else if (this.settings.fontFamily === 'monospace') fontFamily = 'Fira Code, monospace';
@@ -205,41 +291,74 @@ export class SettingsManager {
         root.style.setProperty('--font-family', fontFamily);
         editor.style.fontFamily = fontFamily;
         editor.style.fontSize = this.settings.fontSize;
-
-        // エディタ色
-        editor.style.backgroundColor = this.settings.editorBgColor;
-        root.style.setProperty('--bg-color', this.settings.editorBgColor);
         editor.style.color = this.settings.editorTextColor;
 
-        // テーマ (簡易実装: ダークモード切り替えなどはCSS変数で行うのが理想だが、要件は「背景色・文字色の変更」が主)
+
+        // --- 2. テーマ色の決定 ---
+        let targetBgColor = this.settings.editorBgColor;
+
         if (this.settings.theme === 'dark') {
             root.style.setProperty('--surface-color', '#303030ff');
-            root.style.setProperty('--background-color', '#202020ff');
+            // ダークモード時のデフォルト背景色
+            // ユーザー設定がデフォルト(白)のままならダークグレーにオーバーライド
+            if (this.settings.editorBgColor === '#ffffff') {
+                targetBgColor = '#303030';
+                root.style.setProperty('--bg-color', '#202020ff'); // 全体背景も暗く
+            } else {
+                root.style.setProperty('--bg-color', this.settings.editorBgColor);
+            }
             root.style.setProperty('--text-color', '#f8fafc');
             root.style.setProperty('--border-color', '#334155');
-            // エディタ色がカスタム設定されていない場合のみ上書き
-            if (this.settings.editorBgColor === '#ffffff') editor.style.backgroundColor = '#303030ff';
+
             if (this.settings.editorTextColor === '#334155') editor.style.color = '#f8fafc';
+
         } else {
             root.style.setProperty('--surface-color', '#ffffff');
-            root.style.setProperty('--background-color', '#fbfbff');
+            root.style.setProperty('--bg-color', this.settings.editorBgColor);
             root.style.setProperty('--text-color', '#334155');
             root.style.setProperty('--border-color', '#e2e8f0');
+            targetBgColor = this.settings.editorBgColor;
         }
 
-        // 背景画像の適用
-        if (mainContent) {
-            if (this.settings.backgroundImage) {
-                mainContent.style.backgroundImage = `url(${this.settings.backgroundImage})`;
-                mainContent.style.backgroundSize = 'cover';
-                mainContent.style.backgroundPosition = 'center';
-                mainContent.style.backgroundRepeat = 'no-repeat';
-            } else {
+
+        // --- 3. 背景画像とエディタ背景の適用 ---
+        // 背景画像がある場合はエディタなどを透過させる
+        if (mainContent && this.settings.backgroundImage) {
+            // 背景画像設定
+            mainContent.style.backgroundImage = `url(${this.settings.backgroundImage})`;
+            mainContent.style.backgroundSize = 'cover';
+            mainContent.style.backgroundPosition = 'center';
+            mainContent.style.backgroundRepeat = 'no-repeat';
+
+            // コンテナの透過
+            if (editorContainer) {
+                editorContainer.style.backgroundColor = 'transparent';
+            }
+
+            // エディタ本体の半透過 (80% opacity)
+            // Hex(#RRGGBB)形式を前提に'cc'を付与
+            let finalEditorColor = targetBgColor;
+            if (finalEditorColor.startsWith('#') && finalEditorColor.length === 7) {
+                finalEditorColor += 'cc';
+            }
+            editor.style.backgroundColor = finalEditorColor;
+
+        } else {
+            // 背景画像なし
+            if (mainContent) {
                 mainContent.style.backgroundImage = '';
                 mainContent.style.backgroundSize = '';
                 mainContent.style.backgroundPosition = '';
                 mainContent.style.backgroundRepeat = '';
             }
+
+            // コンテナ背景のリセット (CSS継承 or 空文字)
+            if (editorContainer) {
+                editorContainer.style.backgroundColor = '';
+            }
+
+            // エディタ背景を不透明色に
+            editor.style.backgroundColor = targetBgColor;
         }
     }
 }

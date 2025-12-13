@@ -57,6 +57,29 @@ body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  cursor: text;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: background-color 0.15s;
+}
+
+#filename:hover {
+  background-color: var(--bg-color);
+}
+
+/* タイトル編集入力フィールド */
+.title-edit-input {
+  font-weight: 600;
+  font-size: inherit;
+  font-family: inherit;
+  color: var(--text-color);
+  background-color: var(--surface-color);
+  border: 2px solid var(--primary-color);
+  border-radius: 4px;
+  padding: 2px 6px;
+  width: 100%;
+  max-width: 400px;
+  outline: none;
 }
 
 .header-controls {
@@ -124,19 +147,26 @@ body {
 #outline-list {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
 }
 
+/* アウトライン項目のラッパー */
+.outline-item-wrapper {
+  display: flex;
+  flex-direction: column;
+}
+
+/* アウトライン項目（個別） */
 .outline-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   font-size: 14px;
   padding: 6px 8px;
   border-radius: 4px;
   cursor: pointer;
   color: #4b5563;
   text-decoration: none;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
   transition: background-color 0.1s;
 }
 
@@ -146,9 +176,139 @@ body {
 }
 
 .outline-item.active {
-  background-color: #e0f2fe;
-  color: #0284c7;
+  background-color: color-mix(in srgb, var(--primary-color) 15%, transparent);
+  color: var(--primary-color);
   font-weight: 500;
+}
+
+/* 折りたたまれた見出しがハイライト対象の場合のインジケーター */
+.outline-item.has-hidden-active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 8px;
+  right: 8px;
+  height: 2px;
+  background-color: var(--primary-color);
+  border-radius: 1px;
+}
+
+.outline-item {
+  position: relative;
+}
+
+/* アウトラインアイコン（項目左側） */
+.outline-icon {
+  width: 16px;
+  height: 16px;
+  min-width: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: 3px;
+  transition: background-color 0.1s;
+}
+
+.outline-icon:hover {
+  background-color: var(--bg-color);
+}
+
+.outline-icon svg {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
+}
+
+/* アウトラインテキスト */
+.outline-text {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 折りたたみトグル（テキスト右端） */
+.outline-toggle {
+  width: 18px;
+  height: 18px;
+  min-width: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: 3px;
+  opacity: 0.6;
+  transition: opacity 0.1s, background-color 0.1s;
+}
+
+.outline-toggle:hover {
+  opacity: 1;
+  background-color: var(--bg-color);
+}
+
+.outline-toggle svg {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
+}
+
+/* 子要素のコンテナ */
+.outline-children {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow: hidden;
+  transition: max-height 0.2s ease-out;
+}
+
+.outline-children.collapsed {
+  max-height: 0 !important;
+}
+
+/* アイコンピッカー */
+#outline-icon-picker {
+  position: fixed;
+  background-color: var(--surface-color);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 4px;
+  max-width: 200px;
+}
+
+#outline-icon-picker.hidden {
+  display: none;
+}
+
+.icon-picker-item {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background-color 0.1s;
+}
+
+.icon-picker-item:hover {
+  background-color: var(--bg-color);
+}
+
+.icon-picker-item svg {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
+}
+
+.icon-picker-item.active {
+  background-color: color-mix(in srgb, var(--primary-color) 20%, transparent);
+  color: var(--primary-color);
 }
 
 /* リサイザー */

@@ -12,10 +12,10 @@
     --flowchart-light-color: #94a3b8;
 
     /* インタラクション色 */
-    --flowchart-hover-bg: #f1f5f9;
-    --flowchart-active-bg: #e0f2fe;
-    --flowchart-active-color: #0284c7;
-    --flowchart-active-border: #bae6fd;
+    --flowchart-hover-bg: color-mix(in srgb, var(--primary-color) 15%, transparent);
+    --flowchart-active-bg: color-mix(in srgb, var(--primary-color) 15%, transparent);
+    --flowchart-active-color: var(--primary-color);
+    --flowchart-active-border: color-mix(in srgb, var(--primary-color) 50%, transparent);
 
     /* 危険色 */
     --flowchart-danger-color: #dc2626;
@@ -143,7 +143,7 @@
 
 .shape.selected {
     border-color: var(--primary-color);
-    box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.2);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-color) 50%, transparent);
     z-index: 1000;
 }
 

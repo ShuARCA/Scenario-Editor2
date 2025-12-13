@@ -10,11 +10,14 @@ export class StorageManager {
   /**
    * @param {import('./editor.js').EditorManager} editorManager 
    * @param {import('./flowchart.js').FlowchartApp} flowchartApp 
+   * @param {import('./settings.js').SettingsManager} settingsManager
    */
-  constructor(editorManager, flowchartApp) {
+  constructor(editorManager, flowchartApp, settingsManager) {
     this.editorManager = editorManager;
     this.flowchartApp = flowchartApp;
+    this.settingsManager = settingsManager;
     this.sanitizer = new Sanitizer();
+    this.title = '無題のドキュメント';
     this.filename = 'document.zip';
 
     this.init();
@@ -40,6 +43,92 @@ export class StorageManager {
         this.save();
       }
     });
+
+    // タイトル編集機能の初期化
+    this.initTitleEditing();
+  }
+
+  /**
+   * タイトル編集機能を初期化します。
+   * ヘッダーのタイトルをクリックすると編集モードに切り替わります。
+   */
+  initTitleEditing() {
+    const filenameEl = document.getElementById('filename');
+    if (!filenameEl) return;
+
+    filenameEl.addEventListener('click', () => {
+      this.startTitleEdit();
+    });
+  }
+
+  /**
+   * タイトル編集モードを開始します。
+   */
+  startTitleEdit() {
+    const filenameEl = document.getElementById('filename');
+    if (!filenameEl || filenameEl.querySelector('input')) return;
+
+    const currentTitle = this.title;
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = currentTitle;
+    input.className = 'title-edit-input';
+
+    // 元のテキストを非表示にして入力フィールドを挿入
+    filenameEl.textContent = '';
+    filenameEl.appendChild(input);
+    input.focus();
+    input.select();
+
+    // 確定時の処理
+    const confirmEdit = () => {
+      const newTitle = input.value.trim() || '無題のドキュメント';
+      this.setTitle(newTitle);
+    };
+
+    // Enterキーで確定
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        input.blur();
+      } else if (e.key === 'Escape') {
+        // Escでキャンセル
+        this.setTitle(currentTitle);
+      }
+    });
+
+    // フォーカスアウトで確定
+    input.addEventListener('blur', confirmEdit);
+  }
+
+  /**
+   * タイトルを設定します。
+   * @param {string} title - 新しいタイトル
+   */
+  setTitle(title) {
+    this.title = title;
+    const filenameEl = document.getElementById('filename');
+    if (filenameEl) {
+      filenameEl.textContent = title;
+    }
+    // ファイル名も更新（特殊文字をサニタイズ）
+    this.filename = this.sanitizeFilename(title) + '.zip';
+  }
+
+  /**
+   * ファイル名に使用できない文字を置換します。
+   * @param {string} filename - 元のファイル名
+   * @returns {string} サニタイズされたファイル名
+   */
+  sanitizeFilename(filename) {
+    if (!filename || typeof filename !== 'string') {
+      return 'document';
+    }
+    // Windowsで使用できない文字を置換
+    return filename
+      .replace(/[/\\:*?"<>|]/g, '_')
+      .replace(/\s+/g, ' ')
+      .trim() || 'document';
   }
 
   triggerLoad() {
@@ -64,13 +153,13 @@ export class StorageManager {
    */
   generateViewerHtml(editorContent, flowchartContent, css, metadata) {
     const { title } = metadata;
-    
+
     // エディタコンテンツをサニタイズ（XSS対策）
     const sanitizedEditorContent = this.sanitizer.sanitize(editorContent);
-    
+
     // フローチャートコンテンツもサニタイズ
     const sanitizedFlowchartContent = this.sanitizer.sanitize(flowchartContent);
-    
+
     // ビューア用HTML構築（インラインスクリプトなし）
     const viewerHtml = `<!DOCTYPE html>
 <html lang="ja">
@@ -163,16 +252,35 @@ export class StorageManager {
       }
     });
 
+    // 設定の保存 (ユーザー要望により全設定を保存)
+    const settings = this.settingsManager.getSettings();
+
+    // 背景画像の処理
+    if (settings.backgroundImage && settings.backgroundImage.startsWith('data:')) {
+      const bgImageFilename = 'assets/background.png';
+      const bgData = settings.backgroundImage.split(',')[1];
+
+      // PNGとして保存
+      zip.file(bgImageFilename, bgData, { base64: true });
+
+      // settingsオブジェクト内のパスを更新 (DataURLではなくZIP内パスを保存)
+      settings.backgroundImage = bgImageFilename;
+    } else {
+      // 背景画像がない、またはDataURLでない場合はnullにしておく（あるいは既存のURLならそのまま）
+      if (!settings.backgroundImage) {
+        settings.backgroundImage = null;
+      }
+    }
+
     const processedEditorContent = tempDiv.innerHTML;
     const flowchartContent = document.getElementById('flowchart-canvas').innerHTML;
-    const filename = this.filename.replace('.zip', '');
 
-    // ビューワー用HTML構築（generateViewerHtmlメソッドを使用）
+    // ビューワー用HTML構築（タイトルを使用）
     const viewerHtml = this.generateViewerHtml(
       processedEditorContent,
       flowchartContent,
       combinedCss,
-      { title: filename }
+      { title: this.title }
     );
 
     zip.file("content.html", viewerHtml);
@@ -181,11 +289,13 @@ export class StorageManager {
     // エディタ内容を個別に保存（読み込み用：画像パスは相対パスに変換済み）
     zip.file("editor.html", processedEditorContent);
 
-    // フローチャートメタデータ
+    // フローチャートメタデータ（タイトルを含む）
     const metadata = {
+      title: this.title,
       shapes: Array.from(this.flowchartApp.shapes.entries()),
       connections: this.flowchartApp.connections,
-      zoomLevel: this.flowchartApp.zoomLevel || 1.0
+      zoomLevel: this.flowchartApp.zoomLevel || 1.0,
+      settings: settings // 全設定を保存
     };
     zip.file("metadata.json", JSON.stringify(metadata, null, 2));
 
@@ -236,14 +346,6 @@ export class StorageManager {
         const cleanHtml = this.sanitizer.sanitize(tempDiv.innerHTML);
         this.editorManager.editor.innerHTML = cleanHtml;
 
-        // タイトル更新
-        const h1 = this.editorManager.editor.querySelector('h1');
-        if (h1) {
-          document.getElementById('filename').textContent = h1.textContent;
-        } else {
-          document.getElementById('filename').textContent = this.filename.replace('.zip', '');
-        }
-
         this.editorManager.updateOutline();
       } else if (zip.file("content.md")) {
         // フォールバック: プレーンテキスト
@@ -257,6 +359,14 @@ export class StorageManager {
       if (flowFile) {
         const json = await flowFile.async("string");
         const data = JSON.parse(json);
+
+        // タイトルの復元（metadata.jsonに保存されたタイトルを優先）
+        if (data.title) {
+          this.setTitle(data.title);
+        } else {
+          // フォールバック: ファイル名から復元
+          this.setTitle(this.filename.replace('.zip', ''));
+        }
 
         // 既存のフローチャート要素をクリア
         this.flowchartApp.shapesLayer.innerHTML = '';
@@ -295,6 +405,37 @@ export class StorageManager {
 
         // キャンバスサイズの更新
         this.flowchartApp.updateCanvasSize();
+
+        // 設定の復元
+        if (data.settings) {
+          const settings = data.settings;
+          // 背景画像の復元 (ZIP内パスの場合)
+          if (settings.backgroundImage && !settings.backgroundImage.startsWith('data:')) {
+            const bgFile = zip.file(settings.backgroundImage);
+            if (bgFile) {
+              const bgBase64 = await bgFile.async('base64');
+              // mimeTypeは簡易的にpngとする
+              settings.backgroundImage = `data:image/png;base64,${bgBase64}`;
+            } else {
+              // ファイルが見つからない場合はnull
+              settings.backgroundImage = null;
+            }
+          }
+          // 設定の一括適用
+          this.settingsManager.importSettings(settings);
+        } else if (data.backgroundImage) {
+          // 後方互換性 (古い形式で保存された背景画像)
+          // ユーザー要件では互換性不要とのことだが、念のため残しておくか、削除するか。
+          // 指示には「互換性は持たせなくてよい」とあるので、古いフィールドのみの場合は無視する実装も可だが、
+          // ここでは念のため残しておき、settingsオブジェクト形式に変換して適用する
+          const bgFile = zip.file(data.backgroundImage);
+          if (bgFile) {
+            const bgBase64 = await bgFile.async('base64');
+            this.settingsManager.importSettings({
+              backgroundImage: `data:image/png;base64,${bgBase64}`
+            });
+          }
+        }
       }
 
       alert('読み込み完了');

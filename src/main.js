@@ -28,14 +28,14 @@ document.addEventListener('DOMContentLoaded', () => {
     // エディタから初期状態を送信
     eventBus.emit('editor:update', editorManager.getHeadings());
 
-    // ストレージの初期化
-    const storageManager = new StorageManager(editorManager, flowchartApp);
+    // 環境設定の初期化
+    const settingsManager = new SettingsManager();
 
     // 検索機能の初期化
     const searchManager = new SearchManager(editorManager);
 
-    // 環境設定の初期化
-    const settingsManager = new SettingsManager();
+    // ストレージの初期化
+    const storageManager = new StorageManager(editorManager, flowchartApp, settingsManager);
 
     console.log('iEditWeb Initialized');
 

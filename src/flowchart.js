@@ -543,11 +543,6 @@ export class FlowchartApp {
      * @param {MouseEvent} e 
      */
     handleMouseDown(e) {
-        if (this.mode === 'pan') {
-            this.startPan(e);
-            return;
-        }
-
         const target = e.target;
 
         // リサイズハンドルのクリック処理
@@ -568,10 +563,20 @@ export class FlowchartApp {
             if (this.mode === 'select') {
                 this.startDrag(e, shapeEl);
             }
-        } else {
-            // 背景をクリック
-            this.clearSelection();
+            return;
         }
+
+        // 接続線（SVG path）のクリック処理
+        // 接続線をクリックした場合はパンしない
+        if (target.tagName.toLowerCase() === 'path' || target.closest('path')) {
+            this.clearSelection();
+            return;
+        }
+
+        // 背景をクリックした場合はパン開始
+        e.preventDefault();
+        this.clearSelection();
+        this.startPan(e);
     }
 
     startResize(e, handle) {
@@ -597,7 +602,7 @@ export class FlowchartApp {
     startPan(e) {
         this.isPanning = true;
         this.panStart = { x: e.clientX, y: e.clientY };
-        this.scrollStart = { left: this.container.scrollLeft, top: this.container.scrollTop };
+        this.scrollStart = { left: this.canvas.scrollLeft, top: this.canvas.scrollTop };
     }
 
     startConnect(target) {
@@ -632,8 +637,8 @@ export class FlowchartApp {
         // ズームレベルを考慮したオフセット計算
         const shape = this.shapes.get(shapeEl.id);
         const canvasRect = this.canvas.getBoundingClientRect();
-        const mouseX = (e.clientX - canvasRect.left + this.container.scrollLeft) / this.zoomLevel;
-        const mouseY = (e.clientY - canvasRect.top + this.container.scrollTop) / this.zoomLevel;
+        const mouseX = (e.clientX - canvasRect.left + this.canvas.scrollLeft) / this.zoomLevel;
+        const mouseY = (e.clientY - canvasRect.top + this.canvas.scrollTop) / this.zoomLevel;
         this.dragOffset = {
             x: mouseX - shape.x,
             y: mouseY - shape.y
@@ -645,8 +650,8 @@ export class FlowchartApp {
         if (this.isPanning) {
             const dx = e.clientX - this.panStart.x;
             const dy = e.clientY - this.panStart.y;
-            this.container.scrollLeft = this.scrollStart.left - dx;
-            this.container.scrollTop = this.scrollStart.top - dy;
+            this.canvas.scrollLeft = this.scrollStart.left - dx;
+            this.canvas.scrollTop = this.scrollStart.top - dy;
             return;
         }
 
@@ -720,8 +725,8 @@ export class FlowchartApp {
 
             // canvas-content に対する新しい位置を計算（ズームレベルで補正）
             const canvasRect = this.canvas.getBoundingClientRect();
-            const x = (e.clientX - canvasRect.left + this.container.scrollLeft) / this.zoomLevel - this.dragOffset.x;
-            const y = (e.clientY - canvasRect.top + this.container.scrollTop) / this.zoomLevel - this.dragOffset.y;
+            const x = (e.clientX - canvasRect.left + this.canvas.scrollLeft) / this.zoomLevel - this.dragOffset.x;
+            const y = (e.clientY - canvasRect.top + this.canvas.scrollTop) / this.zoomLevel - this.dragOffset.y;
 
             const shape = this.shapes.get(this.dragTarget.id);
             if (shape) {
@@ -743,8 +748,8 @@ export class FlowchartApp {
         // 接続モードでドラッグ中の場合、プレビュー線を描画
         if (this.mode === 'connect' && this.connectStartShape) {
             const canvasRect = this.canvas.getBoundingClientRect();
-            const mouseX = (e.clientX - canvasRect.left + this.container.scrollLeft) / this.zoomLevel;
-            const mouseY = (e.clientY - canvasRect.top + this.container.scrollTop) / this.zoomLevel;
+            const mouseX = (e.clientX - canvasRect.left + this.canvas.scrollLeft) / this.zoomLevel;
+            const mouseY = (e.clientY - canvasRect.top + this.canvas.scrollTop) / this.zoomLevel;
             this.drawConnectionPreview(mouseX, mouseY);
         }
     }
