@@ -10,12 +10,21 @@
     "test:ui": "vitest --ui"
   },
   "dependencies": {
+    "@tiptap/core": "^2.1.13",
+    "@tiptap/extension-color": "^2.1.13",
+    "@tiptap/extension-highlight": "^2.1.13",
+    "@tiptap/extension-image": "^2.1.13",
+    "@tiptap/extension-text-style": "^2.1.13",
+    "@tiptap/extension-underline": "^2.1.13",
+    "@tiptap/pm": "^2.27.1",
+    "@tiptap/starter-kit": "^2.1.13",
     "serve": "^14.2.1"
   },
   "devDependencies": {
-    "vitest": "^2.1.0",
-    "fast-check": "^3.22.0",
     "@vitest/ui": "^2.1.0",
-    "jsdom": "^25.0.0"
+    "esbuild": "^0.27.2",
+    "fast-check": "^3.22.0",
+    "jsdom": "^25.0.0",
+    "vitest": "^2.1.0"
   }
 }

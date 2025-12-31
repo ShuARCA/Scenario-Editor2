@@ -3,7 +3,7 @@
  * アプリケーションの各モジュールを初期化し、連携させます。
  */
 import { UIManager } from './ui.js';
-import { EditorManager } from './editor.js';
+import { EditorManager } from './editorTiptap.js';
 import { FlowchartApp } from './flowchart.js';
 import { StorageManager } from './storage.js';
 import { SearchManager } from './search.js';

@@ -47,6 +47,14 @@
             });
         }
     </script>
+    <!-- Tiptap import map for offline bundle -->
+    <script type="importmap">
+        {
+            "imports": {
+                "tiptap": "./assets/vendor/tiptap.bundle.js"
+            }
+        }
+    </script>
     <script src="assets/lib/jszip.min.js"></script>
     <script src="assets/lib/FileSaver.min.js"></script>
 </head>
@@ -55,7 +63,7 @@
 
     <!-- Header -->
     <header id="toolbar">
-        <div id="toggleSidebar" title="サイドバー切り替え">
+        <div id="toggleSidebar" title="アウトライン表示/非表示">
             <svg class="icon" viewBox="0 0 24 24">
                 <path d="M3 6h18v2H3V6m0 5h18v2H3v-2m0 5h18v2H3v-2Z" />
             </svg>

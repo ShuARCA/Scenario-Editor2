@@ -47,23 +47,24 @@
    ============================================ */
 .flowchart-toolbar {
     position: absolute;
-    top: 16px;
-    left: 16px;
-    background-color: var(--surface-color);
-    padding: 6px;
-    border-radius: 8px;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    background-color: transparent;
+    padding: 8px 12px;
     display: flex;
-    gap: 4px;
+    gap: 8px;
     z-index: 50;
-    border: 1px solid var(--border-color);
+    width: -webkit-fill-available;
+    transition: all 0.2s;
+}
+
+.flowchart-toolbar:hover {
+    background-color: color-mix(in srgb, var(--surface-color) 50%, transparent);
 }
 
 .mode-btn {
     background: transparent;
     border: 1px solid transparent;
     border-radius: 6px;
-    padding: 8px;
+    padding: 2px;
     cursor: pointer;
     color: var(--flowchart-muted-color);
     display: flex;
@@ -137,10 +138,16 @@
     justify-content: center;
 }
 
-.shape:hover {
-    border-color: var(--flowchart-light-color);
+.shape-text {
+    width: 100%;
+    max-height: 100%;
+    overflow: hidden;
+    word-break: break-word;
+    overflow-wrap: break-word;
+    pointer-events: none;
 }
 
+.shape:hover,
 .shape.selected {
     border-color: var(--primary-color);
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-color) 50%, transparent);
@@ -424,7 +431,6 @@
     transition: opacity 0.2s;
 }
 
-.shape:hover .resize-handle,
 .shape.selected .resize-handle,
 .shape.resizing .resize-handle {
     opacity: 1;

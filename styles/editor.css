@@ -5,7 +5,7 @@
    ============================================ */
 :root {
     --editor-max-width: 800px;
-    --editor-padding: 48px 64px;
+    --editor-padding: 16px 24px;
     --editor-border-radius: 8px;
     --editor-line-height: 1.8;
     --editor-font-size: 16px;
@@ -25,7 +25,6 @@
     padding: 24px;
     display: flex;
     justify-content: center;
-    background-color: var(--bg-color);
 }
 
 /* ============================================
@@ -36,14 +35,16 @@
     height: max-content;
     max-width: var(--editor-max-width);
     min-height: calc(100% - 48px);
-    background-color: var(--bg-color);
     padding: var(--editor-padding);
-    /*box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);*/
     border-radius: var(--editor-border-radius);
     outline: none;
     line-height: var(--editor-line-height);
     font-size: var(--editor-font-size);
     cursor: text;
+}
+
+.ProseMirror {
+    padding: var(--editor-padding);
 }
 
 /* ============================================
@@ -145,11 +146,11 @@
     position: absolute;
     background-color: var(--surface-color);
     border: 1px solid var(--border-color);
-    border-radius: 8px;
+    border-radius: 12px;
     box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-    padding: 6px;
+    padding: 4px 12px;
     display: flex;
-    gap: 4px;
+    gap: 8px;
     align-items: center;
     z-index: 1000;
     transition: opacity 0.2s, transform 0.2s;
@@ -166,7 +167,7 @@
     background: transparent;
     border: none;
     border-radius: 4px;
-    padding: 6px;
+    padding: 2px;
     cursor: pointer;
     color: var(--toolbar-button-color);
     display: flex;

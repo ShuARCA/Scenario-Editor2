@@ -9,71 +9,98 @@ import { CONFIG } from './config.js';
  */
 export class FlowchartApp {
     /**
-     * @param {import('./eventBus.js').EventBus} eventBus - イベントバス
+     * FlowchartAppのコンストラクタ
+     * 
+     * @param {import('./eventBus.js').EventBus} eventBus - アプリケーション全体で使用するイベントバス
      */
     constructor(eventBus) {
+        // =====================================================
+        // DOM要素の参照
+        // =====================================================
         this.container = document.getElementById('flowchart-container');
         this.canvas = document.getElementById('flowchart-canvas');
         this.shapesLayer = document.getElementById('shapes-layer');
         this.connectionsLayer = document.getElementById('connections-layer');
+        this.canvasContent = document.getElementById('canvas-content');
+
+        // =====================================================
+        // イベントバス
+        // =====================================================
         this.eventBus = eventBus;
 
-        /** @type {Map<string, Object>} id -> shapeData */
+        // =====================================================
+        // データストア
+        // =====================================================
+        /** @type {Map<string, Object>} シェイプID -> シェイプデータ */
         this.shapes = new Map();
-        /** @type {Array<Object>} { from: shapeId, to: shapeId, id: ... } */
+        /** @type {Array<Object>} 接続線の配列 { id, from, to, fromPoint, toPoint, style } */
         this.connections = [];
 
-        this.mode = 'select'; // select, connect, pan
+        // =====================================================
+        // 操作モード状態
+        // =====================================================
+        this.mode = 'select'; // 'select' | 'connect' | 'pan'
+
+        // =====================================================
+        // ドラッグ操作状態
+        // =====================================================
         this.isDragging = false;
         this.dragTarget = null;
         this.dragOffset = { x: 0, y: 0 };
 
+        // =====================================================
+        // パン操作状態
+        // =====================================================
         this.isPanning = false;
         this.panStart = { x: 0, y: 0 };
         this.scrollStart = { left: 0, top: 0 };
 
+        // =====================================================
+        // 接続操作状態
+        // =====================================================
         this.connectStartShape = null;
 
-        // ズーム機能
+        // =====================================================
+        // ズーム設定
+        // =====================================================
         this.zoomLevel = 1.0;
         this.zoomMin = 0.1;
         this.zoomMax = 2.0;
         this.zoomStep = 0.1;
-        this.canvasContent = document.getElementById('canvas-content');
 
+        // 初期化処理を実行
         this.init();
     }
 
+    /**
+     * エディタマネージャを設定
+     * 
+     * @param {Object} em - エディタマネージャのインスタンス
+     */
     setEditorManager(em) {
         this.editorManager = em;
     }
 
+    /**
+     * フローチャートの初期化処理
+     * - ツールバーボタンのイベント登録
+     * - ズームボタンのイベント登録
+     * - キャンバスのマウスイベント登録
+     * - コンテキストメニューのセットアップ
+     * - イベントバスの購読
+     */
     init() {
-        // ツールバー
+        // モード切り替えボタンの設定
         document.querySelectorAll('.mode-btn').forEach(btn => {
             if (btn.dataset.mode) {
-                btn.addEventListener('click', () => {
-                    this.setMode(btn.dataset.mode);
-                });
+                btn.addEventListener('click', () => this.setMode(btn.dataset.mode));
             }
         });
 
-        // ズームボタン
-        const zoomInBtn = document.getElementById('zoom-in-btn');
-        const zoomOutBtn = document.getElementById('zoom-out-btn');
-        const fitViewBtn = document.getElementById('fit-view-btn');
+        // ズームボタンの設定
+        this.setupZoomButtons();
 
-        if (zoomInBtn) {
-            zoomInBtn.addEventListener('click', () => this.zoomIn());
-        }
-        if (zoomOutBtn) {
-            zoomOutBtn.addEventListener('click', () => this.zoomOut());
-        }
-        if (fitViewBtn) {
-            fitViewBtn.addEventListener('click', () => this.fitView());
-        }
-
-        // キャンバスイベント
+        // キャンバスのマウスイベント
         this.canvas.addEventListener('mousedown', (e) => this.handleMouseDown(e));
         document.addEventListener('mousemove', (e) => this.handleMouseMove(e));
         document.addEventListener('mouseup', (e) => this.handleMouseUp(e));
@@ -81,10 +108,22 @@ export class FlowchartApp {
         // コンテキストメニューのセットアップ
         this.setupContextMenu();
 
-        // イベント購読
-        this.eventBus.on('editor:update', (headings) => {
-            this.syncFromEditor(headings);
-        });
+        // エディタからの更新イベントを購読
+        this.eventBus.on('editor:update', (headings) => this.syncFromEditor(headings));
+    }
+
+    /**
+     * ズームボタンのイベント設定
+     * @private
+     */
+    setupZoomButtons() {
+        const zoomInBtn = document.getElementById('zoom-in-btn');
+        const zoomOutBtn = document.getElementById('zoom-out-btn');
+        const fitViewBtn = document.getElementById('fit-view-btn');
+
+        if (zoomInBtn) zoomInBtn.addEventListener('click', () => this.zoomIn());
+        if (zoomOutBtn) zoomOutBtn.addEventListener('click', () => this.zoomOut());
+        if (fitViewBtn) fitViewBtn.addEventListener('click', () => this.fitView());
     }
 
     setupContextMenu() {
@@ -266,12 +305,20 @@ export class FlowchartApp {
         this.contextMenu.classList.remove('hidden');
     }
 
+    /**
+     * コンテキストメニューを非表示にする
+     */
     hideContextMenu() {
         this.contextMenu.classList.add('hidden');
         this.selectedShapeForContext = null;
         this.selectedConnectionForContext = null;
     }
 
+    /**
+     * コンテキストメニューのアクションを処理
+     * 
+     * @param {string} action - 実行するアクション（'delete'など）
+     */
     handleContextMenuAction(action) {
         if (action === 'delete') {
             if (this.selectedShapeForContext) {
@@ -282,19 +329,32 @@ export class FlowchartApp {
         }
     }
 
+    /**
+     * 接続線を削除
+     * 
+     * @param {string} id - 削除する接続線のID
+     */
     removeConnection(id) {
         this.connections = this.connections.filter(c => c.id !== id);
+
         // DOM要素の削除
         const path = document.getElementById(`conn-path-${id}`);
         const hit = document.getElementById(`conn-hit-${id}`);
         if (path) path.remove();
         if (hit) hit.remove();
+
         this.clearSelection();
     }
 
+    /**
+     * 選択中のシェイプのスタイルを更新
+     * 
+     * @param {string} prop - 更新するCSSプロパティ名
+     * @param {string} value - 設定する値
+     */
     updateSelectedShapeStyle(prop, value) {
         this.shapes.forEach(shape => {
-            if (shape.element && shape.element.classList.contains('selected')) {
+            if (shape.element?.classList.contains('selected')) {
                 shape[prop] = value;
                 shape.element.style[prop] = value;
             }
@@ -360,11 +420,31 @@ export class FlowchartApp {
             } else {
                 // 新規作成
                 const id = generateId();
+
+                // 位置の計算
+                let x = CONFIG.FLOWCHART.LAYOUT.START_X;
+                let y = CONFIG.FLOWCHART.LAYOUT.START_Y;
+                const gapY = 20; // ノード間の間隔
+
+                // 1つ前の見出しに対応するノードを探す
+                if (index > 0) {
+                    const prevHeading = headings[index - 1];
+                    const prevShape = Array.from(this.shapes.values()).find(s => s.headingId === prevHeading.id);
+                    if (prevShape) {
+                        x = prevShape.x;
+                        y = prevShape.y + prevShape.height + gapY;
+                    } else {
+                        // 前のノードが見つからない場合はデフォルトのグリッド配置（フォールバック）
+                        x = CONFIG.FLOWCHART.LAYOUT.START_X + (index * CONFIG.FLOWCHART.LAYOUT.STEP_X) % CONFIG.FLOWCHART.LAYOUT.WRAP_X;
+                        y = CONFIG.FLOWCHART.LAYOUT.START_Y + Math.floor(index / 5) * CONFIG.FLOWCHART.LAYOUT.STEP_Y;
+                    }
+                }
+
                 const newShape = {
                     id: id,
                     text: h.text,
-                    x: CONFIG.FLOWCHART.LAYOUT.START_X + (index * CONFIG.FLOWCHART.LAYOUT.STEP_X) % CONFIG.FLOWCHART.LAYOUT.WRAP_X,
-                    y: CONFIG.FLOWCHART.LAYOUT.START_Y + Math.floor(index / 5) * CONFIG.FLOWCHART.LAYOUT.STEP_Y,
+                    x: x,
+                    y: y,
                     width: CONFIG.FLOWCHART.SHAPE.WIDTH,
                     height: CONFIG.FLOWCHART.SHAPE.HEIGHT,
                     headingIndex: index,
@@ -399,6 +479,13 @@ export class FlowchartApp {
         this.updateCanvasSize();
     }
 
+    /**
+     * シェイプを削除
+     * 
+     * 親子関係の解消、接続線の削除、DOM要素の削除を行う
+     * 
+     * @param {string} id - 削除するシェイプのID
+     */
     removeShape(id) {
         const shape = this.shapes.get(id);
         if (!shape) return;
@@ -411,49 +498,52 @@ export class FlowchartApp {
             // 子要素の親参照を削除（グループ解除）
             [...shape.children].forEach(childId => {
                 const child = this.shapes.get(childId);
-                if (child) {
-                    this.ungroupShape(child);
-                }
+                if (child) this.ungroupShape(child);
             });
         }
 
-        // 接続の削除
+        // このシェイプに関連する接続線を削除
         this.connections = this.connections.filter(c => c.from !== id && c.to !== id);
 
         // DOM要素の削除
-        if (shape.element) {
-            shape.element.remove();
-        }
+        shape.element?.remove();
 
-        // データ削除
+        // データストアから削除
         this.shapes.delete(id);
 
-        // 選択状態の解除
+        // コンテキストメニュー用の選択状態をクリア
         if (this.selectedShapeForContext === id) {
             this.selectedShapeForContext = null;
         }
 
-        // プロパティパネルを隠す（もし選択されていたら）
-        // 簡易的にクリア
         this.clearSelection();
     }
 
+    /**
+     * シェイプのDOM要素を作成
+     * 
+     * @param {Object} shapeData - シェイプデータ
+     */
     createShapeElement(shapeData) {
         const el = document.createElement('div');
         el.className = 'shape';
         el.id = shapeData.id;
-        el.textContent = shapeData.text;
+        const textEl = document.createElement('div');
+        textEl.className = 'shape-text';
+        textEl.textContent = shapeData.text;
+        el.appendChild(textEl);
+
         el.style.left = `${shapeData.x}px`;
         el.style.top = `${shapeData.y}px`;
         el.style.width = `${shapeData.width}px`;
-        el.style.height = `${shapeData.height}px`; // 実際には最小の高さ
+        el.style.height = `${shapeData.height}px`;
 
         // スタイルの適用
         if (shapeData.backgroundColor) el.style.backgroundColor = shapeData.backgroundColor;
         if (shapeData.borderColor) el.style.borderColor = shapeData.borderColor;
         if (shapeData.color) el.style.color = shapeData.color;
 
-        // 接続ポイントの追加
+        // 接続ポイントの追加（上下左右）
         ['top', 'bottom', 'left', 'right'].forEach(pos => {
             const pt = document.createElement('div');
             pt.className = `connection-point ${pos}`;
@@ -461,7 +551,7 @@ export class FlowchartApp {
             el.appendChild(pt);
         });
 
-        // リサイズハンドルの追加
+        // リサイズハンドルの追加（四隅）
         ['nw', 'ne', 'sw', 'se'].forEach(pos => {
             const handle = document.createElement('div');
             handle.className = `resize-handle ${pos}`;
@@ -473,26 +563,29 @@ export class FlowchartApp {
         shapeData.element = el;
     }
 
-    // ... (updateShapeElement, removeShape, handleMouseDown, handleMouseMove, handleMouseUp, handleDrop, checkCollision, isDescendant, groupShapes, ungroupShape, updateShapeStyle, toggleCollapse, setChildrenVisibility methods remain same)
-
+    /**
+     * シェイプを選択状態にする
+     * 
+     * @param {string} id - 選択するシェイプのID
+     */
     selectShape(id) {
         this.clearSelection();
         const shape = this.shapes.get(id);
-        if (shape && shape.element) {
-            shape.element.classList.add('selected');
+        if (!shape?.element) return;
 
-            // プロパティパネルの表示と値の更新
-            if (this.propertiesPanel) {
-                this.propertiesPanel.classList.remove('hidden');
-                if (this.shapeBgColorInput) {
-                    this.shapeBgColorInput.value = rgbToHex(shape.element.style.backgroundColor) || CONFIG.FLOWCHART.COLORS.DEFAULT_BG;
-                }
-                if (this.shapeBorderColorInput) {
-                    this.shapeBorderColorInput.value = rgbToHex(shape.element.style.borderColor) || CONFIG.FLOWCHART.COLORS.DEFAULT_BORDER;
-                }
-                if (this.shapeTextColorInput) {
-                    this.shapeTextColorInput.value = rgbToHex(shape.element.style.color) || CONFIG.FLOWCHART.COLORS.DEFAULT_TEXT;
-                }
+        shape.element.classList.add('selected');
+
+        // プロパティパネルの更新
+        if (this.propertiesPanel) {
+            this.propertiesPanel.classList.remove('hidden');
+            if (this.shapeBgColorInput) {
+                this.shapeBgColorInput.value = rgbToHex(shape.element.style.backgroundColor) || CONFIG.FLOWCHART.COLORS.DEFAULT_BG;
+            }
+            if (this.shapeBorderColorInput) {
+                this.shapeBorderColorInput.value = rgbToHex(shape.element.style.borderColor) || CONFIG.FLOWCHART.COLORS.DEFAULT_BORDER;
+            }
+            if (this.shapeTextColorInput) {
+                this.shapeTextColorInput.value = rgbToHex(shape.element.style.color) || CONFIG.FLOWCHART.COLORS.DEFAULT_TEXT;
             }
         }
     }
@@ -509,14 +602,15 @@ export class FlowchartApp {
 
     updateShapeElement(shapeData) {
         if (shapeData.element) {
-            // 接続ポイントとリサイズハンドルを保持
-            const points = Array.from(shapeData.element.querySelectorAll('.connection-point'));
-            const handles = Array.from(shapeData.element.querySelectorAll('.resize-handle'));
-
-            shapeData.element.textContent = shapeData.text;
-
-            points.forEach(p => shapeData.element.appendChild(p));
-            handles.forEach(h => shapeData.element.appendChild(h));
+            // テキスト要素を更新
+            let textEl = shapeData.element.querySelector('.shape-text');
+            if (!textEl) {
+                textEl = document.createElement('div');
+                textEl.className = 'shape-text';
+                // 先頭に挿入
+                shapeData.element.insertBefore(textEl, shapeData.element.firstChild);
+            }
+            textEl.textContent = shapeData.text;
         }
     }
 
@@ -889,8 +983,15 @@ export class FlowchartApp {
         return parent.children.some(c => this.isDescendant(c, childId));
     }
 
+    /**
+     * シェイプをグループ化（親子関係を設定）
+     * 
+     * @param {Object} parent - 親となるシェイプ
+     * @param {Object} child - 子となるシェイプ
+     */
     groupShapes(parent, child) {
-        if (child.parent === parent.id) return; // 既に子
+        // 既に親子関係がある場合は何もしない
+        if (child.parent === parent.id) return;
 
         // 既存の親から削除
         if (child.parent) {
@@ -902,14 +1003,17 @@ export class FlowchartApp {
         if (!parent.children) parent.children = [];
         parent.children.push(child.id);
 
-        // スタイル更新
+        // スタイルとサイズを更新
         this.updateShapeStyle(parent);
         this.updateParentSize(parent);
-
-        // z-index更新
         this.updateAllZIndexes();
     }
 
+    /**
+     * シェイプのグループ化を解除
+     * 
+     * @param {Object} child - グループから外すシェイプ
+     */
     ungroupShape(child) {
         if (!child.parent) return;
 
@@ -920,15 +1024,22 @@ export class FlowchartApp {
             this.updateParentSize(parent);
         }
         child.parent = null;
-
-        // z-index更新
         this.updateAllZIndexes();
     }
 
+    /**
+     * シェイプのスタイルを更新
+     * 
+     * 子を持つ場合はgroup-parentクラスと折りたたみボタンを追加
+     * 
+     * @param {Object} shape - 対象のシェイプ
+     */
     updateShapeStyle(shape) {
         if (!shape.element) return;
 
-        if (shape.children && shape.children.length > 0) {
+        const hasChildren = shape.children?.length > 0;
+
+        if (hasChildren) {
             shape.element.classList.add('group-parent');
             // 折りたたみボタンの追加（なければ）
             if (!shape.element.querySelector('.group-toggle')) {
@@ -943,8 +1054,7 @@ export class FlowchartApp {
             }
         } else {
             shape.element.classList.remove('group-parent');
-            const toggle = shape.element.querySelector('.group-toggle');
-            if (toggle) toggle.remove();
+            shape.element.querySelector('.group-toggle')?.remove();
         }
     }
 
@@ -1102,73 +1212,241 @@ export class FlowchartApp {
 
     /**
      * グループの展開/折りたたみに伴うレイアウト調整
-     * サイズ変化量（deltaX, deltaY）に基づいて周囲のノードを移動する
-     * - 展開時: deltaが正の値 → ノードを外側へ移動
-     * - 折りたたみ時: deltaが負の値 → ノードを内側へ移動
      * 
-     * 判定基準：各ノードの左上座標とソースノードの右端/下端を比較
-     * - 水平移動: ノードの左上X座標がソースの右端以上の場合、すべて移動
-     * - 垂直移動: ノードの左上Y座標がソースの下端以上の場合、すべて移動
+     * 動作概要:
+     * - 展開時（delta > 0）: 重なりがある場合のみノードを外側へ移動
+     * - 折りたたみ時（delta < 0）: ブロッキングノードを考慮してノードを内側へ移動
+     * 
+     * 補正対象:
+     * - ソースノードの右端/下端より右/下にある同じ階層のノード
+     * - 子孫ノードは親と一緒に動くため対象外
      * 
      * @param {Object} sourceShape - サイズが変更されたグループShape
      * @param {number} deltaX - X方向の変化量（正: 拡大, 負: 縮小）
      * @param {number} deltaY - Y方向の変化量（正: 拡大, 負: 縮小）
-     * @param {number} [oldWidth] - 変更前の幅（折りたたみ時の判定用）
-     * @param {number} [oldHeight] - 変更前の高さ（折りたたみ時の判定用）
+     * @param {number} [oldWidth] - 変更前の幅
+     * @param {number} [oldHeight] - 変更前の高さ
      */
     adjustLayout(sourceShape, deltaX, deltaY, oldWidth, oldHeight) {
-        // 判定用のサイズを決定
-        // 常に変更前のサイズで判定する（展開・折りたたみ両方）
-        // これにより、ソースノードに近いノードも確実に移動対象になる
-        const checkWidth = (oldWidth !== undefined) ? oldWidth : sourceShape.width;
-        const checkHeight = (oldHeight !== undefined) ? oldHeight : sourceShape.height;
+        // 変更前のサイズを決定（未指定の場合は現在のサイズを使用）
+        const checkWidth = oldWidth ?? sourceShape.width;
+        const checkHeight = oldHeight ?? sourceShape.height;
 
-        // ソースノードの右端と下端の座標（変更前のサイズで計算）
-        const sourceRight = sourceShape.x + checkWidth;
-        const sourceBottom = sourceShape.y + checkHeight;
+        // 変更前後の右下座標を計算
+        const oldRight = sourceShape.x + checkWidth;
+        const oldBottom = sourceShape.y + checkHeight;
+        const newRight = sourceShape.x + sourceShape.width;
+        const newBottom = sourceShape.y + sourceShape.height;
 
-        // ソースノードが親を持つ場合、同じ親を持つ兄弟ノードのみを移動対象とする
-        // ソースノードがルート（親なし）の場合、他のルートノードを移動対象とする
+        // 同じ階層のノードのみを移動対象とする
         const sourceParentId = sourceShape.parent;
 
+        // X軸・Y軸それぞれの有効な補正量を計算
+        const effectiveDeltaX = this.calculateEffectiveDelta(
+            deltaX, sourceShape, 'x', oldRight, newRight, sourceParentId
+        );
+        const effectiveDeltaY = this.calculateEffectiveDelta(
+            deltaY, sourceShape, 'y', oldBottom, newBottom, sourceParentId
+        );
+
+        // 各ノードに対して補正を適用
         this.shapes.forEach(shape => {
+            // 自分自身と子孫は対象外
             if (shape.id === sourceShape.id) return;
-            if (this.isDescendant(sourceShape.id, shape.id)) return; // 子孫は親と一緒に動く（サイズ変更で包含される）
+            if (this.isDescendant(sourceShape.id, shape.id)) return;
 
-            // 移動対象の判定：
-            // - ソースがルートノードの場合：他のルートノードのみ移動
-            // - ソースが子ノードの場合：同じ親を持つ兄弟ノードのみ移動
-            if (sourceParentId) {
-                // ソースが子ノードの場合、同じ親を持つ兄弟のみ対象
-                if (shape.parent !== sourceParentId) return;
-            } else {
-                // ソースがルートノードの場合、他のルートノードのみ対象
-                if (shape.parent) return;
-            }
+            // 同じ階層のノードのみ対象
+            if (!this.isSameLevel(shape, sourceParentId)) return;
 
+            // 補正量を計算
+            // 展開時（delta > 0）は、展開範囲内（oldEdge〜newEdge）のノードも移動対象
+            // 折りたたみ時（delta < 0）は、folded後の位置より右/下のノードが対象
             let dx = 0;
             let dy = 0;
 
-            // ノードの左上X座標がソースの右端以上の場合、水平移動
-            const isRightOfSource = shape.x >= sourceRight;
-
-            // ノードの左上Y座標がソースの下端以上の場合、垂直移動
-            const isBelowSource = shape.y >= sourceBottom;
-
-            // 右側にあるノードを水平移動（deltaXの符号に従う）
-            if (isRightOfSource) {
-                dx = deltaX;
+            if (effectiveDeltaX !== 0) {
+                // X方向: oldRight以降のノード、または展開範囲内のノード
+                if (deltaX > 0) {
+                    // 展開時: 展開範囲と重なる、または右にあるノードを移動
+                    const shapeEnd = shape.x + shape.width;
+                    if (shapeEnd > oldRight) {
+                        dx = effectiveDeltaX;
+                    }
+                } else {
+                    // 折りたたみ時: 変更前の右端より右にあるノードを移動
+                    if (shape.x >= oldRight) {
+                        dx = effectiveDeltaX;
+                    }
+                }
             }
 
-            // 下側にあるノードを垂直移動（deltaYの符号に従う）
-            if (isBelowSource) {
-                dy = deltaY;
+            if (effectiveDeltaY !== 0) {
+                // Y方向: oldBottom以降のノード、または展開範囲内のノード
+                if (deltaY > 0) {
+                    // 展開時: 展開範囲と重なる、または下にあるノードを移動
+                    const shapeEnd = shape.y + shape.height;
+                    if (shapeEnd > oldBottom) {
+                        dy = effectiveDeltaY;
+                    }
+                } else {
+                    // 折りたたみ時: 変更前の下端より下にあるノードを移動
+                    if (shape.y >= oldBottom) {
+                        dy = effectiveDeltaY;
+                    }
+                }
             }
 
+            // 移動が必要な場合のみ実行
             if (dx !== 0 || dy !== 0) {
                 this.moveShape(shape, dx, dy);
             }
         });
+    }
+
+    /**
+     * 軸ごとの有効な補正量を計算
+     * 
+     * @param {number} delta - 元の補正量
+     * @param {Object} sourceShape - ソースShape
+     * @param {'x'|'y'} axis - 軸
+     * @param {number} oldEdge - 変更前の右端/下端
+     * @param {number} newEdge - 変更後の右端/下端
+     * @param {string|null} sourceParentId - ソースの親ID
+     * @returns {number} 有効な補正量
+     */
+    calculateEffectiveDelta(delta, sourceShape, axis, oldEdge, newEdge, sourceParentId) {
+        if (delta < 0) {
+            // 折りたたみ時: ブロッキングノード（展開中の親ノード）を検索
+            const blockingNode = this.findBlockingExpandedNode(
+                newEdge, oldEdge, axis, sourceShape.id, sourceParentId
+            );
+            return this.calculateAdjustedDeltaForCollapse(delta, blockingNode, oldEdge);
+        } else if (delta > 0) {
+            // 展開時: 展開範囲内に重なりがあるか確認
+            const hasOverlap = this.checkExpandOverlap(sourceShape, axis, oldEdge);
+            return hasOverlap ? delta : 0;
+        }
+        return 0;
+    }
+
+    /**
+     * 同じ階層のノードかどうかを判定
+     * 
+     * @param {Object} shape - 判定対象のShape
+     * @param {string|null} sourceParentId - ソースの親ID
+     * @returns {boolean} 同じ階層ならtrue
+     */
+    isSameLevel(shape, sourceParentId) {
+        if (sourceParentId) {
+            // ソースが子ノードの場合: 同じ親を持つ兄弟のみ
+            return shape.parent === sourceParentId;
+        } else {
+            // ソースがルートノードの場合: 他のルートノードのみ
+            return !shape.parent;
+        }
+    }
+
+    /**
+     * 折りたたみ時のブロッキングノード（展開中の親ノード）を検索
+     * 
+     * 補正範囲（newEdge〜oldEdge）内に展開中の親ノードがあれば、
+     * そのノードの位置情報を返す
+     * 
+     * @param {number} newEdge - 折りたたみ後の右端/下端
+     * @param {number} oldEdge - 折りたたみ前の右端/下端
+     * @param {'x'|'y'} axis - 軸
+     * @param {string} sourceId - ソースノードのID
+     * @param {string|null} sourceParentId - ソースノードの親ID
+     * @returns {Object|null} ブロッキングノード情報 { shapeStart, shapeEnd }
+     */
+    findBlockingExpandedNode(newEdge, oldEdge, axis, sourceId, sourceParentId) {
+        for (const [id, shape] of this.shapes) {
+            // 除外条件: 自分自身、子を持たない、折りたたみ中、子孫
+            if (id === sourceId) continue;
+            if (!shape.children || shape.children.length === 0) continue;
+            if (shape.collapsed) continue;
+            if (this.isDescendant(sourceId, id)) continue;
+
+            // 同じ階層のみ対象
+            if (!this.isSameLevel(shape, sourceParentId)) continue;
+
+            // ノードの範囲を取得
+            const { start, end } = this.getShapeEdge(shape, axis);
+
+            // 補正範囲内に存在するか（一部または全部が重なっている）
+            if (end > newEdge && start < oldEdge) {
+                return { shapeStart: start, shapeEnd: end };
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 折りたたみ時の補正量を計算（ブロッキングノード考慮）
+     * 
+     * @param {number} delta - 元の補正量（負の値）
+     * @param {Object|null} blockingNode - ブロッキングノード情報
+     * @param {number} oldEdge - 折りたたみ前の右端/下端
+     * @returns {number} 調整後の補正量
+     */
+    calculateAdjustedDeltaForCollapse(delta, blockingNode, oldEdge) {
+        if (!blockingNode) {
+            return delta; // ブロッキングノードなし → 通常の補正
+        }
+
+        // ブロッキングノードの右/下端までしか詰めない
+        const adjustedDelta = blockingNode.shapeEnd - oldEdge;
+
+        // 補正範囲をまたいでいる場合（shapeEnd >= oldEdge）は補正しない
+        return (adjustedDelta >= 0) ? 0 : adjustedDelta;
+    }
+
+    /**
+     * 展開範囲内に重なるノードが存在するかをチェック
+     * 
+     * 展開前後の座標間（oldEdge〜newEdge）にノードが存在するか確認
+     * ノードの一部でも展開範囲と重なる場合は検出する
+     * 子ノードは親の位置で決まるため検索対象から除外
+     * 
+     * @param {Object} sourceShape - 展開するソースShape
+     * @param {'x'|'y'} axis - 軸
+     * @param {number} oldEdge - 展開前の右端/下端
+     * @returns {boolean} 重なりがあればtrue
+     */
+    checkExpandOverlap(sourceShape, axis, oldEdge) {
+        const newEdge = this.getShapeEdge(sourceShape, axis).end;
+
+        for (const [id, shape] of this.shapes) {
+            // 除外条件: 自分自身、子孫、子ノード（親を持つノード）
+            if (id === sourceShape.id) continue;
+            if (this.isDescendant(sourceShape.id, id)) continue;
+            if (shape.parent) continue;
+
+            // ノードの範囲を取得
+            const { start, end } = this.getShapeEdge(shape, axis);
+
+            // 展開範囲（oldEdge〜newEdge）とノードが一部でも重なるかチェック
+            // 条件: ノードの終端が展開前の端より大きく、かつノードの始端が展開後の端より小さい
+            if (end > oldEdge && start < newEdge) {
+                return true; // 重なりあり
+            }
+        }
+        return false; // 重なりなし
+    }
+
+    /**
+     * Shapeの軸に応じた開始位置と終了位置を取得
+     * 
+     * @param {Object} shape - Shape
+     * @param {'x'|'y'} axis - 軸
+     * @returns {{start: number, end: number}} 開始位置と終了位置
+     */
+    getShapeEdge(shape, axis) {
+        if (axis === 'x') {
+            return { start: shape.x, end: shape.x + shape.width };
+        } else {
+            return { start: shape.y, end: shape.y + shape.height };
+        }
     }
 
     setChildrenVisibility(shape, visible) {

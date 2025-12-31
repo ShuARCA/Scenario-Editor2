@@ -18,19 +18,18 @@ export class UIManager {
     }
 
     init() {
+        // 初期幅をCSS変数に適用
+        this.sidebar.style.setProperty('--sidebar-width', `${this.sidebarWidth}px`);
+
         // サイドバーの切り替え
         this.toggleSidebarBtn.addEventListener('click', () => {
-            this.sidebar.classList.toggle('hidden');
-            if (!this.sidebar.classList.contains('hidden')) {
-                this.sidebar.style.width = `${this.sidebarWidth}px`;
-            } else {
-                this.sidebar.style.width = '0px';
-            }
+            this.sidebar.classList.toggle('collapsed');
+            // クラスの付け替えのみでアニメーションさせるため、JSによるwidth操作は削除
         });
 
         // サイドバーのリサイズ
         this.resizer.addEventListener('mousedown', (e) => {
-            if (this.sidebar.classList.contains('hidden')) return;
+            if (this.sidebar.classList.contains('collapsed')) return;
             this.isResizing = true;
             document.body.style.cursor = 'col-resize';
             e.preventDefault();
@@ -39,7 +38,8 @@ export class UIManager {
         document.addEventListener('mousemove', (e) => {
             if (!this.isResizing) return;
             const newWidth = Math.max(150, Math.min(500, e.clientX));
-            this.sidebar.style.width = `${newWidth}px`;
+            // style.widthではなくCSS変数を更新
+            this.sidebar.style.setProperty('--sidebar-width', `${newWidth}px`);
             this.sidebarWidth = newWidth;
         });
 

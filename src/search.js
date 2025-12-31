@@ -1,20 +1,24 @@
 /**
- * 検索・置換ロジック
+ * 検索・置換ロジック (Tiptap対応版)
  * エディタ内のテキスト検索と置換機能を提供します。
+ * Tiptapエディタと完全に統合されています。
  */
 export class SearchManager {
     /**
-     * @param {import('./editor.js').EditorManager} editorManager 
+     * @param {import('./editorTiptap.js').EditorManager} editorManager 
      */
     constructor(editorManager) {
         this.editorManager = editorManager;
-        this.editor = editorManager.editor;
+
+        // UI要素の参照
         this.searchContainer = document.getElementById('search-panel');
         this.searchInput = document.getElementById('search-input');
         this.replaceInput = document.getElementById('replace-input');
         this.regexModeCheckbox = document.getElementById('regex-mode-checkbox');
         this.caseSensitiveCheckbox = document.getElementById('case-sensitive-checkbox');
         this.searchInfo = document.getElementById('search-info');
+
+        // 検索状態
         this.matches = [];
         this.currentMatchIndex = -1;
         this.regexMode = false;
@@ -23,16 +27,27 @@ export class SearchManager {
         this.init();
     }
 
+    /**
+     * TiptapのDOM要素を取得します。
+     * @returns {HTMLElement|null} Tiptapがレンダリングしたエディタ要素
+     */
+    getEditorElement() {
+        return this.editorManager.editorContainer.querySelector('.tiptap');
+    }
+
+    /**
+     * イベントリスナーを初期化します。
+     */
     init() {
-        // UIイベントリスナー
+        // 検索パネルの表示/非表示
         document.getElementById('searchBtn').addEventListener('click', () => this.toggleSearchPanel());
-        
-        // 検索ボタンで検索実行
+
+        // 検索ボタン
         const doSearchBtn = document.getElementById('do-search-btn');
         if (doSearchBtn) {
             doSearchBtn.addEventListener('click', () => this.performSearchWithoutFocusChange());
         }
-        
+
         // Enterキーで検索実行
         this.searchInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
@@ -44,14 +59,19 @@ export class SearchManager {
                 }
             }
         });
-        
+
+        // ナビゲーションボタン
         document.getElementById('find-next-btn').addEventListener('click', () => this.nextMatch());
         document.getElementById('find-prev-btn').addEventListener('click', () => this.prevMatch());
+
+        // 置換ボタン
         document.getElementById('replace-btn').addEventListener('click', () => this.replaceCurrent());
         document.getElementById('replace-all-btn').addEventListener('click', () => this.replaceAll());
+
+        // 閉じるボタン
         document.getElementById('close-search-btn').addEventListener('click', () => this.closeSearchPanel());
 
-        // 正規表現モードと大文字/小文字区別のチェックボックス
+        // オプションチェックボックス
         if (this.regexModeCheckbox) {
             this.regexModeCheckbox.addEventListener('change', () => {
                 this.regexMode = this.regexModeCheckbox.checked;
@@ -73,7 +93,9 @@ export class SearchManager {
         });
     }
 
-
+    /**
+     * 検索パネルの表示/非表示を切り替えます。
+     */
     toggleSearchPanel() {
         this.searchContainer.classList.toggle('hidden');
         if (!this.searchContainer.classList.contains('hidden')) {
@@ -82,10 +104,8 @@ export class SearchManager {
             if (!btn) return;
             const rect = btn.getBoundingClientRect();
 
-            // ボタンの下、右揃え気味に表示
             this.searchContainer.style.position = 'absolute';
             this.searchContainer.style.top = `${rect.bottom + 10}px`;
-            // 画面幅からはみ出さないように調整
             const right = window.innerWidth - rect.right;
             this.searchContainer.style.right = `${Math.max(10, right - 10)}px`;
             this.searchContainer.style.left = 'auto';
@@ -97,6 +117,9 @@ export class SearchManager {
         }
     }
 
+    /**
+     * 検索パネルを閉じます。
+     */
     closeSearchPanel() {
         this.searchContainer.classList.add('hidden');
         this.clearHighlights();
@@ -125,6 +148,28 @@ export class SearchManager {
     }
 
     /**
+     * 検索用の正規表現を作成します。
+     * @param {string} query - 検索クエリ
+     * @param {boolean} useRegex - 正規表現モード
+     * @param {boolean} useCaseSensitive - 大文字/小文字区別
+     * @returns {RegExp|null} 正規表現オブジェクト（無効な場合はnull）
+     * @private
+     */
+    _createSearchRegex(query, useRegex, useCaseSensitive) {
+        try {
+            const flags = useCaseSensitive ? 'g' : 'gi';
+            if (useRegex) {
+                return new RegExp(query, flags);
+            } else {
+                const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                return new RegExp(escapedQuery, flags);
+            }
+        } catch (e) {
+            return null;
+        }
+    }
+
+    /**
      * 検索を実行します。
      * @param {string} [query] - 検索クエリ（省略時は入力フィールドの値を使用）
      * @param {Object} [options] - 検索オプション
@@ -146,33 +191,34 @@ export class SearchManager {
             return this.matches;
         }
 
-        // テキストノードを走査して検索
-        const walker = document.createTreeWalker(this.editor, NodeFilter.SHOW_TEXT, null, false);
+        // 正規表現を作成
+        const regex = this._createSearchRegex(searchQuery, useRegex, useCaseSensitive);
+        if (!regex) {
+            this.updateSearchInfo('無効な正規表現です');
+            return this.matches;
+        }
+
+        // Tiptap要素からテキストノードを走査
+        const editorEl = this.getEditorElement();
+        if (!editorEl) {
+            this.updateSearchInfo();
+            return this.matches;
+        }
+
+        const walker = document.createTreeWalker(editorEl, NodeFilter.SHOW_TEXT, null, false);
         let node;
+        let nodeIndex = 0;
+
         while (node = walker.nextNode()) {
             const text = node.nodeValue;
-            let regex;
-            try {
-                if (useRegex) {
-                    // 正規表現モード
-                    const flags = useCaseSensitive ? 'g' : 'gi';
-                    regex = new RegExp(searchQuery, flags);
-                } else {
-                    // 通常検索モード（特殊文字をエスケープ）
-                    const escapedQuery = searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                    const flags = useCaseSensitive ? 'g' : 'gi';
-                    regex = new RegExp(escapedQuery, flags);
-                }
-            } catch (e) {
-                // 無効な正規表現の場合はスキップ
-                this.updateSearchInfo('無効な正規表現です');
-                return this.matches;
-            }
+            // 正規表現のlastIndexをリセット
+            regex.lastIndex = 0;
 
             let match;
             while ((match = regex.exec(text)) !== null) {
                 this.matches.push({
                     node: node,
+                    nodeIndex: nodeIndex,
                     index: match.index,
                     length: match[0].length,
                     text: match[0]
@@ -182,6 +228,7 @@ export class SearchManager {
                     regex.lastIndex++;
                 }
             }
+            nodeIndex++;
         }
 
         this.updateSearchInfo();
@@ -202,19 +249,17 @@ export class SearchManager {
 
     /**
      * 検索を実行しますが、フォーカスを検索入力欄に保持します。
-     * ボタン/Enterキーでの検索用。
      */
     performSearchWithoutFocusChange() {
         this.search();
 
         if (this.matches.length > 0) {
             this.highlightMatches();
-            // 最初のマッチを選択するが、スクロールのみ行いフォーカスは移動しない
             this.currentMatchIndex = 0;
             this.scrollToMatch(this.matches[this.currentMatchIndex]);
             this.updateSearchInfo();
         }
-        
+
         // 検索入力欄にフォーカスを戻す
         if (this.searchInput && document.activeElement !== this.searchInput) {
             this.searchInput.focus();
@@ -222,7 +267,7 @@ export class SearchManager {
     }
 
     /**
-     * 指定されたマッチ位置にスクロールします（選択はしない）。
+     * 指定されたマッチ位置にスクロールします。
      * @param {Object} match - マッチ情報
      */
     scrollToMatch(match) {
@@ -231,15 +276,12 @@ export class SearchManager {
         }
     }
 
-
     /**
-     * マッチした箇所をハイライト表示します。
+     * マッチした箇所をハイライト表示します（現状は簡易実装）。
      */
     highlightMatches() {
-        // ハイライト処理は複雑（DOM構造を変更するため）
-        // ここでは簡易的に、現在のマッチのみを選択状態にする実装とします
-        // 本格的なハイライト（<span class="highlight">...</span>で囲む）は
-        // contenteditableの動作を不安定にする可能性があるため慎重に行う必要があります
+        // 本格的なハイライトはcontenteditable/Tiptapの動作を不安定にする可能性があるため
+        // 現在のマッチのみを選択状態にする実装としています
     }
 
     /**
@@ -275,10 +317,69 @@ export class SearchManager {
         selection.removeAllRanges();
         selection.addRange(range);
 
-        // scrollIntoViewが存在する場合のみ呼び出す（テスト環境対応）
         if (match.node.parentElement && typeof match.node.parentElement.scrollIntoView === 'function') {
             match.node.parentElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
+    }
+
+    /**
+     * HTMLコンテンツ内の特定のマッチを置換します（単一置換用）。
+     * @param {string} html - 元のHTMLコンテンツ
+     * @param {Object} match - マッチ情報
+     * @param {string} replacement - 置換文字列
+     * @returns {string} 置換後のHTMLコンテンツ
+     * @private
+     */
+    _replaceInHtml(html, match, replacement) {
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = html;
+
+        const walker = document.createTreeWalker(tempDiv, NodeFilter.SHOW_TEXT, null, false);
+        let currentIndex = 0;
+        let node;
+
+        while (node = walker.nextNode()) {
+            if (currentIndex === match.nodeIndex) {
+                const text = node.nodeValue;
+                node.nodeValue = text.substring(0, match.index) +
+                    replacement +
+                    text.substring(match.index + match.length);
+                break;
+            }
+            currentIndex++;
+        }
+
+        return tempDiv.innerHTML;
+    }
+
+    /**
+     * HTMLコンテンツ内のすべてのマッチを置換します。
+     * @param {string} html - 元のHTMLコンテンツ
+     * @param {string} query - 検索クエリ
+     * @param {string} replacement - 置換文字列
+     * @returns {string} 置換後のHTMLコンテンツ
+     * @private
+     */
+    _replaceAllInHtml(html, query, replacement) {
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = html;
+
+        const regex = this._createSearchRegex(query, this.regexMode, this.caseSensitive);
+        if (!regex) return html;
+
+        const walker = document.createTreeWalker(tempDiv, NodeFilter.SHOW_TEXT, null, false);
+        const nodesToReplace = [];
+        let node;
+
+        while (node = walker.nextNode()) {
+            nodesToReplace.push(node);
+        }
+
+        nodesToReplace.forEach(textNode => {
+            textNode.nodeValue = textNode.nodeValue.replace(regex, replacement);
+        });
+
+        return tempDiv.innerHTML;
     }
 
     /**
@@ -292,14 +393,14 @@ export class SearchManager {
         const match = this.matches[this.currentMatchIndex];
         const replaceText = replacement !== undefined ? replacement : this.replaceInput.value;
 
-        const range = document.createRange();
-        range.setStart(match.node, match.index);
-        range.setEnd(match.node, match.index + match.length);
-        range.deleteContents();
-        range.insertNode(document.createTextNode(replaceText));
+        // TiptapのHTMLを取得して置換
+        const currentHtml = this.editorManager.getContent();
+        const newHtml = this._replaceInHtml(currentHtml, match, replaceText);
 
-        // マッチリストを更新する必要があるが、DOMが変わってしまったため
-        // 再検索するのが最も安全
+        // Tiptapに反映（setContentを使用）
+        this.editorManager.setContent(newHtml);
+
+        // 再検索
         this.performSearch();
         return true;
     }
@@ -321,21 +422,20 @@ export class SearchManager {
         const replaceText = replacement !== undefined ? replacement : this.replaceInput.value;
         if (!query) return 0;
 
-        // まず検索を実行して最新のマッチリストを取得
+        // まず検索を実行して件数を取得
         this.search();
-
         const count = this.matches.length;
 
-        // 逆順に処理（インデックスずれを防ぐため）
-        for (let i = this.matches.length - 1; i >= 0; i--) {
-            const match = this.matches[i];
-            const range = document.createRange();
-            range.setStart(match.node, match.index);
-            range.setEnd(match.node, match.index + match.length);
-            range.deleteContents();
-            range.insertNode(document.createTextNode(replaceText));
-        }
+        if (count === 0) return 0;
 
+        // TiptapのHTMLを取得して一括置換
+        const currentHtml = this.editorManager.getContent();
+        const newHtml = this._replaceAllInHtml(currentHtml, query, replaceText);
+
+        // Tiptapに反映
+        this.editorManager.setContent(newHtml);
+
+        // 状態をリセット
         this.matches = [];
         this.currentMatchIndex = -1;
         this.updateSearchInfo();
@@ -347,7 +447,6 @@ export class SearchManager {
      * ハイライトをクリアします。
      */
     clearHighlights() {
-        // ハイライト解除（今回は選択解除のみ）
         window.getSelection().removeAllRanges();
         this.updateSearchInfo();
     }
