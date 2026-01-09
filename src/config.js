@@ -34,9 +34,31 @@ export const CONFIG = {
     EDITOR: {
         DEBOUNCE_WAIT: 500,
         MAX_IMAGE_WIDTH: 500,
-        COLORS: [
-            '#24140e', '#abb1b5', '#946c45', '#f39800', '#e9bc00',
-            '#578a3d', '#0068b7', '#5a4498', '#dc6b9a', '#ea5550'
+        // 文字色用（1行目左上がnull=デフォルト色に戻す）
+        TEXT_COLORS: [
+            { color: null, name: 'デフォルト' },
+            { color: '#abb1b5', name: 'フォッグ' },
+            { color: '#946c45', name: 'カフェオレ' },
+            { color: '#f39800', name: 'マリーゴールド' },
+            { color: '#e9bc00', name: 'トパーズ' },
+            { color: '#578a3d', name: 'アイビーグリーン' },
+            { color: '#0068b7', name: 'コバルトブルー' },
+            { color: '#5a4498', name: 'バイオレット' },
+            { color: '#dc6b9a', name: 'コスモス' },
+            { color: '#ea5550', name: 'ポピーレッド' }
+        ],
+        // ハイライト色用（1行目左上がnull=クリア/透明）
+        HIGHLIGHT_COLORS: [
+            { color: null, name: 'クリア' },
+            { color: '#efefef', name: 'シルバーホワイト' },
+            { color: '#f6e5cc', name: 'エクルベージュ' },
+            { color: '#fbd8b5', name: 'ピーチ' },
+            { color: '#fff3b8', name: 'クリームイエロー' },
+            { color: '#f0f6da', name: 'ホワイトリリー' },
+            { color: '#bbdbf3', name: 'フロスティブルー' },
+            { color: '#d1baba', name: 'ライラック' },
+            { color: '#e5c1cd', name: 'ローズドラジェ' },
+            { color: '#fbdac8', name: 'シェルピンク' }
         ]
     }
 };

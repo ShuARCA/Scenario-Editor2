@@ -4,11 +4,19 @@ import { Sanitizer } from './sanitizer.js';
  * ストレージロジック (ZIP)
  * プロジェクトの保存と読み込みを管理します。
  * 
- * 要件: 10.1, 10.2, 10.3, 10.4
+ * 責務:
+ * - ZIPファイルへのプロジェクト保存
+ * - ZIPファイルからのプロジェクト読み込み
+ * - 画像アセットの管理（Base64/ZIP内パス変換）
+ * - メタデータ（タイトル、設定等）の永続化
  */
 export class StorageManager {
+  // ========================================
+  // 初期化
+  // ========================================
+
   /**
-   * @param {import('./editor.js').EditorManager} editorManager 
+   * @param {import('./editorTiptap.js').EditorManager} editorManager 
    * @param {import('./flowchart.js').FlowchartApp} flowchartApp 
    * @param {import('./settings.js').SettingsManager} settingsManager
    */
@@ -20,23 +28,22 @@ export class StorageManager {
     this.title = '無題のドキュメント';
     this.filename = 'document.zip';
 
-    this.init();
+    this._init();
   }
 
-  init() {
-    document.getElementById('saveBtn').addEventListener('click', () => this.save());
-    document.getElementById('loadBtn').addEventListener('click', () => this.triggerLoad());
+  /**
+   * イベントリスナーを初期化します。
+   * @private
+   */
+  _init() {
+    // 保存・読み込みボタン
+    this._addEventListenerIfExists('saveBtn', 'click', () => this.save());
+    this._addEventListenerIfExists('loadBtn', 'click', () => this.triggerLoad());
 
-    // 非表示のファイル入力
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.zip';
-    input.id = 'hidden-file-input';
-    input.style.display = 'none';
-    input.addEventListener('change', (e) => this.load(e));
-    document.body.appendChild(input);
+    // 非表示のファイル入力を作成
+    this._createHiddenFileInput();
 
-    // ショートカットキー
+    // キーボードショートカット
     document.addEventListener('keydown', (e) => {
       if (e.ctrlKey && e.key === 's') {
         e.preventDefault();
@@ -44,27 +51,55 @@ export class StorageManager {
       }
     });
 
-    // タイトル編集機能の初期化
-    this.initTitleEditing();
+    // タイトル編集機能
+    this._initTitleEditing();
   }
 
   /**
-   * タイトル編集機能を初期化します。
-   * ヘッダーのタイトルをクリックすると編集モードに切り替わります。
+   * 要素が存在する場合のみイベントリスナーを追加します。
+   * @private
    */
-  initTitleEditing() {
-    const filenameEl = document.getElementById('filename');
-    if (!filenameEl) return;
+  _addEventListenerIfExists(elementId, eventType, handler) {
+    const element = document.getElementById(elementId);
+    if (element) {
+      element.addEventListener(eventType, handler);
+    }
+  }
 
-    filenameEl.addEventListener('click', () => {
-      this.startTitleEdit();
-    });
+  /**
+   * 非表示のファイル入力を作成します。
+   * @private
+   */
+  _createHiddenFileInput() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.zip';
+    input.id = 'hidden-file-input';
+    input.style.display = 'none';
+    input.addEventListener('change', (e) => this.load(e));
+    document.body.appendChild(input);
+  }
+
+  // ========================================
+  // タイトル管理
+  // ========================================
+
+  /**
+   * タイトル編集機能を初期化します。
+   * @private
+   */
+  _initTitleEditing() {
+    const filenameEl = document.getElementById('filename');
+    if (filenameEl) {
+      filenameEl.addEventListener('click', () => this._startTitleEdit());
+    }
   }
 
   /**
    * タイトル編集モードを開始します。
+   * @private
    */
-  startTitleEdit() {
+  _startTitleEdit() {
     const filenameEl = document.getElementById('filename');
     if (!filenameEl || filenameEl.querySelector('input')) return;
 
@@ -74,30 +109,25 @@ export class StorageManager {
     input.value = currentTitle;
     input.className = 'title-edit-input';
 
-    // 元のテキストを非表示にして入力フィールドを挿入
     filenameEl.textContent = '';
     filenameEl.appendChild(input);
     input.focus();
     input.select();
 
-    // 確定時の処理
     const confirmEdit = () => {
       const newTitle = input.value.trim() || '無題のドキュメント';
       this.setTitle(newTitle);
     };
 
-    // Enterキーで確定
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
         e.preventDefault();
         input.blur();
       } else if (e.key === 'Escape') {
-        // Escでキャンセル
         this.setTitle(currentTitle);
       }
     });
 
-    // フォーカスアウトで確定
     input.addEventListener('blur', confirmEdit);
   }
 
@@ -111,198 +141,154 @@ export class StorageManager {
     if (filenameEl) {
       filenameEl.textContent = title;
     }
-    // ファイル名も更新（特殊文字をサニタイズ）
-    this.filename = this.sanitizeFilename(title) + '.zip';
+    this.filename = this._sanitizeFilename(title) + '.zip';
   }
 
   /**
    * ファイル名に使用できない文字を置換します。
+   * @private
    * @param {string} filename - 元のファイル名
    * @returns {string} サニタイズされたファイル名
    */
-  sanitizeFilename(filename) {
+  _sanitizeFilename(filename) {
     if (!filename || typeof filename !== 'string') {
       return 'document';
     }
-    // Windowsで使用できない文字を置換
     return filename
       .replace(/[/\\:*?"<>|]/g, '_')
       .replace(/\s+/g, ' ')
       .trim() || 'document';
   }
 
+  /**
+   * ファイル選択ダイアログを開きます。
+   */
   triggerLoad() {
-    document.getElementById('hidden-file-input').click();
-  }
-
-  /**
-   * ビューアHTMLを生成します。
-   * 生成されるHTMLは読み取り専用のビューアとして機能し、
-   * インラインスクリプトを含まない安全なHTML/CSSのみで構成されます。
-   * 
-   * 要件: 10.4
-   * - ビューアHTMLはインラインスクリプトを含まない
-   * - 安全なHTML/CSSのみで構成される
-   * 
-   * @param {string} editorContent - エディタのHTMLコンテンツ（サニタイズ済み）
-   * @param {string} flowchartContent - フローチャートのHTMLコンテンツ
-   * @param {string} css - 結合されたCSSスタイル
-   * @param {Object} metadata - メタデータ
-   * @param {string} metadata.title - ドキュメントタイトル
-   * @returns {string} 生成されたビューアHTML
-   */
-  generateViewerHtml(editorContent, flowchartContent, css, metadata) {
-    const { title } = metadata;
-
-    // エディタコンテンツをサニタイズ（XSS対策）
-    const sanitizedEditorContent = this.sanitizer.sanitize(editorContent);
-
-    // フローチャートコンテンツもサニタイズ
-    const sanitizedFlowchartContent = this.sanitizer.sanitize(flowchartContent);
-
-    // ビューア用HTML構築（インラインスクリプトなし）
-    const viewerHtml = `<!DOCTYPE html>
-<html lang="ja">
-<head>
-  <meta charset="UTF-8">
-  <title>${this.escapeHtml(title)}</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <style>
-    ${css}
-    /* ビューワー用追加スタイル */
-    body { overflow: auto; }
-    #container { height: 100vh; }
-    #flowchart-container { resize: none; border-bottom: 2px solid #ccc; }
-    #editor { outline: none; }
-    .flowchart-toolbar, .header-controls, #toggleSidebar, #float-toolbar { display: none !important; }
-  </style>
-</head>
-<body>
-  <header id="toolbar" style="justify-content: center;">
-    <div id="filename">${this.escapeHtml(title)}</div>
-  </header>
-  <div id="container">
-    <main id="main-content">
-      <div id="flowchart-container" style="height: 40%; min-height: 200px;">
-        <div id="flowchart-canvas">
-          ${sanitizedFlowchartContent}
-        </div>
-      </div>
-      <div id="editor-container">
-        <div id="editor">
-          ${sanitizedEditorContent}
-        </div>
-      </div>
-    </main>
-  </div>
-</body>
-</html>`;
-
-    return viewerHtml;
-  }
-
-  /**
-   * HTML特殊文字をエスケープします。
-   * @param {string} text - エスケープ対象のテキスト
-   * @returns {string} エスケープ後のテキスト
-   */
-  escapeHtml(text) {
-    if (!text || typeof text !== 'string') {
-      return '';
+    const input = document.getElementById('hidden-file-input');
+    if (input) {
+      input.click();
     }
-    const escapeMap = {
-      '&': '&amp;',
-      '<': '&lt;',
-      '>': '&gt;',
-      '"': '&quot;',
-      "'": '&#39;'
-    };
-    return text.replace(/[&<>"']/g, char => escapeMap[char]);
   }
+
+  // ========================================
+  // 保存機能
+  // ========================================
 
   /**
    * プロジェクトをZIPファイルとして保存します。
-   * エディタの内容、フローチャートのデータ、画像アセットを同梱します。
    */
   async save() {
-    const zip = new JSZip();
-    const imgFolder = zip.folder("assets");
+    try {
+      const zip = new JSZip();
+      const imgFolder = zip.folder('assets');
 
-    // CSSの取得
-    const cssFiles = ['styles/main.css', 'styles/editor.css', 'styles/flowchart.css'];
-    const cssContents = await Promise.all(cssFiles.map(url => fetch(url).then(res => res.text())));
-    const combinedCss = cssContents.join('\n');
+      // エディタコンテンツを取得し、画像を処理
+      const editorContent = await this._processEditorContentForSave(imgFolder);
 
-    // エディタコンテンツの処理 (画像抽出)
+      // 背景画像を処理
+      const settings = await this._processSettingsForSave(zip);
+
+      // メタデータを作成
+      const metadata = this._createMetadata(settings);
+
+      // ZIPに各ファイルを追加
+      zip.file('editor.html', editorContent);
+      zip.file('content.md', this._getEditorPlainText());
+      zip.file('metadata.json', JSON.stringify(metadata, null, 2));
+
+      // ZIPを生成して保存
+      const content = await zip.generateAsync({ type: 'blob' });
+      saveAs(content, this.filename);
+
+    } catch (error) {
+      console.error('保存エラー:', error);
+      alert('保存に失敗しました: ' + error.message);
+    }
+  }
+
+  /**
+   * エディタコンテンツを処理し、画像をZIPに追加します。
+   * @private
+   * @param {JSZip} imgFolder - 画像フォルダ
+   * @returns {Promise<string>} 処理済みのHTMLコンテンツ
+   */
+  async _processEditorContentForSave(imgFolder) {
+    // Tiptap APIを通じてHTMLを取得
+    const html = this.editorManager.getContent();
+
     const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = document.getElementById('editor').innerHTML;
+    tempDiv.innerHTML = html;
     const images = tempDiv.querySelectorAll('img');
 
     images.forEach((img, index) => {
-      if (img.src.startsWith('data:')) {
-        const extension = img.src.split(';')[0].split('/')[1];
-        const filename = `image_${Date.now()}_${index}.${extension}`;
-
-        // Data URL からデータを抽出して ZIP に追加
-        const data = img.src.split(',')[1];
+      const src = img.getAttribute('src');
+      if (src && src.startsWith('data:')) {
+        const { filename, data } = this._extractImageData(src, index);
         imgFolder.file(filename, data, { base64: true });
-
-        // src を相対パスに書き換え
         img.setAttribute('src', `assets/${filename}`);
       }
     });
 
-    // 設定の保存 (ユーザー要望により全設定を保存)
+    return tempDiv.innerHTML;
+  }
+
+  /**
+   * Data URLから画像データを抽出します。
+   * @private
+   */
+  _extractImageData(dataUrl, index) {
+    const extension = dataUrl.split(';')[0].split('/')[1] || 'png';
+    const filename = `image_${Date.now()}_${index}.${extension}`;
+    const data = dataUrl.split(',')[1];
+    return { filename, data };
+  }
+
+  /**
+   * 設定を処理し、背景画像があればZIPに追加します。
+   * @private
+   */
+  async _processSettingsForSave(zip) {
     const settings = this.settingsManager.getSettings();
 
-    // 背景画像の処理
     if (settings.backgroundImage && settings.backgroundImage.startsWith('data:')) {
       const bgImageFilename = 'assets/background.png';
       const bgData = settings.backgroundImage.split(',')[1];
-
-      // PNGとして保存
       zip.file(bgImageFilename, bgData, { base64: true });
-
-      // settingsオブジェクト内のパスを更新 (DataURLではなくZIP内パスを保存)
       settings.backgroundImage = bgImageFilename;
-    } else {
-      // 背景画像がない、またはDataURLでない場合はnullにしておく（あるいは既存のURLならそのまま）
-      if (!settings.backgroundImage) {
-        settings.backgroundImage = null;
-      }
+    } else if (!settings.backgroundImage) {
+      settings.backgroundImage = null;
     }
 
-    const processedEditorContent = tempDiv.innerHTML;
-    const flowchartContent = document.getElementById('flowchart-canvas').innerHTML;
+    return settings;
+  }
 
-    // ビューワー用HTML構築（タイトルを使用）
-    const viewerHtml = this.generateViewerHtml(
-      processedEditorContent,
-      flowchartContent,
-      combinedCss,
-      { title: this.title }
-    );
-
-    zip.file("content.html", viewerHtml);
-    zip.file("content.md", document.getElementById('editor').innerText); // フォールバック
-
-    // エディタ内容を個別に保存（読み込み用：画像パスは相対パスに変換済み）
-    zip.file("editor.html", processedEditorContent);
-
-    // フローチャートメタデータ（タイトルを含む）
-    const metadata = {
+  /**
+   * メタデータオブジェクトを作成します。
+   * @private
+   */
+  _createMetadata(settings) {
+    return {
       title: this.title,
       shapes: Array.from(this.flowchartApp.shapes.entries()),
       connections: this.flowchartApp.connections,
       zoomLevel: this.flowchartApp.zoomLevel || 1.0,
-      settings: settings // 全設定を保存
+      settings: settings,
+      customColors: this.editorManager.getCustomColors()
     };
-    zip.file("metadata.json", JSON.stringify(metadata, null, 2));
-
-    // ZIPの生成
-    const content = await zip.generateAsync({ type: "blob" });
-    saveAs(content, this.filename);
   }
+
+  /**
+   * エディタのプレーンテキストを取得します。
+   * @private
+   */
+  _getEditorPlainText() {
+    const editor = document.getElementById('editor');
+    return editor ? editor.innerText : '';
+  }
+
+  // ========================================
+  // 読み込み機能
+  // ========================================
 
   /**
    * ZIPファイルを読み込み、プロジェクトを復元します。
@@ -311,140 +297,212 @@ export class StorageManager {
   async load(e) {
     const file = e.target.files[0];
     if (!file) return;
+
     this.filename = file.name;
 
     try {
       const zip = await JSZip.loadAsync(file);
 
-      // エディタ内容の読み込み（editor.htmlから復元）
-      const editorFile = zip.file("editor.html");
-      if (editorFile) {
-        let editorHtml = await editorFile.async("string");
-
-        // 画像の復元 (assetsフォルダから読み込んでdataURLに戻す)
-        const tempDiv = document.createElement('div');
-        tempDiv.innerHTML = editorHtml;
-        const images = tempDiv.querySelectorAll('img');
-
-        for (const img of images) {
-          const src = img.getAttribute('src');
-          if (src && src.startsWith('assets/')) {
-            const imgFile = zip.file(src);
-            if (imgFile) {
-              const base64 = await imgFile.async('base64');
-              const ext = src.split('.').pop().toLowerCase();
-              let mimeType = 'image/png';
-              if (ext === 'jpg' || ext === 'jpeg') mimeType = 'image/jpeg';
-              else if (ext === 'gif') mimeType = 'image/gif';
-              else if (ext === 'webp') mimeType = 'image/webp';
-              img.src = `data:${mimeType};base64,${base64}`;
-            }
-          }
-        }
-
-        // サニタイズしてセット
-        const cleanHtml = this.sanitizer.sanitize(tempDiv.innerHTML);
-        this.editorManager.editor.innerHTML = cleanHtml;
-
-        this.editorManager.updateOutline();
-      } else if (zip.file("content.md")) {
-        // フォールバック: プレーンテキスト
-        const text = await zip.file("content.md").async("string");
-        this.editorManager.editor.innerText = text;
-        this.editorManager.updateOutline();
-      }
-
-      // フローチャートデータの読み込み
-      const flowFile = zip.file("metadata.json");
-      if (flowFile) {
-        const json = await flowFile.async("string");
-        const data = JSON.parse(json);
-
-        // タイトルの復元（metadata.jsonに保存されたタイトルを優先）
-        if (data.title) {
-          this.setTitle(data.title);
-        } else {
-          // フォールバック: ファイル名から復元
-          this.setTitle(this.filename.replace('.zip', ''));
-        }
-
-        // 既存のフローチャート要素をクリア
-        this.flowchartApp.shapesLayer.innerHTML = '';
-        this.flowchartApp.connectionsLayer.querySelectorAll('path, text').forEach(el => el.remove());
-
-        // Mapに復元
-        this.flowchartApp.shapes = new Map(data.shapes);
-        this.flowchartApp.connections = data.connections || [];
-
-        // ズームレベルの復元
-        if (data.zoomLevel) {
-          this.flowchartApp.zoomLevel = data.zoomLevel;
-          if (this.flowchartApp.canvasContent) {
-            this.flowchartApp.canvasContent.style.transform = `scale(${data.zoomLevel})`;
-            this.flowchartApp.canvasContent.style.transformOrigin = 'top left';
-          }
-        }
-
-        // DOM要素の再生成
-        this.flowchartApp.shapes.forEach(shape => {
-          this.flowchartApp.createShapeElement(shape);
-          // グループ化状態の復元
-          this.flowchartApp.updateShapeStyle(shape);
-          // 折りたたみ状態の復元
-          if (shape.collapsed) {
-            this.flowchartApp.setChildrenVisibility(shape, false);
-            const toggle = shape.element.querySelector('.group-toggle');
-            if (toggle) toggle.textContent = '+';
-          }
-        });
-
-        // z-indexの更新
-        this.flowchartApp.updateAllZIndexes();
-
-        this.flowchartApp.drawConnections();
-
-        // キャンバスサイズの更新
-        this.flowchartApp.updateCanvasSize();
-
-        // 設定の復元
-        if (data.settings) {
-          const settings = data.settings;
-          // 背景画像の復元 (ZIP内パスの場合)
-          if (settings.backgroundImage && !settings.backgroundImage.startsWith('data:')) {
-            const bgFile = zip.file(settings.backgroundImage);
-            if (bgFile) {
-              const bgBase64 = await bgFile.async('base64');
-              // mimeTypeは簡易的にpngとする
-              settings.backgroundImage = `data:image/png;base64,${bgBase64}`;
-            } else {
-              // ファイルが見つからない場合はnull
-              settings.backgroundImage = null;
-            }
-          }
-          // 設定の一括適用
-          this.settingsManager.importSettings(settings);
-        } else if (data.backgroundImage) {
-          // 後方互換性 (古い形式で保存された背景画像)
-          // ユーザー要件では互換性不要とのことだが、念のため残しておくか、削除するか。
-          // 指示には「互換性は持たせなくてよい」とあるので、古いフィールドのみの場合は無視する実装も可だが、
-          // ここでは念のため残しておき、settingsオブジェクト形式に変換して適用する
-          const bgFile = zip.file(data.backgroundImage);
-          if (bgFile) {
-            const bgBase64 = await bgFile.async('base64');
-            this.settingsManager.importSettings({
-              backgroundImage: `data:image/png;base64,${bgBase64}`
-            });
-          }
-        }
-      }
+      // 各コンポーネントを順次復元
+      await this._restoreEditorContent(zip);
+      await this._restoreFlowchartData(zip);
 
       alert('読み込み完了');
-    } catch (err) {
-      console.error(err);
-      alert('読み込みに失敗しました: ' + err.message);
+
+    } catch (error) {
+      console.error('読み込みエラー:', error);
+      alert('読み込みに失敗しました: ' + error.message);
+    } finally {
+      // ファイル入力をリセット
+      e.target.value = '';
+    }
+  }
+
+  /**
+   * エディタコンテンツを復元します。
+   * @private
+   */
+  async _restoreEditorContent(zip) {
+    const editorFile = zip.file('editor.html');
+
+    if (editorFile) {
+      let editorHtml = await editorFile.async('string');
+      editorHtml = await this._restoreImages(editorHtml, zip);
+
+      // Tiptap APIを通じてコンテンツを設定
+      this.editorManager.setContent(editorHtml);
+
+    } else {
+      // フォールバック: プレーンテキスト
+      const mdFile = zip.file('content.md');
+      if (mdFile) {
+        const text = await mdFile.async('string');
+        this.editorManager.setContent(`<p>${text}</p>`);
+      }
+    }
+  }
+
+  /**
+   * HTML内の画像パスをBase64に復元します。
+   * @private
+   */
+  async _restoreImages(html, zip) {
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = html;
+    const images = tempDiv.querySelectorAll('img');
+
+    for (const img of images) {
+      const src = img.getAttribute('src');
+      if (src && src.startsWith('assets/')) {
+        const imgFile = zip.file(src);
+        if (imgFile) {
+          const base64 = await imgFile.async('base64');
+          const mimeType = this._getMimeType(src);
+          img.src = `data:${mimeType};base64,${base64}`;
+        }
+      }
     }
 
-    // inputをリセット
-    e.target.value = '';
+    return tempDiv.innerHTML;
+  }
+
+  /**
+   * ファイル拡張子からMIMEタイプを取得します。
+   * @private
+   */
+  _getMimeType(filename) {
+    const ext = filename.split('.').pop().toLowerCase();
+    const mimeTypes = {
+      'jpg': 'image/jpeg',
+      'jpeg': 'image/jpeg',
+      'gif': 'image/gif',
+      'webp': 'image/webp',
+      'png': 'image/png'
+    };
+    return mimeTypes[ext] || 'image/png';
+  }
+
+  /**
+   * フローチャートデータを復元します。
+   * @private
+   */
+  async _restoreFlowchartData(zip) {
+    const metadataFile = zip.file('metadata.json');
+    if (!metadataFile) return;
+
+    const json = await metadataFile.async('string');
+    const data = JSON.parse(json);
+
+    // タイトルを復元
+    this._restoreTitle(data);
+
+    // フローチャートを復元
+    this._restoreFlowchart(data);
+
+    // ズームレベルを復元
+    this._restoreZoomLevel(data);
+
+    // 設定を復元
+    await this._restoreSettings(data, zip);
+
+    // カスタムカラーを復元
+    this._restoreCustomColors(data);
+  }
+
+  /**
+   * タイトルを復元します。
+   * @private
+   */
+  _restoreTitle(data) {
+    if (data.title) {
+      this.setTitle(data.title);
+    } else {
+      this.setTitle(this.filename.replace('.zip', ''));
+    }
+  }
+
+  /**
+   * フローチャートを復元します。
+   * @private
+   */
+  _restoreFlowchart(data) {
+    // 既存要素をクリア
+    this.flowchartApp.shapesLayer.innerHTML = '';
+    this.flowchartApp.connectionsLayer.querySelectorAll('path, text').forEach(el => el.remove());
+
+    // データを復元
+    this.flowchartApp.shapes = new Map(data.shapes || []);
+    this.flowchartApp.connections = data.connections || [];
+
+    // DOM要素を再生成
+    this.flowchartApp.shapes.forEach(shape => {
+      this.flowchartApp.createShapeElement(shape);
+      this.flowchartApp.updateShapeStyle(shape);
+
+      if (shape.collapsed) {
+        this.flowchartApp.setChildrenVisibility(shape, false);
+        const toggle = shape.element?.querySelector('.group-toggle');
+        if (toggle) toggle.textContent = '+';
+      }
+    });
+
+    this.flowchartApp.updateAllZIndexes();
+    this.flowchartApp.drawConnections();
+    this.flowchartApp.updateCanvasSize();
+  }
+
+  /**
+   * ズームレベルを復元します。
+   * @private
+   */
+  _restoreZoomLevel(data) {
+    if (data.zoomLevel && this.flowchartApp.canvasContent) {
+      this.flowchartApp.zoomLevel = data.zoomLevel;
+      this.flowchartApp.canvasContent.style.transform = `scale(${data.zoomLevel})`;
+      this.flowchartApp.canvasContent.style.transformOrigin = 'top left';
+    }
+  }
+
+  /**
+   * 設定を復元します。
+   * @private
+   */
+  async _restoreSettings(data, zip) {
+    if (!data.settings) return;
+
+    const settings = data.settings;
+
+    // 背景画像がZIP内パスの場合はBase64に変換
+    if (settings.backgroundImage && !settings.backgroundImage.startsWith('data:')) {
+      const bgFile = zip.file(settings.backgroundImage);
+      if (bgFile) {
+        const bgBase64 = await bgFile.async('base64');
+        settings.backgroundImage = `data:image/png;base64,${bgBase64}`;
+      } else {
+        settings.backgroundImage = null;
+      }
+    }
+
+    this.settingsManager.importSettings(settings);
+  }
+
+  /**
+   * カスタムカラーを復元します。
+   * @private
+   */
+  _restoreCustomColors(data) {
+    if (!data.customColors) return;
+
+    // 新形式（オブジェクト）
+    if (data.customColors.text || data.customColors.highlight) {
+      this.editorManager.setCustomColors(data.customColors);
+    }
+    // 旧形式（配列）: 文字色として扱う
+    else if (Array.isArray(data.customColors)) {
+      this.editorManager.setCustomColors({
+        text: data.customColors,
+        highlight: []
+      });
+    }
   }
 }

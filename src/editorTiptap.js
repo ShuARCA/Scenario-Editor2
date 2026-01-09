@@ -40,6 +40,10 @@ export class EditorManager {
         this.currentIconTarget = null;
         this.lastActiveHeadingId = null;
 
+        // カスタムカラー管理（最大9色、プロジェクトZIPに保存）
+        this.customTextColors = [];
+        this.customHighlightColors = [];
+
         // DOM要素の参照を取得
         this._initDOMReferences();
         this.init();
@@ -69,6 +73,14 @@ export class EditorManager {
 
         // アイコンピッカー関連
         this.iconPicker = document.getElementById('outline-icon-picker');
+
+        // 画像ツールバー関連
+        this.imageToolbar = document.getElementById('image-toolbar');
+        this.alignLeftBtn = document.getElementById('align-left-btn');
+        this.alignCenterBtn = document.getElementById('align-center-btn');
+        this.alignRightBtn = document.getElementById('align-right-btn');
+        this.floatToggleBtn = document.getElementById('float-toggle-btn');
+        this.deleteImageBtn = document.getElementById('delete-image-btn');
     }
 
     /**
@@ -80,6 +92,7 @@ export class EditorManager {
         this._setupToolbarActions();
         this._setupRubyPanel();
         this._setupIconPicker();
+        this._setupImageToolbar();
         this._setupEventBusListeners();
     }
 
@@ -121,6 +134,48 @@ export class EditorManager {
                 attributes: {
                     id: 'editor',
                     spellcheck: 'false'
+                },
+                // 画像ファイルの貼り付け処理
+                handlePaste: (view, event, slice) => {
+                    const items = event.clipboardData?.items;
+                    if (!items) return false;
+
+                    for (const item of items) {
+                        if (item.type.startsWith('image/')) {
+                            const file = item.getAsFile();
+                            if (file) {
+                                event.preventDefault();
+                                this._insertImageFromFile(file);
+                                return true;
+                            }
+                        }
+                    }
+                    return false;
+                },
+                // 画像ファイルのドロップ処理
+                handleDrop: (view, event, slice, moved) => {
+                    // 内部でのノード移動は通常のTiptap処理に任せる
+                    if (moved) return false;
+
+                    const files = event.dataTransfer?.files;
+                    if (!files || files.length === 0) return false;
+
+                    let hasImage = false;
+                    for (const file of files) {
+                        if (file.type.startsWith('image/')) {
+                            hasImage = true;
+                            event.preventDefault();
+
+                            // ドロップ位置を取得して画像を挿入
+                            const coordinates = view.posAtCoords({
+                                left: event.clientX,
+                                top: event.clientY
+                            });
+
+                            this._insertImageFromFile(file, coordinates?.pos);
+                        }
+                    }
+                    return hasImage;
                 }
             },
             onUpdate: ({ editor }) => {
@@ -154,16 +209,65 @@ export class EditorManager {
     _onSelectionUpdate() {
         const { from, to, empty } = this.tiptap.state.selection;
 
-        // フローティングツールバーの表示/非表示
-        if (empty || from === to) {
+        // 画像ノードが選択されているかチェック
+        const isImageSelected = this._isImageSelected();
+
+        if (isImageSelected) {
+            // 画像選択時はテキストツールバーを非表示、画像ツールバーを表示
             this._hideFloatToolbar();
+            this._showImageToolbar();
         } else {
-            this._showFloatToolbar();
-            this._updateToolbarState();
+            // 通常のテキスト選択
+            this._hideImageToolbar();
+
+            if (empty || from === to) {
+                this._hideFloatToolbar();
+            } else {
+                this._showFloatToolbar();
+                this._updateToolbarState();
+            }
         }
 
         // アウトラインハイライトの更新
         this._updateOutlineHighlightByPosition();
+    }
+
+    /**
+     * 画像ノードが選択されているかチェックします。
+     * @private
+     * @returns {boolean}
+     */
+    _isImageSelected() {
+        const { from, to } = this.tiptap.state.selection;
+        let hasImage = false;
+
+        this.tiptap.state.doc.nodesBetween(from, to, (node) => {
+            if (node.type.name === 'image') {
+                hasImage = true;
+                return false; // 早期終了
+            }
+        });
+
+        return hasImage;
+    }
+
+    /**
+     * 選択中の画像ノードの属性を取得します。
+     * @private
+     * @returns {Object|null}
+     */
+    _getSelectedImageAttrs() {
+        const { from, to } = this.tiptap.state.selection;
+        let imageAttrs = null;
+
+        this.tiptap.state.doc.nodesBetween(from, to, (node) => {
+            if (node.type.name === 'image') {
+                imageAttrs = node.attrs;
+                return false;
+            }
+        });
+
+        return imageAttrs;
     }
 
     /**
@@ -320,29 +424,127 @@ export class EditorManager {
 
     /**
      * カラーピッカーをセットアップします。
+     * 3行構成：1-2行目はプリセット（nullを含む10色）、3行目はカスタム色
      * @private
      */
     _setupColorPicker(btnId, pickerId, command) {
         const btn = document.getElementById(btnId);
         const picker = document.getElementById(pickerId);
-        const colors = CONFIG.EDITOR.COLORS;
+        const isForeColor = command === 'foreColor';
+        const presetColors = isForeColor ? CONFIG.EDITOR.TEXT_COLORS : CONFIG.EDITOR.HIGHLIGHT_COLORS;
 
-        picker.innerHTML = '';
-        colors.forEach(color => {
-            const div = document.createElement('div');
-            div.className = 'color-option';
-            div.style.backgroundColor = color;
-            div.addEventListener('mousedown', (e) => {
-                e.preventDefault();
-                if (command === 'foreColor') {
-                    this.setTextColor(color);
-                } else if (command === 'hiliteColor') {
-                    this.setBackgroundColor(color);
+        // ピッカー再構築用の関数
+        const rebuildPicker = () => {
+            picker.innerHTML = '';
+
+            // プリセット色を追加（nullを含む10色）
+            presetColors.forEach((item, index) => {
+                const colorValue = item.color;
+                const colorName = item.name;
+                const div = document.createElement('div');
+                div.className = 'color-option';
+                div.title = colorName;
+
+                if (colorValue === null) {
+                    // null = デフォルト色/クリア
+                    div.classList.add('default-option');
+                    if (isForeColor) {
+                        // 文字色のデフォルト: --text-colorで塗りつぶし
+                        div.classList.add('text-default');
+                    } else {
+                        // ハイライトのクリア: 透明背景＋×表示
+                        div.classList.add('highlight-clear');
+                        div.textContent = '×';
+                    }
+                } else {
+                    div.style.backgroundColor = colorValue;
                 }
-                picker.classList.add('hidden');
+
+                div.addEventListener('mousedown', (e) => {
+                    e.preventDefault();
+                    if (colorValue === null) {
+                        // null選択時はunsetを呼び出す
+                        if (isForeColor) {
+                            this.tiptap.chain().focus().unsetColor().run();
+                        } else {
+                            this.tiptap.chain().focus().unsetHighlight().run();
+                        }
+                    } else {
+                        if (isForeColor) {
+                            this.setTextColor(colorValue);
+                        } else {
+                            this.setBackgroundColor(colorValue);
+                        }
+                    }
+                    picker.classList.add('hidden');
+                });
+                picker.appendChild(div);
             });
-            picker.appendChild(div);
-        });
+
+            // セパレーター
+            const separator = document.createElement('div');
+            separator.className = 'color-picker-separator';
+            picker.appendChild(separator);
+
+            // カスタム色を追加
+            const customColors = isForeColor ? this.customTextColors : this.customHighlightColors;
+            customColors.forEach((color, index) => {
+                const div = document.createElement('div');
+                div.className = 'color-option custom-color';
+                div.style.backgroundColor = color;
+                div.addEventListener('mousedown', (e) => {
+                    e.preventDefault();
+                    if (isForeColor) {
+                        this.setTextColor(color);
+                    } else {
+                        this.setBackgroundColor(color);
+                    }
+                    picker.classList.add('hidden');
+                });
+                picker.appendChild(div);
+            });
+
+            // カスタム色追加ボタン
+            const addBtn = document.createElement('div');
+            addBtn.className = 'color-option add-custom';
+            addBtn.textContent = '＋';
+            addBtn.title = 'カスタム色を追加';
+
+            // 隠しカラーインプット
+            const colorInput = document.createElement('input');
+            colorInput.type = 'color';
+            colorInput.className = 'hidden-color-input';
+            colorInput.style.position = 'absolute';
+            colorInput.style.opacity = '0';
+            colorInput.style.pointerEvents = 'none';
+
+            addBtn.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                colorInput.click();
+            });
+
+            // changeイベントに変更：色を決定したときのみ追加（カラーピッカーを閉じた時）
+            colorInput.addEventListener('change', (e) => {
+                const newColor = e.target.value;
+                if (isForeColor) {
+                    this._addCustomTextColor(newColor);
+                } else {
+                    this._addCustomHighlightColor(newColor);
+                }
+                // 両方のピッカーを再構築
+                this._rebuildColorPickers();
+            });
+
+            addBtn.appendChild(colorInput);
+            picker.appendChild(addBtn);
+        };
+
+        // ピッカー再構築関数を保存
+        picker._rebuild = rebuildPicker;
+
+        // 初期構築
+        rebuildPicker();
 
         btn.addEventListener('mousedown', (e) => {
             e.preventDefault();
@@ -351,6 +553,81 @@ export class EditorManager {
             picker.style.top = `${rect.bottom + 5 + window.scrollY}px`;
             picker.style.left = `${rect.left + window.scrollX}px`;
         });
+    }
+
+    /**
+     * カスタム文字色を追加します（最大9色、超過時は古いものを破棄）
+     * @private
+     * @param {string} color - 追加する色（HEX形式）
+     */
+    _addCustomTextColor(color) {
+        if (this.customTextColors.includes(color)) return;
+        if (this.customTextColors.length >= 9) {
+            this.customTextColors.shift();
+        }
+        this.customTextColors.push(color);
+        this.eventBus.emit('editor:customColorsChanged', this.getCustomColors());
+    }
+
+    /**
+     * カスタムハイライト色を追加します（最大9色、超過時は古いものを破棄）
+     * @private
+     * @param {string} color - 追加する色（HEX形式）
+     */
+    _addCustomHighlightColor(color) {
+        if (this.customHighlightColors.includes(color)) return;
+        if (this.customHighlightColors.length >= 9) {
+            this.customHighlightColors.shift();
+        }
+        this.customHighlightColors.push(color);
+        this.eventBus.emit('editor:customColorsChanged', this.getCustomColors());
+    }
+
+    /**
+     * カスタム色を設定します（ZIPファイル読み込み時に使用）
+     * @param {Object} colors - カスタム色オブジェクト
+     * @param {string[]} colors.text - 文字色のカスタム配列
+     * @param {string[]} colors.highlight - ハイライト色のカスタム配列
+     */
+    setCustomColors(colors) {
+        if (!colors) return;
+
+        // 配列型（旧形式）の場合は互換性のため文字色として扱うか、無視するか
+        // ここではオブジェクト形式のみ受け入れる前提とするが、
+        // もし旧データがある場合は考慮が必要。今回は新規実装なのでオブジェクト期待。
+
+        if (colors.text && Array.isArray(colors.text)) {
+            this.customTextColors = colors.text.slice(0, 9);
+        }
+        if (colors.highlight && Array.isArray(colors.highlight)) {
+            this.customHighlightColors = colors.highlight.slice(0, 9);
+        }
+
+        this._rebuildColorPickers();
+    }
+
+    /**
+     * カスタム色を取得します（ZIP保存時に使用）
+     * @returns {Object} カスタム色配列を含むオブジェクト
+     */
+    getCustomColors() {
+        return {
+            text: [...this.customTextColors],
+            highlight: [...this.customHighlightColors]
+        };
+    }
+
+    /**
+     * 両方のカラーピッカーを再構築します
+     * @private
+     */
+    _rebuildColorPickers() {
+        if (this.textColorPicker?._rebuild) {
+            this.textColorPicker._rebuild();
+        }
+        if (this.highlightPicker?._rebuild) {
+            this.highlightPicker._rebuild();
+        }
     }
 
     /**
@@ -1171,4 +1448,180 @@ export class EditorManager {
     hasRtInSelection() { return false; }
     adjustSelectionForRuby() { return null; }
     excludeRtFromSelection() { return null; }
+
+    // ========================================
+    // 画像処理
+    // ========================================
+
+    /**
+     * ファイルから画像を読み込んでエディタに挿入します。
+     * @param {File} file - 画像ファイル
+     * @param {number|null} pos - 挿入位置（省略時は現在のカーソル位置）
+     * @private
+     */
+    _insertImageFromFile(file, pos = null) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const src = e.target.result;
+
+            if (pos !== null && pos !== undefined) {
+                // 指定位置に挿入
+                this.tiptap.chain()
+                    .focus()
+                    .insertContentAt(pos, {
+                        type: 'image',
+                        attrs: { src }
+                    })
+                    .run();
+            } else {
+                // 現在位置に挿入
+                this.tiptap.chain()
+                    .focus()
+                    .setImage({ src })
+                    .run();
+            }
+        };
+        reader.readAsDataURL(file);
+    }
+
+    // ========================================
+    // 画像ツールバー
+    // ========================================
+
+    /**
+     * 画像ツールバーをセットアップします。
+     * @private
+     */
+    _setupImageToolbar() {
+        if (!this.imageToolbar) return;
+
+        // 左揃え
+        this.alignLeftBtn?.addEventListener('click', () => {
+            this.tiptap.chain().focus().setImageAlignment('left').run();
+            this._updateImageToolbarState();
+        });
+
+        // 中央揃え
+        this.alignCenterBtn?.addEventListener('click', () => {
+            this.tiptap.chain().focus().setImageAlignment('center').run();
+            this._updateImageToolbarState();
+        });
+
+        // 右揃え
+        this.alignRightBtn?.addEventListener('click', () => {
+            this.tiptap.chain().focus().setImageAlignment('right').run();
+            this._updateImageToolbarState();
+        });
+
+        // 段組み切替
+        this.floatToggleBtn?.addEventListener('click', () => {
+            const attrs = this._getSelectedImageAttrs();
+            if (attrs) {
+                // 中央揃えの場合は段組みを有効にできない
+                if (attrs.alignment === 'center') return;
+                const newState = !attrs.floatEnabled;
+                this.tiptap.chain().focus().toggleImageFloat(newState).run();
+                this._updateImageToolbarState();
+            }
+        });
+
+        // 削除
+        this.deleteImageBtn?.addEventListener('click', () => {
+            this.tiptap.chain().focus().deleteSelection().run();
+            this._hideImageToolbar();
+        });
+
+        // ドキュメントクリックで非表示
+        document.addEventListener('click', (e) => {
+            if (!this.imageToolbar.contains(e.target) &&
+                !e.target.closest('.resizable-container')) {
+                this._hideImageToolbar();
+            }
+        });
+    }
+
+    /**
+     * 画像ツールバーを表示します。
+     * @private
+     */
+    _showImageToolbar() {
+        if (!this.imageToolbar) return;
+
+        // 画像コンテナの位置を取得
+        const tiptapElement = this.editorContainer.querySelector('.tiptap');
+        const selectedImage = tiptapElement?.querySelector('.resizable-container.selected');
+
+        if (!selectedImage) {
+            // DOMにselectedクラスがまだ付いていない場合、現在選択中の画像ノードを探す
+            const { from } = this.tiptap.state.selection;
+            const coords = this.tiptap.view.coordsAtPos(from);
+
+            const toolbarRect = this.imageToolbar.getBoundingClientRect();
+            const margin = 10;
+
+            let top = coords.top - toolbarRect.height - margin;
+            let left = coords.left;
+
+            if (top < margin) top = coords.bottom + margin;
+
+            this.imageToolbar.style.top = `${top + window.scrollY}px`;
+            this.imageToolbar.style.left = `${left + window.scrollX}px`;
+        } else {
+            const rect = selectedImage.getBoundingClientRect();
+            const toolbarRect = this.imageToolbar.getBoundingClientRect();
+            const margin = 10;
+
+            let top = rect.top - toolbarRect.height - margin;
+            let left = rect.left + (rect.width / 2) - (toolbarRect.width / 2);
+
+            if (top < margin) top = rect.bottom + margin;
+            if (left < margin) left = margin;
+            if (left + toolbarRect.width > window.innerWidth - margin) {
+                left = window.innerWidth - toolbarRect.width - margin;
+            }
+
+            this.imageToolbar.style.top = `${top + window.scrollY}px`;
+            this.imageToolbar.style.left = `${left + window.scrollX}px`;
+        }
+
+        this.imageToolbar.classList.remove('hidden');
+        this._updateImageToolbarState();
+    }
+
+    /**
+     * 画像ツールバーを非表示にします。
+     * @private
+     */
+    _hideImageToolbar() {
+        if (this.imageToolbar) {
+            this.imageToolbar.classList.add('hidden');
+        }
+    }
+
+    /**
+     * 画像ツールバーの状態を更新します。
+     * @private
+     */
+    _updateImageToolbarState() {
+        const attrs = this._getSelectedImageAttrs();
+        if (!attrs) return;
+
+        const alignment = attrs.alignment || 'left';
+        const floatEnabled = attrs.floatEnabled;
+
+        // 配置ボタンの状態更新
+        this.alignLeftBtn?.classList.toggle('active', alignment === 'left');
+        this.alignCenterBtn?.classList.toggle('active', alignment === 'center');
+        this.alignRightBtn?.classList.toggle('active', alignment === 'right');
+
+        // 段組みボタンの状態更新
+        this.floatToggleBtn?.classList.toggle('active', floatEnabled);
+
+        // 中央揃え時は段組みボタンを無効化
+        if (this.floatToggleBtn) {
+            this.floatToggleBtn.disabled = alignment === 'center';
+            this.floatToggleBtn.style.opacity = alignment === 'center' ? '0.5' : '1';
+        }
+    }
 }
+

@@ -102,8 +102,7 @@
     position: relative;
     display: inline-block;
     max-width: 100%;
-    margin: 10px;
-    /* resize: both は削除（JavaScriptでハンドル操作によるリサイズを実装） */
+    margin: 0.2em;
     overflow: visible;
     vertical-align: top;
 }
@@ -111,32 +110,157 @@
 .resizable-container img {
     margin: 0;
     display: block;
-    /* ウィンドウ幅に応じてレスポンシブに縮小（元のサイズを超えない） */
     max-width: 100%;
     height: auto;
 }
 
-.resizable-container:hover .resize-handle {
-    opacity: 1;
+/* 選択状態 */
+.resizable-container:hover,
+.resizable-container.selected,
+.resizable-container.resizing {
+    outline: 2px solid var(--primary-color);
+    box-shadow: 0 0 0 5px color-mix(in srgb, var(--primary-color) 50%, transparent);
+}
+
+
+/* ============================================
+   画像配置スタイル
+   ============================================ */
+.resizable-container.align-left {
+    display: block;
+    margin-left: 0;
+    margin-right: auto;
+}
+
+.resizable-container.align-center {
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.resizable-container.align-right {
+    display: block;
+    margin-left: auto;
+    margin-right: 0;
+}
+
+/* 段組み（float）有効時 */
+.resizable-container.float-enabled.align-left {
+    float: left;
+    margin-right: 16px;
+}
+
+.resizable-container.float-enabled.align-right {
+    float: right;
+    margin-left: 16px;
+}
+
+/* floatクリア用 - 中央揃えまたはfloat無効時 */
+.resizable-container.align-center+p,
+.resizable-container:not(.float-enabled)+p {
+    clear: both;
 }
 
 /* ============================================
-   画像リサイズハンドル
+   画像リサイズハンドル（4隅）
    ============================================ */
-.resize-handle {
+.resizable-container .resize-handle {
     position: absolute;
-    bottom: 0;
-    right: 0;
-    width: 12px;
-    height: 12px;
-    background-color: var(--primary-color, #3b82f6);
-    cursor: nwse-resize;
+    width: 8px;
+    height: 8px;
+    background-color: var(--surface-color);
+    border: 1px solid var(--primary-color);
     border-radius: 50%;
-    border: 2px solid #fff;
-    box-shadow: 0 0 4px rgba(0, 0, 0, 0.2);
+    z-index: 40;
     opacity: 0;
     transition: opacity 0.2s;
-    z-index: 10;
+}
+
+.resizable-container.selected .resize-handle,
+.resizable-container.resizing .resize-handle {
+    opacity: 1;
+}
+
+.resizable-container .resize-handle.nw {
+    top: -4px;
+    left: -4px;
+    cursor: nw-resize;
+}
+
+.resizable-container .resize-handle.ne {
+    top: -4px;
+    right: -4px;
+    cursor: ne-resize;
+}
+
+.resizable-container .resize-handle.sw {
+    bottom: -4px;
+    left: -4px;
+    cursor: sw-resize;
+}
+
+.resizable-container .resize-handle.se {
+    bottom: -4px;
+    right: -4px;
+    cursor: se-resize;
+}
+
+/* ============================================
+   画像用フローティングツールバー
+   ============================================ */
+#image-toolbar {
+    position: absolute;
+    background-color: var(--surface-color);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    padding: 4px 12px;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    z-index: 1000;
+    transition: opacity 0.2s, transform 0.2s;
+}
+
+#image-toolbar.hidden {
+    display: none;
+    opacity: 0;
+    pointer-events: none;
+}
+
+#image-toolbar button {
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    padding: 4px;
+    cursor: pointer;
+    color: var(--toolbar-button-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.2s, color 0.2s;
+}
+
+#image-toolbar button:hover {
+    background-color: var(--toolbar-button-hover-bg);
+    color: var(--text-color);
+}
+
+#image-toolbar button.active {
+    background-color: var(--toolbar-active-bg);
+    color: var(--toolbar-active-color);
+}
+
+#image-toolbar button.delete-btn:hover {
+    background-color: #fef2f2;
+    color: #dc2626;
+}
+
+#image-toolbar .separator {
+    width: 1px;
+    height: 20px;
+    background-color: var(--border-color);
+    margin: 0 4px;
 }
 
 /* ============================================
@@ -212,13 +336,13 @@
     background: var(--surface-color);
     border: 1px solid var(--border-color);
     border-radius: 8px;
-    padding: 12px;
+    padding: 8px;
     box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
     z-index: 1001;
     display: grid;
     grid-template-columns: repeat(5, 1fr);
-    gap: 8px;
-    width: 180px;
+    gap: 4px;
+    width: 160px;
 }
 
 .color-picker.hidden {
@@ -231,12 +355,58 @@
     border-radius: 4px;
     cursor: pointer;
     border: 1px solid rgba(0, 0, 0, 0.1);
+    border-radius: 50%;
     transition: transform 0.1s;
 }
 
 .color-option:hover {
     transform: scale(1.1);
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* デフォルト/クリアオプション用スタイル */
+.color-option.default-option {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 500;
+}
+
+/* 文字色のデフォルト: --text-colorで塗りつぶし */
+.color-option.default-option.text-default {
+    background-color: var(--text-color);
+}
+
+/* ハイライトのクリア: 透明背景＋×表示 */
+.color-option.default-option.highlight-clear {
+    background: transparent;
+    font-size: 14px;
+    color: #999;
+}
+
+/* セパレーター */
+.color-picker-separator {
+    grid-column: 1 / -1;
+    height: 1px;
+    background: var(--border-color);
+    margin: 4px 0;
+}
+
+/* カスタム色追加ボタン */
+.color-option.add-custom {
+    background: var(--surface-color);
+    border: 1px dashed var(--border-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    color: #999;
+}
+
+.color-option.add-custom:hover {
+    background: #f5f5f5;
+    border-color: #999;
+    color: #666;
 }
 
 

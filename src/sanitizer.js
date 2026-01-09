@@ -16,22 +16,28 @@ export class Sanitizer {
             'h1', 'h2', 'h3', 'h4', 'p', 'br', 'hr',
             'b', 'i', 'u', 's', 'strong', 'em', 'span', 'div', 'font',
             'ul', 'ol', 'li', 'blockquote', 'pre', 'code',
-            'img', 'ruby', 'rt', 'rp', 'a', 'table', 'tr', 'td', 'th', 'thead', 'tbody'
+            'img', 'ruby', 'rt', 'rp', 'a', 'table', 'tr', 'td', 'th', 'thead', 'tbody',
+            // ハイライト用
+            'mark'
         ];
-        
+
         // 許可する属性のリスト
         this.allowedAttributes = [
             'class', 'id', 'style', 'src', 'alt', 'title', 'href', 'target', 'color',
-            'width', 'height', 'colspan', 'rowspan'
+            'width', 'height', 'colspan', 'rowspan',
+            // 画像のカスタム属性
+            'data-alignment', 'data-float-enabled', 'data-original-width',
+            // 見出し・ハイライトのカスタム属性
+            'data-outline-icon', 'data-color'
         ];
-        
+
         // 完全に削除するタグ（中身も含めて）
         this.dangerousTags = [
             'script', 'iframe', 'object', 'embed', 'style', 'link', 'meta',
             'frame', 'frameset', 'applet', 'base', 'form', 'input', 'button',
             'select', 'textarea', 'noscript'
         ];
-        
+
         // 危険なURLプロトコル（正規化後にチェック）
         this.dangerousProtocols = [
             'javascript',
@@ -49,7 +55,7 @@ export class Sanitizer {
         if (!html || typeof html !== 'string') {
             return '';
         }
-        
+
         const parser = new DOMParser();
         const doc = parser.parseFromString(html, 'text/html');
 
@@ -106,7 +112,7 @@ export class Sanitizer {
      */
     cleanAttributes(element) {
         const attrs = Array.from(element.attributes);
-        
+
         attrs.forEach(attr => {
             const attrName = attr.name.toLowerCase();
             const attrValue = attr.value;
@@ -150,28 +156,39 @@ export class Sanitizer {
      */
     isDangerousUrl(url) {
         if (!url) return false;
-        
+
         // 空白文字、制御文字、NULL文字を除去して正規化
         const normalizedUrl = url
             .replace(/[\x00-\x20\x7f-\x9f]/g, '')  // 制御文字を除去
             .replace(/\s/g, '')                     // 空白を除去
             .toLowerCase();
-        
+
+        // data:image/ で始まる画像URLは安全として許可
+        if (normalizedUrl.startsWith('data:image/')) {
+            return false;
+        }
+
         // 危険なプロトコルをチェック
         for (const protocol of this.dangerousProtocols) {
             if (normalizedUrl.startsWith(protocol + ':')) {
                 return true;
             }
         }
-        
+
         // エンコードされたjavascript:のチェック
         const decodedUrl = this.decodeUrl(normalizedUrl);
+
+        // デコード後もdata:image/であれば許可
+        if (decodedUrl.startsWith('data:image/')) {
+            return false;
+        }
+
         for (const protocol of this.dangerousProtocols) {
             if (decodedUrl.startsWith(protocol + ':')) {
                 return true;
             }
         }
-        
+
         return false;
     }
 
@@ -183,7 +200,7 @@ export class Sanitizer {
     decodeUrl(url) {
         let decoded = url;
         let prev = '';
-        
+
         // 最大10回までデコードを試行（無限ループ防止）
         for (let i = 0; i < 10 && decoded !== prev; i++) {
             prev = decoded;
@@ -194,7 +211,7 @@ export class Sanitizer {
                 break;
             }
         }
-        
+
         return decoded.toLowerCase();
     }
 
@@ -205,7 +222,7 @@ export class Sanitizer {
      */
     cleanStyleAttribute(style) {
         if (!style) return '';
-        
+
         // 危険なパターンを除去
         const dangerousPatterns = [
             /expression\s*\(/gi,           // IE expression()
@@ -216,13 +233,13 @@ export class Sanitizer {
             /url\s*\(\s*["']?\s*javascript/gi,  // url(javascript:...)
             /url\s*\(\s*["']?\s*data\s*:/gi,    // url(data:...)
         ];
-        
+
         let cleanedStyle = style;
-        
+
         for (const pattern of dangerousPatterns) {
             cleanedStyle = cleanedStyle.replace(pattern, '');
         }
-        
+
         return cleanedStyle.trim();
     }
 }
