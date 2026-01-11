@@ -24,7 +24,7 @@ export const CONFIG = {
         COLORS: {
             DEFAULT_BG: '#ffffff',
             DEFAULT_BORDER: '#cbd5e1',
-            DEFAULT_TEXT: '#334155',
+            DEFAULT_TEXT: 'var(--text-color)',
             SELECTED_BORDER: 'var(--primary-color)',
             CONNECTION_DEFAULT: '#94a3b8',
             CONNECTION_SELECTED: 'var(--primary-color)'

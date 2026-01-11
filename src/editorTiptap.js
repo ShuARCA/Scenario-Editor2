@@ -805,7 +805,10 @@ export class EditorManager {
         const wrapper = document.createElement('div');
         wrapper.className = 'outline-item-wrapper';
         wrapper.dataset.headingId = item.id;
-        wrapper.style.paddingLeft = `${(item.level - 1) * 12}px`;
+        if (item.level === 1) {
+            wrapper.style.paddingLeft = `0px`;
+        }
+
 
         const itemEl = document.createElement('div');
         itemEl.className = 'outline-item';

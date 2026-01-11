@@ -67,7 +67,7 @@
 
 #search-panel button {
     padding: 6px 10px;
-    background-color: var(--bg-color);
+    background-color: var(--surface-color);
     border: 1px solid var(--border-color);
     border-radius: 6px;
     cursor: pointer;

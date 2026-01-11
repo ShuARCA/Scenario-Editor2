@@ -17,7 +17,6 @@ export class SettingsManager {
             fontSize: '16px',
             editorBgColor: '#ffffff',
             editorTextColor: '#334155',
-            editorTextColor: '#334155',
             backgroundImage: null // メモリ保持のみ
         };
 
@@ -308,7 +307,7 @@ export class SettingsManager {
                 root.style.setProperty('--bg-color', this.settings.editorBgColor);
             }
             root.style.setProperty('--text-color', '#f8fafc');
-            root.style.setProperty('--border-color', '#334155');
+            root.style.setProperty('--border-color', '#3c3c3d');
 
             if (this.settings.editorTextColor === '#334155') editor.style.color = '#f8fafc';
 
@@ -316,7 +315,7 @@ export class SettingsManager {
             root.style.setProperty('--surface-color', '#ffffff');
             root.style.setProperty('--bg-color', this.settings.editorBgColor);
             root.style.setProperty('--text-color', '#334155');
-            root.style.setProperty('--border-color', '#e2e8f0');
+            root.style.setProperty('--border-color', '#dedfde');
             targetBgColor = this.settings.editorBgColor;
         }
 

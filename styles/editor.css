@@ -7,7 +7,7 @@
     --editor-max-width: 800px;
     --editor-padding: 16px 24px;
     --editor-border-radius: 8px;
-    --editor-line-height: 1.8;
+    --editor-line-height: 1.5;
     --editor-font-size: 16px;
     --heading-border-color: #eee;
     --toolbar-button-color: #4b5563;
@@ -52,47 +52,67 @@
    ============================================ */
 #editor h1 {
     font-size: 2.25em;
-    margin-bottom: 0.5em;
-    border-bottom: 1px solid var(--heading-border-color);
-    padding-bottom: 0.2em;
+    margin-top: 2em;
+    margin-bottom: 0.6em;
+    border-bottom: 1px solid color-mix(in srgb, var(--text-color) 15%, transparent);
 }
 
 #editor h2 {
     font-size: 1.75em;
-    margin-top: 1.5em;
-    margin-bottom: 0.5em;
-    padding-bottom: 0.2em;
+    margin-top: 1.4em;
+    margin-bottom: 0.3em;
 }
 
 #editor h3 {
     font-size: 1.5em;
     margin-top: 1.25em;
-    margin-bottom: 0.5em;
+    margin-bottom: 0.3em;
 }
 
 #editor h4 {
     font-size: 1.25em;
-    margin: 1em auto;
-    border-radius: 4px;
+    margin-top: 1em;
+    margin-bottom: 0.3em;
 }
 
 #editor p {
-    margin: 0.2em auto;
+    margin-top: 0.3em;
+    margin-bottom: 0.3em;
+}
+
+#editor ul,
+#editor ol {
+    margin-top: 0.3em;
+    margin-bottom: 0.3em;
+    padding-inline-start: 2em;
 }
 
 #editor blockquote {
-    margin: 0.5em 1em;
-    padding: 0.5em 1em;
+    margin: 0.6em 1em;
+    padding: 0em 1em;
     border-left: 2px solid var(--primary-color);
 }
 
 #editor pre {
-    padding: 0.5em 1em;
-    background-color: rgba(210, 210, 210, 0.5);
+    margin-top: 0.3em;
+    margin-bottom: 0.3em;
+    padding: 0.6em 1em;
+    background-color: rgba(200, 200, 200, 0.2);
 }
 
 #editor rt {
     font-size: 0.7em;
+}
+
+#editor hr {
+    margin-top: 1em;
+    margin-bottom: 1em;
+    color: color-mix(in srgb, var(--text-color) 15%, transparent);
+    border-style: dashed;
+    border-top-width: 0px;
+    border-right-width: 0px;
+    border-bottom-width: 1px;
+    border-left-width: 0px;
 }
 
 /* ============================================

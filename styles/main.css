@@ -20,7 +20,7 @@ body {
   padding: 0;
   height: 100%;
   font-family: 'Inter', 'Yu Gothic', sans-serif;
-  background-color: var(--bg-color);
+  background-color: var(--surface-color);
   color: var(--text-color);
   overflow: hidden;
 }
@@ -64,7 +64,7 @@ body {
 }
 
 #filename:hover {
-  background-color: var(--bg-color);
+  background-color: var(--border-color);
 }
 
 /* タイトル編集入力フィールド */
@@ -100,7 +100,7 @@ body {
 }
 
 .header-controls button:hover {
-  background-color: var(--bg-color);
+  background-color: var(--border-color);
   color: var(--primary-color);
 }
 
@@ -161,10 +161,12 @@ body {
 .outline-item {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 4px;
   font-size: 14px;
+  font-weight: 500;
   padding: 4px 8px;
   border-radius: 4px;
+  margin-bottom: 4px;
   cursor: pointer;
   color: #4b5563;
   text-decoration: none;
@@ -172,7 +174,7 @@ body {
 }
 
 .outline-item:hover {
-  background-color: var(--bg-color);
+  background-color: var(--border-color);
   color: var(--text-color);
 }
 
@@ -200,9 +202,9 @@ body {
 
 /* アウトラインアイコン（項目左側） */
 .outline-icon {
-  width: 16px;
-  height: 16px;
-  min-width: 16px;
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -212,12 +214,12 @@ body {
 }
 
 .outline-icon:hover {
-  background-color: var(--bg-color);
+  background-color: var(--border-color);
 }
 
 .outline-icon svg {
-  width: 14px;
-  height: 14px;
+  width: 24px;
+  height: 24px;
   fill: currentColor;
 }
 
@@ -227,6 +229,9 @@ body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  height: 20px;
+  line-height: 21px;
+  font-weight: 500;
 }
 
 /* 折りたたみトグル（テキスト右端） */
@@ -260,11 +265,18 @@ body {
   flex-direction: column;
   gap: 2px;
   overflow: hidden;
-  transition: max-height 0.2s ease-out;
+  transition: all 0.3s ease-out;
+  border-left: 1px solid;
+  margin-left: 16px;
+  border-image: linear-gradient(0deg, transparent, color-mix(in srgb, var(--primary-color) 80%, transparent)) 1;
+  opacity: 1;
+  padding-left: 11px;
 }
 
 .outline-children.collapsed {
   max-height: 0 !important;
+  opacity: 0;
+  padding-left: 0px;
 }
 
 /* アイコンピッカー */
