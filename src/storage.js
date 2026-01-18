@@ -28,9 +28,6 @@ export class StorageManager {
     this.title = '無題のドキュメント';
     this.filename = 'document.zip';
 
-    // ファイルハンドルの保持（セッション中のみ有効）
-    this.fileHandle = null;
-
     // File System Access API のサポート状況
     this.supportsFileSystemAccess = 'showSaveFilePicker' in window;
 
@@ -211,7 +208,6 @@ export class StorageManager {
       });
 
       const file = await handle.getFile();
-      this.fileHandle = handle;
       this.filename = file.name;
 
       // ファイルを処理
@@ -280,7 +276,7 @@ export class StorageManager {
 
   /**
    * File System Access API を使用してファイルを保存します。
-   * 前回のファイルハンドルがある場合は上書き保存を試みます。
+   * 毎回「名前を付けて保存」ダイアログを表示します。
    * @private
    * @param {Blob} blob - 保存するデータ
    */
@@ -293,35 +289,22 @@ export class StorageManager {
       }]
     };
 
-    // 前回のファイルハンドルがある場合は上書き保存を試みる
-    if (this.fileHandle) {
-      try {
-        const writable = await this.fileHandle.createWritable();
-        await writable.write(blob);
-        await writable.close();
-        console.log('ファイルを上書き保存しました:', this.filename);
-        return;
-      } catch (e) {
-        // パーミッションエラー等の場合は新規保存ダイアログを表示
-        console.log('上書き保存に失敗、新規保存ダイアログを表示:', e.message);
-      }
-    }
-
-    // 新規保存ダイアログを表示
-    this.fileHandle = await window.showSaveFilePicker(options);
-    const writable = await this.fileHandle.createWritable();
+    // 保存ダイアログを表示
+    const fileHandle = await window.showSaveFilePicker(options);
+    const writable = await fileHandle.createWritable();
     await writable.write(blob);
     await writable.close();
 
     // タイトルとファイル名を更新
-    const newFilename = this.fileHandle.name;
+    const newFilename = fileHandle.name;
     const titleFromFilename = newFilename.replace(/\.zip$/i, '');
     this.setTitle(titleFromFilename);
 
     // ファイル名を localStorage に保存
     localStorage.setItem('ieditweb-last-filename', newFilename);
-    console.log('ファイルを新規保存しました:', newFilename);
+    console.log('ファイルを保存しました:', newFilename);
   }
+
 
   /**
    * エディタコンテンツを処理し、画像をZIPに追加します。
