@@ -17,7 +17,8 @@ export class SettingsManager {
             fontSize: '16px',
             editorBgColor: '#ffffff',
             editorTextColor: '#334155',
-            backgroundImage: null // メモリ保持のみ
+            backgroundImage: null, // メモリ保持のみ
+            commentDisplayMode: 'hover' // 'always' | 'hover'
         };
 
         // DOM初期化をスキップするオプション（テスト用）
@@ -84,6 +85,12 @@ export class SettingsManager {
         document.getElementById('font-size-input').value = parseInt(this.settings.fontSize);
         document.getElementById('editor-bg-color').value = this.settings.editorBgColor;
         document.getElementById('editor-text-color').value = this.settings.editorTextColor;
+
+        // コメント表示設定
+        const commentDisplaySelect = document.getElementById('comment-display-select');
+        if (commentDisplaySelect) {
+            commentDisplaySelect.value = this.settings.commentDisplayMode;
+        }
     }
 
     close() {
@@ -101,7 +108,11 @@ export class SettingsManager {
         this.settings.editorBgColor = document.getElementById('editor-bg-color').value;
         this.settings.editorTextColor = document.getElementById('editor-text-color').value;
 
-        this.settings.editorTextColor = document.getElementById('editor-text-color').value;
+        // コメント表示設定
+        const commentDisplaySelect = document.getElementById('comment-display-select');
+        if (commentDisplaySelect) {
+            this.settings.commentDisplayMode = commentDisplaySelect.value;
+        }
 
         // 背景画像以外の設定を保存
         const settingsToSave = { ...this.settings };
@@ -109,8 +120,12 @@ export class SettingsManager {
         localStorage.setItem('ieditweb-settings', JSON.stringify(settingsToSave));
 
         this.applySettings();
-        this.close();
-        this.applySettings();
+
+        // コメント表示設定の変更をエディタに通知
+        document.dispatchEvent(new CustomEvent('commentDisplayModeChange', {
+            detail: { mode: this.settings.commentDisplayMode }
+        }));
+
         this.close();
     }
 

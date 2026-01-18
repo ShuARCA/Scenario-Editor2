@@ -7,6 +7,7 @@
  */
 import { Editor, Extension } from 'tiptap';
 import { Ruby } from './extensions/ruby.js';
+import { Comment } from './extensions/comment.js';
 import { HeadingWithId } from './extensions/headingWithId.js';
 import { ResizableImage } from './extensions/resizableImage.js';
 import { debounce, generateId } from './utils.js';
@@ -81,6 +82,19 @@ export class EditorManager {
         this.alignRightBtn = document.getElementById('align-right-btn');
         this.floatToggleBtn = document.getElementById('float-toggle-btn');
         this.deleteImageBtn = document.getElementById('delete-image-btn');
+
+        // コメントパネル関連
+        this.commentPanel = document.getElementById('comment-panel');
+        this.commentInput = document.getElementById('comment-input');
+        this.commentApplyBtn = document.getElementById('comment-apply-btn');
+        this.commentDeleteBtn = document.getElementById('comment-delete-btn');
+        this.commentBtn = document.getElementById('commentBtn');
+        this.commentSidebar = document.getElementById('comment-sidebar');
+        this.commentList = document.getElementById('comment-list');
+        this.commentPopup = document.getElementById('comment-popup');
+
+        // コメント設定
+        this.commentDisplaySelect = document.getElementById('comment-display-select');
     }
 
     /**
@@ -91,6 +105,8 @@ export class EditorManager {
         this._initTiptapEditor();
         this._setupToolbarActions();
         this._setupRubyPanel();
+        this._setupCommentPanel();
+        this._setupCommentHover();
         this._setupIconPicker();
         this._setupImageToolbar();
         this._setupEventBusListeners();
@@ -120,6 +136,7 @@ export class EditorManager {
                 }),
                 HeadingWithId,
                 Ruby,
+                Comment,
                 ResizableImage,
                 Underline,
                 TextStyle,
@@ -225,11 +242,28 @@ export class EditorManager {
             } else {
                 this._showFloatToolbar();
                 this._updateToolbarState();
+                this._updateCommentButtonState();
             }
         }
 
         // アウトラインハイライトの更新
         this._updateOutlineHighlightByPosition();
+    }
+
+    /**
+     * コメントボタンの状態を更新します。
+     * 既存コメントがある場合はプライマリーカラーでハイライト表示します。
+     * @private
+     */
+    _updateCommentButtonState() {
+        if (!this.commentBtn) return;
+
+        const commentInfo = this.detectExistingComment();
+        if (commentInfo.allComments.length > 0) {
+            this.commentBtn.classList.add('has-comment');
+        } else {
+            this.commentBtn.classList.remove('has-comment');
+        }
     }
 
     /**
@@ -1625,6 +1659,653 @@ export class EditorManager {
             this.floatToggleBtn.disabled = alignment === 'center';
             this.floatToggleBtn.style.opacity = alignment === 'center' ? '0.5' : '1';
         }
+    }
+
+    // ========================================
+    // コメント機能
+    // ========================================
+
+    /**
+     * コメントパネルのイベントリスナーをセットアップします。
+     * @private
+     */
+    _setupCommentPanel() {
+        if (!this.commentPanel || !this.commentInput || !this.commentApplyBtn || !this.commentDeleteBtn) {
+            return;
+        }
+
+        // コメントパネル状態管理
+        this.existingCommentInfo = null;
+        this.savedCommentSelection = null;
+        this.commentDisplayMode = 'always'; // 'always' | 'hover'
+
+        // 適用ボタン
+        this.commentApplyBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            this._applyCommentFromPanel();
+        });
+
+        // 削除ボタン
+        this.commentDeleteBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            this._deleteCommentFromPanel();
+        });
+
+        // Enter/Escapeキーの処理
+        this.commentInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                this._hideCommentPanel();
+            }
+        });
+
+        // パネル外クリックで閉じる
+        document.addEventListener('mousedown', (e) => {
+            if (!this.commentPanel.classList.contains('hidden') &&
+                !this.commentPanel.contains(e.target) &&
+                e.target !== this.commentBtn &&
+                !this.commentBtn?.contains(e.target)) {
+                this._hideCommentPanel();
+            }
+        });
+
+        // フローティングメニューのコメントボタン
+        if (this.commentBtn) {
+            this.commentBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.insertComment();
+            });
+        }
+
+        // 設定変更の監視（カスタムイベント経由）
+        document.addEventListener('commentDisplayModeChange', (e) => {
+            this.commentDisplayMode = e.detail.mode;
+            this._updateCommentDisplay();
+        });
+
+        // 初回起動時の設定読み込み
+        this._loadCommentDisplayMode();
+    }
+
+    /**
+     * コメント表示モードを初回読み込みします。
+     * @private
+     */
+    _loadCommentDisplayMode() {
+        // localStorageから設定を読み込み
+        const saved = localStorage.getItem('ieditweb-settings');
+        if (saved) {
+            try {
+                const parsed = JSON.parse(saved);
+                if (parsed.commentDisplayMode) {
+                    this.commentDisplayMode = parsed.commentDisplayMode;
+                }
+            } catch (e) {
+                // パースエラーは無視
+            }
+        }
+        this._updateCommentDisplay();
+    }
+
+    /**
+     * コメントのマウスオーバー表示をセットアップします。
+     * @private
+     */
+    _setupCommentHover() {
+        if (!this.commentPopup) return;
+
+        let hideTimeout = null;
+
+        // エディタ内のコメントマークへのホバー処理
+        this.editorContainer.addEventListener('mouseover', (e) => {
+            if (this.commentDisplayMode !== 'hover') return;
+
+            const commentMark = e.target.closest('.comment-mark');
+            if (commentMark) {
+                clearTimeout(hideTimeout);
+                this._showCommentPopup(commentMark);
+            }
+        });
+
+        this.editorContainer.addEventListener('mouseout', (e) => {
+            if (this.commentDisplayMode !== 'hover') return;
+
+            const commentMark = e.target.closest('.comment-mark');
+            if (commentMark) {
+                hideTimeout = setTimeout(() => {
+                    this._hideCommentPopup();
+                }, 200);
+            }
+        });
+
+        // ポップアップ内でのマウス操作
+        this.commentPopup.addEventListener('mouseover', () => {
+            clearTimeout(hideTimeout);
+        });
+
+        this.commentPopup.addEventListener('mouseout', () => {
+            hideTimeout = setTimeout(() => {
+                this._hideCommentPopup();
+            }, 200);
+        });
+
+        // ポップアップ内のボタン処理
+        this.commentPopup.addEventListener('click', (e) => {
+            const editBtn = e.target.closest('.comment-popup-edit-btn');
+
+            if (editBtn && this.currentPopupCommentId) {
+                const commentId = this.currentPopupCommentId; // 先に保存
+                this._hideCommentPopup(); // これでcurrentPopupCommentIdがnullになる
+                this._editCommentById(commentId); // 保存したIDを使用
+            }
+        });
+    }
+
+    /**
+     * コメント挿入を開始します。
+     */
+    insertComment() {
+        const { from, to, empty } = this.tiptap.state.selection;
+        if (empty) return;
+
+        // 選択範囲を保存
+        this.savedCommentSelection = { from, to };
+
+        // 既存のコメントを検出
+        const commentInfo = this.detectExistingComment();
+        this.existingCommentInfo = commentInfo.allComments.length > 0 ? commentInfo : null;
+
+        this._showCommentPanel();
+    }
+
+    /**
+     * 既存のコメントを検出します。
+     * @returns {{firstComment: Object|null, allComments: Array}} 検出されたコメント情報
+     */
+    detectExistingComment() {
+        const result = {
+            firstComment: null,
+            allComments: []
+        };
+
+        const { from, to } = this.tiptap.state.selection;
+        const { doc, schema } = this.tiptap.state;
+        const markType = schema.marks.comment;
+
+        if (!markType) return result;
+
+        // 選択範囲内のコメントマークを探す
+        doc.nodesBetween(from, to, (node, pos) => {
+            if (node.isText) {
+                const marks = node.marks.filter(mark => mark.type.name === 'comment');
+                for (const mark of marks) {
+                    const commentInfo = {
+                        commentId: mark.attrs.commentId,
+                        commentText: mark.attrs.commentText,
+                        from: pos,
+                        to: pos + node.nodeSize,
+                        mark
+                    };
+                    if (!result.firstComment) {
+                        result.firstComment = commentInfo;
+                    }
+                    // 同じIDのコメントは重複しない
+                    if (!result.allComments.find(c => c.commentId === mark.attrs.commentId)) {
+                        result.allComments.push(commentInfo);
+                    }
+                }
+            }
+        });
+
+        return result;
+    }
+
+    /**
+     * コメントパネルを表示します。
+     * @private
+     */
+    _showCommentPanel() {
+        if (!this.commentPanel) return;
+
+        // 既存コメントがある場合は値を表示
+        if (this.existingCommentInfo && this.existingCommentInfo.firstComment) {
+            this.commentInput.value = this.existingCommentInfo.firstComment.commentText || '';
+        } else {
+            this.commentInput.value = '';
+        }
+
+        this.commentPanel.classList.remove('hidden');
+
+        // 位置計算: コメントボタンが表示されていればそれを基準に、そうでなければ選択範囲を基準に
+        let position;
+        const isFloatToolbarVisible = this.floatToolbar && !this.floatToolbar.classList.contains('hidden');
+        if (this.commentBtn && isFloatToolbarVisible) {
+            position = this._calculateCommentPanelPosition(this.commentBtn);
+        } else {
+            // 選択範囲から位置を計算
+            position = this._calculateCommentPanelPositionFromSelection();
+        }
+
+        this.commentPanel.style.top = `${position.top}px`;
+        this.commentPanel.style.left = `${position.left}px`;
+
+        setTimeout(() => {
+            this.commentInput.focus();
+            this.commentInput.select();
+        }, 0);
+    }
+
+    /**
+     * 選択範囲からコメントパネルの位置を計算します。
+     * @returns {{top: number, left: number}} 位置
+     * @private
+     */
+    _calculateCommentPanelPositionFromSelection() {
+        const { from, to } = this.savedCommentSelection || this.tiptap.state.selection;
+        const start = this.tiptap.view.coordsAtPos(from);
+        const end = this.tiptap.view.coordsAtPos(to);
+
+        const panelRect = this.commentPanel.getBoundingClientRect();
+        let top = end.bottom + 8;
+        let left = start.left;
+
+        // 画面外に出ないように調整
+        if (left + panelRect.width > window.innerWidth - 10) {
+            left = window.innerWidth - panelRect.width - 10;
+        }
+        if (top + panelRect.height > window.innerHeight - 10) {
+            top = start.top - panelRect.height - 8;
+        }
+
+        return { top, left };
+    }
+
+    /**
+     * コメントパネルを非表示にします。
+     * @private
+     */
+    _hideCommentPanel() {
+        if (this.commentPanel) {
+            this.commentPanel.classList.add('hidden');
+        }
+        this.existingCommentInfo = null;
+        this.savedCommentSelection = null;
+    }
+
+    /**
+     * コメントパネルの位置を計算します。
+     * @param {HTMLElement} button - 基準となるボタン
+     * @returns {{top: number, left: number}} 位置
+     * @private
+     */
+    _calculateCommentPanelPosition(button) {
+        const rect = button.getBoundingClientRect();
+        const panelRect = this.commentPanel.getBoundingClientRect();
+        let top = rect.bottom + 8;
+        let left = rect.left;
+
+        // 画面外に出ないように調整
+        if (left + panelRect.width > window.innerWidth - 10) {
+            left = window.innerWidth - panelRect.width - 10;
+        }
+        if (top + panelRect.height > window.innerHeight - 10) {
+            top = rect.top - panelRect.height - 8;
+        }
+
+        return { top, left };
+    }
+
+    /**
+     * コメントパネルからコメントを適用します。
+     * @private
+     */
+    _applyCommentFromPanel() {
+        const commentText = this.commentInput.value.trim();
+        if (!commentText) {
+            this._hideCommentPanel();
+            return;
+        }
+
+        // 既存コメントを削除してから新たに適用
+        if (this.existingCommentInfo && this.existingCommentInfo.allComments.length > 0) {
+            for (const comment of this.existingCommentInfo.allComments) {
+                // commentIdでコメントを削除（mark属性が無くても動作する）
+                if (comment.commentId) {
+                    this.tiptap.chain()
+                        .focus()
+                        .removeCommentById(comment.commentId)
+                        .run();
+                }
+            }
+        }
+
+        // 保存した選択範囲でコメントを適用
+        if (this.savedCommentSelection) {
+            const { from, to } = this.savedCommentSelection;
+            const currentDoc = this.tiptap.state.doc;
+            const maxPos = currentDoc.content.size;
+
+            const safeFrom = Math.min(from, maxPos);
+            const safeTo = Math.min(to, maxPos);
+
+            if (safeFrom < safeTo) {
+                this.tiptap
+                    .chain()
+                    .focus()
+                    .setTextSelection({ from: safeFrom, to: safeTo })
+                    .setComment(commentText)
+                    .run();
+            }
+        }
+
+        this._hideCommentPanel();
+        this._updateCommentSidebar();
+    }
+
+    /**
+     * コメントパネルからコメントを削除します。
+     * @private
+     */
+    _deleteCommentFromPanel() {
+        if (this.existingCommentInfo && this.existingCommentInfo.allComments.length > 0) {
+            for (const comment of this.existingCommentInfo.allComments) {
+                // commentIdでコメントを削除（mark属性が無くても動作する）
+                if (comment.commentId) {
+                    this.tiptap.chain()
+                        .focus()
+                        .removeCommentById(comment.commentId)
+                        .run();
+                }
+            }
+        }
+        this._hideCommentPanel();
+        this._updateCommentSidebar();
+    }
+
+    /**
+     * コメントIDでコメントを編集します。
+     * @param {string} commentId - コメントID
+     * @private
+     */
+    _editCommentById(commentId) {
+        const comments = this._getAllComments();
+        const comment = comments.find(c => c.commentId === commentId);
+        if (!comment) return;
+
+        // 選択範囲を設定
+        this.tiptap.chain()
+            .focus()
+            .setTextSelection({ from: comment.from, to: comment.to })
+            .run();
+
+        // コメントパネルを表示
+        this.savedCommentSelection = { from: comment.from, to: comment.to };
+        this.existingCommentInfo = { firstComment: comment, allComments: [comment] };
+        this._showCommentPanel();
+    }
+
+    /**
+     * コメントIDでコメントを削除します。
+     * @param {string} commentId - コメントID
+     * @private
+     */
+    _deleteCommentById(commentId) {
+        this.tiptap.chain()
+            .focus()
+            .removeCommentById(commentId)
+            .run();
+        this._updateCommentSidebar();
+    }
+
+    /**
+     * コメントポップアップを表示します。
+     * @param {HTMLElement} commentMark - コメントマーク要素
+     * @private
+     */
+    _showCommentPopup(commentMark) {
+        const commentId = commentMark.getAttribute('data-comment-id');
+        const commentText = commentMark.getAttribute('data-comment-text');
+
+        if (!commentId || !commentText) return;
+
+        this.currentPopupCommentId = commentId;
+
+        const textEl = this.commentPopup.querySelector('.comment-popup-text');
+        if (textEl) {
+            textEl.textContent = commentText;
+        }
+
+        const rect = commentMark.getBoundingClientRect();
+        // アイコンの右上に表示（テキストにかぶさらないように）
+        // アイコンは擬似要素として右端に表示されているので、rectの右端を基準にする
+        let left = rect.right + 8 + window.scrollX;
+        let top = rect.top - 8 + window.scrollY;
+
+        // 画面右端からはみ出る場合は左側に表示
+        this.commentPopup.classList.remove('hidden');
+        const popupRect = this.commentPopup.getBoundingClientRect();
+        if (left + popupRect.width > window.innerWidth - 10) {
+            left = rect.left - popupRect.width - 8 + window.scrollX;
+        }
+
+        // 画面上端からはみ出る場合は下に表示
+        if (top < window.scrollY + 10) {
+            top = rect.bottom + 8 + window.scrollY;
+        }
+
+        this.commentPopup.style.top = `${top}px`;
+        this.commentPopup.style.left = `${left}px`;
+    }
+
+    /**
+     * コメントポップアップを非表示にします。
+     * @private
+     */
+    _hideCommentPopup() {
+        if (this.commentPopup) {
+            this.commentPopup.classList.add('hidden');
+        }
+        this.currentPopupCommentId = null;
+    }
+
+    /**
+     * コメント表示モードを更新します。
+     * @private
+     */
+    _updateCommentDisplay() {
+        if (this.commentDisplayMode === 'always') {
+            this.commentSidebar?.classList.remove('hidden');
+            this._updateCommentSidebar();
+            this._setupCommentScrollSync();
+        } else {
+            this.commentSidebar?.classList.add('hidden');
+            this._removeCommentScrollSync();
+        }
+    }
+
+    /**
+     * コメントスクロール同期をセットアップします。
+     * @private
+     */
+    _setupCommentScrollSync() {
+        if (this._commentScrollHandler) return; // 既に設定済み
+
+        this._commentScrollHandler = () => {
+            this._updateCommentPositions();
+        };
+
+        // エディタコンテナのスクロールを監視
+        const editorContainer = document.getElementById('editor-container');
+        if (editorContainer) {
+            editorContainer.addEventListener('scroll', this._commentScrollHandler);
+        }
+    }
+
+    /**
+     * コメントスクロール同期を解除します。
+     * @private
+     */
+    _removeCommentScrollSync() {
+        if (!this._commentScrollHandler) return;
+
+        const editorContainer = document.getElementById('editor-container');
+        if (editorContainer) {
+            editorContainer.removeEventListener('scroll', this._commentScrollHandler);
+        }
+        this._commentScrollHandler = null;
+    }
+
+    /**
+     * コメントサイドバーを更新します。
+     * @private
+     */
+    _updateCommentSidebar() {
+        if (!this.commentList) return;
+        if (this.commentDisplayMode !== 'always') return;
+
+        const comments = this._getAllComments();
+        this.commentList.innerHTML = '';
+
+        for (const comment of comments) {
+            const item = document.createElement('div');
+            item.className = 'comment-list-item';
+            item.setAttribute('data-comment-id', comment.commentId);
+            item.setAttribute('data-comment-from', comment.from);
+
+            const textDiv = document.createElement('div');
+            textDiv.className = 'comment-list-item-text';
+            textDiv.textContent = comment.commentText;
+            item.appendChild(textDiv);
+
+            // 編集アイコン（右上に配置）
+            const editIconBtn = document.createElement('button');
+            editIconBtn.className = 'comment-list-item-edit-btn';
+            editIconBtn.title = '編集';
+            editIconBtn.innerHTML = this._getEditIconSVG();
+            item.appendChild(editIconBtn);
+
+            // クリックでハイライト表示とアクティブ切替
+            item.addEventListener('click', (e) => {
+                // 既存のアクティブを解除
+                this.commentList.querySelectorAll('.comment-list-item').forEach(el => el.classList.remove('active'));
+                item.classList.add('active');
+
+                // テキスト範囲をハイライト
+                this._highlightCommentRange(comment.from, comment.to);
+            });
+
+            // 編集アイコンクリックでパネルを開く
+            editIconBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                // 編集モードにする
+                this._editCommentById(comment.commentId);
+            });
+
+            this.commentList.appendChild(item);
+        }
+
+        // 初回位置更新
+        requestAnimationFrame(() => {
+            this._updateCommentPositions();
+        });
+    }
+
+    /**
+     * 編集アイコンのSVG文字列を返します。
+     * @returns {string} SVG文字列
+     * @private
+     */
+    _getEditIconSVG() {
+        return `<svg viewBox="0 -960 960 960" width="16" height="16" fill="currentColor"><path d="M200-200h57l391-391-57-57-391 391v57Zm-80 80v-170l528-527q12-11 26.5-17t30.5-6q16 0 31 6t26 18l55 56q12 11 17.5 26t5.5 30q0 16-5.5 30.5T817-647L290-120H120Zm640-584-56-56 56 56Zm-141 85-28-29 57 57-29-28Z"/></svg>`;
+    }
+
+    /**
+     * コメントの位置を更新します。
+     * @private
+     */
+    _updateCommentPositions() {
+        if (!this.commentList || this.commentDisplayMode !== 'always') return;
+
+        const editorContainer = document.getElementById('editor-container');
+        const sidebarRect = this.commentSidebar?.getBoundingClientRect();
+        if (!editorContainer || !sidebarRect) return;
+
+        const editorContainerRect = editorContainer.getBoundingClientRect();
+        const items = this.commentList.querySelectorAll('.comment-list-item');
+
+        items.forEach(item => {
+            const from = parseInt(item.getAttribute('data-comment-from'), 10);
+            if (isNaN(from)) return;
+
+            try {
+                // テキスト位置から座標を取得
+                const coords = this.tiptap.view.coordsAtPos(from);
+
+                // サイドバー内での相対位置を計算
+                const relativeTop = coords.top - sidebarRect.top;
+
+                // 位置を設定
+                item.style.position = 'absolute';
+                item.style.top = `${relativeTop}px`;
+                item.style.left = '8px';
+                item.style.right = '8px';
+            } catch (e) {
+                // 位置計算エラーは無視
+            }
+        });
+    }
+
+    /**
+     * すべてのコメントを取得します。
+     * @returns {Array} コメント情報の配列
+     * @private
+     */
+    _getAllComments() {
+        const comments = [];
+        const { doc, schema } = this.tiptap.state;
+        const markType = schema.marks.comment;
+
+        if (!markType) return comments;
+
+        const seenIds = new Set();
+        doc.descendants((node, pos) => {
+            if (node.isText) {
+                const marks = node.marks.filter(mark => mark.type.name === 'comment');
+                for (const mark of marks) {
+                    if (!seenIds.has(mark.attrs.commentId)) {
+                        seenIds.add(mark.attrs.commentId);
+                        comments.push({
+                            commentId: mark.attrs.commentId,
+                            commentText: mark.attrs.commentText,
+                            baseText: node.text,
+                            from: pos,
+                            to: pos + node.nodeSize
+                        });
+                    }
+                }
+            }
+        });
+
+        return comments;
+    }
+
+    /**
+     * コメント範囲をハイライト表示します。
+     * @param {number} from - 開始位置
+     * @param {number} to - 終了位置
+     * @private
+     */
+    _highlightCommentRange(from, to) {
+        // 既存のハイライトを削除
+        this.editorContainer.querySelectorAll('.comment-mark.highlighted').forEach(el => {
+            el.classList.remove('highlighted');
+        });
+
+        // 選択範囲を設定してスクロール
+        this.tiptap.chain()
+            .focus()
+            .setTextSelection({ from, to })
+            .run();
     }
 }
 

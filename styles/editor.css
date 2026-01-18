@@ -17,6 +17,16 @@
 }
 
 /* ============================================
+   エディタエリア（エディタ + コメントサイドバー）
+   ============================================ */
+#editor-area {
+    display: flex;
+    flex-direction: row;
+    flex: 1;
+    overflow: hidden;
+}
+
+/* ============================================
    エディタコンテナ
    ============================================ */
 #editor-container {
@@ -329,6 +339,15 @@
     color: var(--toolbar-active-color);
 }
 
+/* コメントボタン - 既存コメントがある場合はプライマリーカラー */
+#float-toolbar #commentBtn.has-comment {
+    color: var(--primary-color);
+}
+
+#float-toolbar #commentBtn.has-comment svg {
+    fill: var(--primary-color);
+}
+
 /* ツールバーセパレーター */
 #float-toolbar .separator {
     width: 1px;
@@ -558,6 +577,317 @@
     }
 
     .ruby-btn {
+        padding: 5px 10px;
+        font-size: 13px;
+    }
+}
+
+/* ============================================
+   コメント機能
+   ============================================ */
+
+/* コメントマーク（テキストに適用） */
+#editor .comment-mark {
+    position: relative;
+    cursor: pointer;
+}
+
+/* コメント適用範囲 - マウスオーバー時にハイライト */
+#editor .comment-mark:hover {
+    background-color: color-mix(in srgb, var(--primary-color) 20%, transparent);
+    border-radius: 2px;
+}
+
+/* コメントアイコン（末尾に表示） - SVGアイコンを背景として表示 */
+#editor .comment-mark::after {
+    content: '';
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    margin-left: 2px;
+    vertical-align: middle;
+    background-color: var(--primary-color);
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 -960 960 960'%3E%3Cpath d='M240-400h480v-80H240v80Zm0-120h480v-80H240v80Zm0-120h480v-80H240v80ZM880-80 720-240H160q-33 0-56.5-23.5T80-320v-480q0-33 23.5-56.5T160-880h640q33 0 56.5 23.5T880-800v720ZM160-320h594l46 45v-525H160v480Zm0 0v-480 480Z'/%3E%3C/svg%3E");
+    -webkit-mask-size: contain;
+    -webkit-mask-repeat: no-repeat;
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 -960 960 960'%3E%3Cpath d='M240-400h480v-80H240v80Zm0-120h480v-80H240v80Zm0-120h480v-80H240v80ZM880-80 720-240H160q-33 0-56.5-23.5T80-320v-480q0-33 23.5-56.5T160-880h640q33 0 56.5 23.5T880-800v720ZM160-320h594l46 45v-525H160v480Zm0 0v-480 480Z'/%3E%3C/svg%3E");
+    mask-size: contain;
+    mask-repeat: no-repeat;
+    opacity: 0.9;
+}
+
+/* ============================================
+   コメント編集パネル
+   ============================================ */
+.comment-panel {
+    position: absolute;
+    background-color: var(--surface-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    padding: 12px;
+    z-index: 1002;
+    min-width: 250px;
+    max-width: 350px;
+}
+
+.comment-panel.hidden {
+    display: none;
+}
+
+.comment-panel-content {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+#comment-input {
+    padding: 8px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    font-size: 14px;
+    background-color: var(--surface-color);
+    color: var(--text-color);
+    outline: none;
+    resize: vertical;
+    min-height: 60px;
+    font-family: inherit;
+}
+
+#comment-input:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(13, 148, 136, 0.2);
+}
+
+.comment-panel-buttons {
+    display: flex;
+    gap: 8px;
+}
+
+.comment-btn {
+    flex: 1;
+    padding: 6px 12px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background-color 0.2s, transform 0.1s;
+}
+
+.comment-btn:hover {
+    transform: translateY(-1px);
+}
+
+.comment-btn:active {
+    transform: translateY(0);
+}
+
+.comment-btn.primary {
+    background-color: var(--primary-color);
+    color: white;
+}
+
+.comment-btn.primary:hover {
+    background-color: var(--primary-hover-color, #0f766e);
+}
+
+.comment-btn.danger {
+    background-color: #ef4444;
+    color: white;
+}
+
+.comment-btn.danger:hover {
+    background-color: #dc2626;
+}
+
+/* ============================================
+   コメントサイドバー（常に表示モード）
+   ============================================ */
+#comment-sidebar {
+    width: 280px;
+    min-width: 200px;
+    background-color: transparent;
+    overflow-y: auto;
+    flex-shrink: 0;
+}
+
+#comment-sidebar.hidden {
+    display: none;
+}
+
+#comment-list {
+    position: relative;
+    min-height: 100%;
+    padding: 8px 0;
+}
+
+.comment-list-item {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    padding: 10px 12px;
+    margin-bottom: 4px;
+    background-color: var(--surface-color);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background-color 0.2s, box-shadow 0.2s;
+    border-left: 3px solid var(--primary-color);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    width: calc(100% - 16px);
+    box-sizing: border-box;
+}
+
+.comment-list-item:hover,
+.comment-list-item.active {
+    border: 2px solid var(--primary-color);
+    border-left-width: 3px;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-color) 50%, transparent);
+}
+
+.comment-list-item-text {
+    padding-right: 18px;
+    font-size: 14px;
+    color: var(--text-color);
+    margin-bottom: 8px;
+    line-height: 1.4;
+    word-wrap: break-word;
+}
+
+.comment-list-item-preview {
+    font-size: 12px;
+    color: color-mix(in srgb, var(--text-color) 60%, transparent);
+    font-style: italic;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* 編集アイコンボタン */
+.comment-list-item-edit-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text-color);
+    width: 24px;
+    height: 24px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.6;
+    transition: opacity 0.2s, background-color 0.2s;
+    padding: 0;
+}
+
+.comment-list-item-edit-btn:hover {
+    opacity: 1;
+    background-color: var(--toolbar-button-hover-bg);
+    color: var(--primary-color);
+}
+
+.comment-list-item-edit-btn svg {
+    width: 16px;
+    height: 16px;
+}
+
+/* ============================================
+   コメントポップアップ（マウスオーバー時表示）
+   ============================================ */
+.comment-popup {
+    position: absolute;
+    background-color: var(--surface-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    padding: 10px 14px;
+    z-index: 1003;
+    max-width: 300px;
+    pointer-events: auto;
+}
+
+.comment-popup.hidden {
+    display: none;
+}
+
+.comment-popup-content {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 10px;
+}
+
+.comment-popup-text {
+    padding-right: 18px;
+    flex: 1;
+    font-size: 13px;
+    color: var(--text-color);
+    line-height: 1.5;
+    word-wrap: break-word;
+}
+
+/* 編集アイコンボタン */
+.comment-popup-edit-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text-color);
+    width: 24px;
+    height: 24px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.6;
+    transition: opacity 0.2s, background-color 0.2s;
+    padding: 0;
+}
+
+.comment-popup-edit-btn:hover {
+    opacity: 1;
+    background-color: var(--toolbar-button-hover-bg);
+    color: var(--primary-color);
+}
+
+.comment-popup-edit-btn svg {
+    width: 16px;
+    height: 16px;
+}
+
+
+/* ============================================
+   コメントハイライト（アクティブ時）
+   ============================================ */
+#editor .comment-mark.highlighted {
+    background-color: color-mix(in srgb, var(--primary-color) 30%, transparent);
+    border-radius: 2px;
+}
+
+/* レスポンシブ対応 */
+@media (max-width: 768px) {
+    #comment-sidebar {
+        width: 220px;
+        min-width: 180px;
+    }
+}
+
+@media (max-width: 480px) {
+    .comment-panel {
+        min-width: 200px;
+        padding: 10px;
+    }
+
+    #comment-input {
+        padding: 6px;
+        font-size: 13px;
+    }
+
+    .comment-btn {
         padding: 5px 10px;
         font-size: 13px;
     }

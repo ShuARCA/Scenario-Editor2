@@ -28,6 +28,12 @@ export class StorageManager {
     this.title = '無題のドキュメント';
     this.filename = 'document.zip';
 
+    // ファイルハンドルの保持（セッション中のみ有効）
+    this.fileHandle = null;
+
+    // File System Access API のサポート状況
+    this.supportsFileSystemAccess = 'showSaveFilePicker' in window;
+
     this._init();
   }
 
@@ -40,7 +46,7 @@ export class StorageManager {
     this._addEventListenerIfExists('saveBtn', 'click', () => this.save());
     this._addEventListenerIfExists('loadBtn', 'click', () => this.triggerLoad());
 
-    // 非表示のファイル入力を作成
+    // 非表示のファイル入力を作成（フォールバック用）
     this._createHiddenFileInput();
 
     // キーボードショートカット
@@ -53,6 +59,20 @@ export class StorageManager {
 
     // タイトル編集機能
     this._initTitleEditing();
+
+    // 前回のファイル名を復元
+    this._restoreLastFilename();
+  }
+
+  /**
+   * 前回保存/読み込みしたファイル名を復元します。
+   * @private
+   */
+  _restoreLastFilename() {
+    const lastFilename = localStorage.getItem('ieditweb-last-filename');
+    if (lastFilename) {
+      this.filename = lastFilename;
+    }
   }
 
   /**
@@ -162,11 +182,51 @@ export class StorageManager {
 
   /**
    * ファイル選択ダイアログを開きます。
+   * File System Access API が利用可能な場合はネイティブダイアログを使用します。
    */
-  triggerLoad() {
-    const input = document.getElementById('hidden-file-input');
-    if (input) {
-      input.click();
+  async triggerLoad() {
+    if (this.supportsFileSystemAccess) {
+      await this._loadWithFilePicker();
+    } else {
+      // フォールバック: 従来の input[type=file]
+      const input = document.getElementById('hidden-file-input');
+      if (input) {
+        input.click();
+      }
+    }
+  }
+
+  /**
+   * File System Access API を使用してファイルを読み込みます。
+   * @private
+   */
+  async _loadWithFilePicker() {
+    try {
+      const [handle] = await window.showOpenFilePicker({
+        types: [{
+          description: 'ZIPファイル',
+          accept: { 'application/zip': ['.zip'] }
+        }],
+        multiple: false
+      });
+
+      const file = await handle.getFile();
+      this.fileHandle = handle;
+      this.filename = file.name;
+
+      // ファイルを処理
+      await this._processLoadedFile(file);
+
+      // ファイル名を localStorage に保存
+      localStorage.setItem('ieditweb-last-filename', file.name);
+
+    } catch (error) {
+      if (error.name === 'AbortError') {
+        // ユーザーがキャンセルした場合は何もしない
+        return;
+      }
+      console.error('読み込みエラー:', error);
+      alert('読み込みに失敗しました: ' + error.message);
     }
   }
 
@@ -176,6 +236,7 @@ export class StorageManager {
 
   /**
    * プロジェクトをZIPファイルとして保存します。
+   * File System Access API が利用可能な場合は「名前を付けて保存」ダイアログを表示します。
    */
   async save() {
     try {
@@ -196,14 +257,70 @@ export class StorageManager {
       zip.file('content.md', this._getEditorPlainText());
       zip.file('metadata.json', JSON.stringify(metadata, null, 2));
 
-      // ZIPを生成して保存
+      // ZIPを生成
       const content = await zip.generateAsync({ type: 'blob' });
-      saveAs(content, this.filename);
+
+      // File System Access API が利用可能な場合は「名前を付けて保存」
+      if (this.supportsFileSystemAccess) {
+        await this._saveWithFilePicker(content);
+      } else {
+        // フォールバック: 従来のダウンロード
+        saveAs(content, this.filename);
+      }
 
     } catch (error) {
+      if (error.name === 'AbortError') {
+        // ユーザーがキャンセルした場合は何もしない
+        return;
+      }
       console.error('保存エラー:', error);
       alert('保存に失敗しました: ' + error.message);
     }
+  }
+
+  /**
+   * File System Access API を使用してファイルを保存します。
+   * 前回のファイルハンドルがある場合は上書き保存を試みます。
+   * @private
+   * @param {Blob} blob - 保存するデータ
+   */
+  async _saveWithFilePicker(blob) {
+    const options = {
+      suggestedName: this.filename,
+      types: [{
+        description: 'ZIPファイル',
+        accept: { 'application/zip': ['.zip'] }
+      }]
+    };
+
+    // 前回のファイルハンドルがある場合は上書き保存を試みる
+    if (this.fileHandle) {
+      try {
+        const writable = await this.fileHandle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+        console.log('ファイルを上書き保存しました:', this.filename);
+        return;
+      } catch (e) {
+        // パーミッションエラー等の場合は新規保存ダイアログを表示
+        console.log('上書き保存に失敗、新規保存ダイアログを表示:', e.message);
+      }
+    }
+
+    // 新規保存ダイアログを表示
+    this.fileHandle = await window.showSaveFilePicker(options);
+    const writable = await this.fileHandle.createWritable();
+    await writable.write(blob);
+    await writable.close();
+
+    // タイトルとファイル名を更新
+    const newFilename = this.fileHandle.name;
+    const titleFromFilename = newFilename.replace(/\.zip$/i, '');
+    this.setTitle(titleFromFilename);
+
+    // ファイル名を localStorage に保存
+    localStorage.setItem('ieditweb-last-filename', newFilename);
+    console.log('ファイルを新規保存しました:', newFilename);
   }
 
   /**
@@ -292,6 +409,7 @@ export class StorageManager {
 
   /**
    * ZIPファイルを読み込み、プロジェクトを復元します。
+   * input[type=file] からの読み込み用（フォールバック）
    * @param {Event} e - ファイル入力イベント
    */
   async load(e) {
@@ -299,15 +417,13 @@ export class StorageManager {
     if (!file) return;
 
     this.filename = file.name;
+    this.fileHandle = null; // input[type=file] からの読み込みはハンドルなし
 
     try {
-      const zip = await JSZip.loadAsync(file);
+      await this._processLoadedFile(file);
 
-      // 各コンポーネントを順次復元
-      await this._restoreEditorContent(zip);
-      await this._restoreFlowchartData(zip);
-
-      alert('読み込み完了');
+      // ファイル名を localStorage に保存
+      localStorage.setItem('ieditweb-last-filename', file.name);
 
     } catch (error) {
       console.error('読み込みエラー:', error);
@@ -316,6 +432,21 @@ export class StorageManager {
       // ファイル入力をリセット
       e.target.value = '';
     }
+  }
+
+  /**
+   * 読み込んだファイルを処理します。
+   * @private
+   * @param {File} file - 読み込むファイル
+   */
+  async _processLoadedFile(file) {
+    const zip = await JSZip.loadAsync(file);
+
+    // 各コンポーネントを順次復元
+    await this._restoreEditorContent(zip);
+    await this._restoreFlowchartData(zip);
+
+    alert('読み込み完了');
   }
 
   /**
