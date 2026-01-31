@@ -17,6 +17,7 @@
     <link rel="stylesheet" href="styles/flowchart.css">
     <link rel="stylesheet" href="styles/search.css">
     <link rel="stylesheet" href="styles/settings.css">
+    <link rel="stylesheet" href="styles/color-picker.css">
     <script>
         /**
          * Service Worker登録
@@ -178,6 +179,15 @@
 
             <!-- Editor Area Wrapper (エディタとコメントサイドバー) -->
             <div id="editor-area">
+
+                <!-- Flowchart Toggle Button -->
+                <button id="flowchart-toggle-btn" class="flowchart-toggle-btn" title="折りたたみ">
+                    <svg class="icon" viewBox="0 -960 960 960">
+                        <path
+                            d="m296-224-56-56 240-240 240 240-56 56-184-183-184 183Zm0-240-56-56 240-240 240 240-56 56-184-183-184 183Z" />
+                    </svg>
+                </button>
+
                 <div id="editor-container">
                     <div id="editor" contenteditable="true" spellcheck="false">
                         <h1>ここにタイトルを入力...</h1>
@@ -246,6 +256,12 @@
             </svg>
         </button>
         <div class="separator"></div>
+        <button id="linkBtn" title="リンク">
+            <svg class="icon" viewBox="0 0 24 24">
+                <path
+                    d="M10.59,13.41C11,13.8 11,14.44 10.59,14.83C10.2,15.22 9.56,15.22 9.17,14.83C7.22,12.88 7.22,9.71 9.17,7.76V7.76L12.71,4.22C14.66,2.27 17.83,2.27 19.78,4.22C21.73,6.17 21.73,9.34 19.78,11.29L18.29,12.78C18.3,11.96 18.17,11.14 17.89,10.36L18.36,9.88C19.54,8.71 19.54,6.81 18.36,5.64C17.19,4.46 15.29,4.46 14.12,5.64L10.59,9.17C9.41,10.34 9.41,12.24 10.59,13.41M13.41,9.17C13.8,8.78 14.44,8.78 14.83,9.17C16.78,11.12 16.78,14.29 14.83,16.24V16.24L11.29,19.78C9.34,21.73 6.17,21.73 4.22,19.78C2.27,17.83 2.27,14.66 4.22,12.71L5.71,11.22C5.7,12.04 5.83,12.86 6.11,13.64L5.64,14.12C4.46,15.29 4.46,17.19 5.64,18.36C6.81,19.54 8.71,19.54 9.88,18.36L13.41,14.83C14.59,13.66 14.59,11.76 13.41,10.59C13,10.2 13,9.56 13.41,9.17Z" />
+            </svg>
+        </button>
         <button id="commentBtn" title="コメント">
             <svg class="icon" viewBox="0 -960 960 960">
                 <path
@@ -281,6 +297,38 @@
         <div class="comment-popup-content">
             <div class="comment-popup-text"></div>
             <button class="comment-popup-edit-btn" title="編集">
+                <svg viewBox="0 -960 960 960" width="16" height="16">
+                    <path
+                        d="M200-200h57l391-391-57-57-391 391v57Zm-80 80v-170l528-527q12-11 26.5-17t30.5-6q16 0 31 6t26 18l55 56q12 11 17.5 26t5.5 30q0 16-5.5 30.5T817-647L290-120H120Zm640-584-56-56 56 56Zm-141 85-28-29 57 57-29-28Z" />
+                </svg>
+            </button>
+        </div>
+    </div>
+
+    <!-- Link Panel (リンクパネル) -->
+    <div id="link-panel" class="link-panel hidden">
+        <div class="link-panel-content">
+            <div class="link-panel-field">
+                <label for="link-input">リンク先</label>
+                <input type="text" id="link-input" placeholder="URLまたは見出しを入力..." />
+            </div>
+            <div id="link-heading-list" class="link-heading-list hidden"></div>
+            <div class="link-panel-field">
+                <label for="link-title-input">表示テキスト</label>
+                <input type="text" id="link-title-input" placeholder="表示テキスト（任意）..." />
+            </div>
+            <div class="link-panel-buttons">
+                <button id="link-apply-btn" class="link-btn primary">適用</button>
+                <button id="link-delete-btn" class="link-btn danger">削除</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Link Popup (リンクマウスオーバー時のポップアップ) -->
+    <div id="link-popup" class="link-popup hidden">
+        <div class="link-popup-content">
+            <span class="link-popup-text"></span>
+            <button class="link-popup-edit-btn" title="編集">
                 <svg viewBox="0 -960 960 960" width="16" height="16">
                     <path
                         d="M200-200h57l391-391-57-57-391 391v57Zm-80 80v-170l528-527q12-11 26.5-17t30.5-6q16 0 31 6t26 18l55 56q12 11 17.5 26t5.5 30q0 16-5.5 30.5T817-647L290-120H120Zm640-584-56-56 56 56Zm-141 85-28-29 57 57-29-28Z" />
@@ -425,15 +473,15 @@
             <div class="context-menu-form">
                 <div class="context-menu-row">
                     <label>背景色</label>
-                    <input type="color" id="ctx-shape-bg" value="#ffffff">
+                    <div id="ctx-shape-bg" class="color-swatch" tabindex="0"></div>
                 </div>
                 <div class="context-menu-row">
                     <label>枠線色</label>
-                    <input type="color" id="ctx-shape-border" value="#cbd5e1">
+                    <div id="ctx-shape-border" class="color-swatch" tabindex="0"></div>
                 </div>
                 <div class="context-menu-row">
                     <label>文字色</label>
-                    <input type="color" id="ctx-shape-text" value="#334155">
+                    <div id="ctx-shape-text" class="color-swatch" tabindex="0"></div>
                 </div>
             </div>
         </div>
@@ -459,7 +507,7 @@
                 </div>
                 <div class="context-menu-row">
                     <label>線色</label>
-                    <input type="color" id="ctx-connection-color" value="#94a3b8">
+                    <div id="ctx-connection-color" class="color-swatch" tabindex="0"></div>
                 </div>
                 <div class="context-menu-row">
                     <label>ラベル</label>
@@ -471,6 +519,8 @@
         <div class="context-menu-separator"></div>
         <div class="context-menu-item delete" data-action="delete">削除</div>
     </div>
+
+    <div id="global-color-picker-container" style="position: absolute; display: none; z-index: 10000;"></div>
 
     <script type="module" src="src/main.js?v=2"></script>
 </body>

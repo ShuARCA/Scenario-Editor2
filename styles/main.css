@@ -6,7 +6,7 @@
   --border-color: #e5e7eb;
   --primary-color: #0d9488;
   --primary-hover: #0f766e;
-  --header-height: 50px;
+  --header-height: 40px;
   --sidebar-width: 250px;
 }
 
@@ -126,12 +126,12 @@ body {
 }
 
 #sidebar.collapsed {
-  margin-left: calc(var(--sidebar-width) * -1);
+  margin-left: calc(var(--sidebar-width) * -1 - 2px);
   border-right: none;
 }
 
 .sidebar-section {
-  padding: 16px;
+  padding: 8px;
   overflow-y: auto;
   flex-grow: 1;
 }
@@ -140,8 +140,7 @@ body {
   font-size: 12px;
   text-transform: uppercase;
   color: #9ca3af;
-  margin-top: 0;
-  margin-bottom: 12px;
+  margin: 8px 8px;
   letter-spacing: 0.05em;
 }
 
