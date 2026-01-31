@@ -1,0 +1,227 @@
+:root {
+    --cp-w: 260px;
+    --cp-accent: #3b82f6;
+    --cp-muted: #6b7280;
+    --cp-border: #e6eef8;
+    --cp-radius: 8px;
+    --cp-checker: 8px;
+    --cp-bg: #fff;
+    --cp-text: #0f172a;
+}
+
+.cp-picker {
+    width: var(--cp-w);
+    background: var(--cp-bg);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    border: 1px solid rgba(0, 0, 0, 0.05);
+    border-radius: var(--cp-radius);
+    overflow: hidden;
+    font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+    color: var(--cp-text);
+    user-select: none;
+    z-index: 1000;
+}
+
+.cp-picker * {
+    box-sizing: border-box;
+}
+
+.cp-sv {
+    height: 150px;
+    position: relative;
+    cursor: crosshair;
+    overflow: hidden;
+}
+
+.cp-cursor {
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    border: 2px solid #fff;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.2), 0 2px 4px rgba(0, 0, 0, 0.2);
+    pointer-events: none;
+}
+
+.cp-controls {
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.cp-top {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.cp-preview {
+    width: 36px;
+    height: 36px;
+    border-radius: 6px;
+    position: relative;
+    border: 1px solid var(--cp-border);
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.cp-checker {
+    position: absolute;
+    border-radius: 10px;
+    inset: 0;
+    background-image: linear-gradient(45deg, #d4d6db 25%, transparent 25%), linear-gradient(-45deg, #d4d6db 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #d4d6db 75%), linear-gradient(-45deg, transparent 75%, #d4d6db 75%);
+    background-size: var(--cp-checker) var(--cp-checker);
+}
+
+.cp-preview-fill {
+    position: absolute;
+    inset: 0;
+}
+
+.cp-hex {
+    flex: 1;
+}
+
+.cp-hex-input {
+    width: 100%;
+    padding: 6px 8px;
+    border-radius: 6px;
+    border: 1px solid var(--cp-border);
+    font-family: monospace;
+    font-size: 13px;
+    outline: none;
+    text-transform: uppercase;
+    color: var(--cp-text);
+}
+
+.cp-hex-input:focus {
+    border-color: var(--cp-accent);
+}
+
+.cp-btn {
+    padding: 6px;
+    border-radius: 6px;
+    border: 1px solid var(--cp-border);
+    background: #fff;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--cp-muted);
+}
+
+.cp-btn:hover {
+    background: #f8fafc;
+}
+
+.cp-bar {
+    height: 10px;
+    border-radius: 10px;
+    position: relative;
+    cursor: pointer;
+    margin: 0 5px;
+    /* Handle width/2 approx */
+}
+
+.cp-handle {
+    position: absolute;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 2px solid #fff;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.2);
+    pointer-events: none;
+    z-index: 3;
+}
+
+.cp-alpha-wrap {
+    position: relative;
+    margin-bottom: 2px;
+}
+
+.cp-alpha-grad {
+    position: absolute;
+    inset: 0;
+    border-radius: 10px;
+    z-index: 1;
+}
+
+.cp-range-wrap {
+    height: 0;
+    overflow: hidden;
+}
+
+.cp-alpha-range {
+    width: 100%;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.cp-compact {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.cp-group {
+    display: flex;
+    gap: 4px;
+    flex: 1;
+}
+
+.cp-box {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+}
+
+.cp-value {
+    width: 100%;
+    border-radius: 6px;
+    border: 1px solid var(--cp-border);
+    background: #fff;
+    overflow: hidden;
+}
+
+.cp-value input {
+    width: 100%;
+    border: 0;
+    padding: 4px 0;
+    text-align: center;
+    outline: none;
+    font-size: 11px;
+    color: var(--cp-text);
+    -moz-appearance: textfield;
+    appearance: textfield;
+}
+
+.cp-value input::-webkit-outer-spin-button,
+.cp-value input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.cp-label-small {
+    font-size: 10px;
+    color: var(--cp-muted);
+}
+
+.cp-toggle {
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+}
+
+.cp-toggle:hover {
+    background: #f1f5f9;
+}
