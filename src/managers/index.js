@@ -13,3 +13,4 @@ export { LinkManager } from './LinkManager.js';
 export { ImageManager } from './ImageManager.js';
 export { ColorPickerManager } from './ColorPickerManager.js';
 export { ToolbarManager } from './ToolbarManager.js';
+export { BlockCopyManager } from './BlockCopyManager.js';

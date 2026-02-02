@@ -94,5 +94,24 @@ export const CONFIG = {
     APP: {
         NAME: 'iEditWeb',
         VERSION: '1.0.0'
+    },
+
+    // =====================================================
+    // キーボードショートカット設定
+    // =====================================================
+    /**
+     * ショートカットキー設定
+     * - key: KeyboardEvent.key の値
+     * - ctrlKey, shiftKey, altKey: 修飾キー（デフォルト: false）
+     * - action: アクション識別子
+     * - context: ショートカットが有効なコンテキスト
+     */
+    SHORTCUTS: {
+        OUTLINE: [
+            { key: 'ArrowLeft', ctrlKey: true, action: 'promote', label: '階層を上げる' },
+            { key: 'ArrowRight', ctrlKey: true, action: 'demote', label: '階層を下げる' },
+            { key: 'ArrowUp', ctrlKey: true, action: 'moveUp', label: '上へ移動' },
+            { key: 'ArrowDown', ctrlKey: true, action: 'moveDown', label: '下へ移動' }
+        ]
     }
 };
