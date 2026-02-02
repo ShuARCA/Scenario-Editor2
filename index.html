@@ -110,6 +110,43 @@
         <!-- Outline Icon Picker -->
         <div id="outline-icon-picker" class="hidden"></div>
 
+        <!-- Outline Context Menu -->
+        <div id="outline-context-menu" class="outline-context-menu hidden">
+            <div class="outline-context-menu-item" data-action="promote">
+                <svg class="icon" viewBox="0 -960 960 960">
+                    <path d="M440-240v-368L296-464l-56-56 240-240 240 240-56 56-144-144v368h-80Z" />
+                </svg>
+                <span>階層を上げる</span>
+            </div>
+            <div class="outline-context-menu-item" data-action="demote">
+                <svg class="icon" viewBox="0 -960 960 960">
+                    <path d="M440-720v368l-144-144-56 56 240 240 240-240-56-56-144 144v-368h-80Z" />
+                </svg>
+                <span>階層を下げる</span>
+            </div>
+            <div class="outline-context-menu-separator"></div>
+            <div class="outline-context-menu-item" data-action="moveUp">
+                <svg class="icon" viewBox="0 -960 960 960">
+                    <path d="m296-224-56-56 240-240 240 240-56 56-184-184-184 184Z" />
+                </svg>
+                <span>上へ移動</span>
+            </div>
+            <div class="outline-context-menu-item" data-action="moveDown">
+                <svg class="icon" viewBox="0 -960 960 960">
+                    <path d="M480-344 240-584l56-56 184 184 184-184 56 56-240 240Z" />
+                </svg>
+                <span>下へ移動</span>
+            </div>
+            <div class="outline-context-menu-separator"></div>
+            <div class="outline-context-menu-item" data-action="changeIcon">
+                <svg class="icon" viewBox="0 -960 960 960">
+                    <path
+                        d="M200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h560q33 0 56.5 23.5T840-760v560q0 33-23.5 56.5T760-120H200Zm0-80h560v-560H200v560Zm40-80h480L570-480 450-320l-90-120-120 160Zm-40 80v-560 560Z" />
+                </svg>
+                <span>アイコンを変更</span>
+            </div>
+        </div>
+
         <!-- Main Content -->
         <main id="main-content">
             <!-- Flowchart Area -->

@@ -24,8 +24,10 @@ import {
     LinkManager,
     ImageManager,
     ColorPickerManager,
-    ToolbarManager
+    ToolbarManager,
+    BlockCopyManager
 } from './managers/index.js';
+import { ShortcutManager } from './managers/ShortcutManager.js';
 
 // フローチャートコントローラー
 import { FlowchartApp } from './flowchart/index.js'; // FlowchartAppはindexからエクスポート済み
@@ -52,7 +54,8 @@ document.addEventListener('DOMContentLoaded', () => {
         link: new LinkManager(editorCore),       // EditorCoreはファサードとAPI互換性がない部分があるため注意
         image: new ImageManager(editorCore),     // 特に `init` で `setup...` メソッドを呼んでいる部分など
         colorPicker: new ColorPickerManager(editorCore),
-        toolbar: new ToolbarManager(editorCore)
+        toolbar: new ToolbarManager(editorCore),
+        blockCopy: new BlockCopyManager(editorCore)
     };
 
     /**
@@ -117,6 +120,25 @@ document.addEventListener('DOMContentLoaded', () => {
     editorManagers.toolbar.setupToolbarActions();
     editorManagers.colorPicker.setupColorPicker('textColorBtn', 'textColorPicker', 'foreColor');
     editorManagers.colorPicker.setupColorPicker('highlightBtn', 'highlightPicker', 'hiliteColor');
+    editorManagers.blockCopy.init();
+
+    // 5.5 ショートカットマネージャーのセットアップ
+    const shortcutManager = new ShortcutManager();
+    shortcutManager.registerContext(
+        'outline',
+        shortcutManager.getShortcuts('outline'),
+        (action) => {
+            // コンテキストメニューの対象見出しに対してアクションを実行
+            const targetId = editorManagers.outline.contextMenuTargetId;
+            if (targetId) {
+                editorManagers.outline.executeAction(action, targetId);
+                // メニュー項目の有効/無効状態を更新
+                editorManagers.outline._refreshContextMenuState();
+            }
+        }
+    );
+    // OutlineManagerにショートカットマネージャーへの参照を渡す
+    editorManagers.outline.shortcutManager = shortcutManager;
 
     // 6. コールバック設定（EditorManagerファサードがやっていた役割）
     editorCore.onUpdate(() => {
