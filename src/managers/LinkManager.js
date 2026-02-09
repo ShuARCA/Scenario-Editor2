@@ -90,10 +90,6 @@ export class LinkManager {
             this.linkInput.addEventListener('input', () => {
                 this._filterHeadings(this.linkInput.value);
             });
-
-            this.linkInput.addEventListener('focus', () => {
-                this._filterHeadings(this.linkInput.value);
-            });
         }
 
         if (this.linkTitleInput) {
@@ -340,8 +336,11 @@ export class LinkManager {
             }
         }
 
-        // 見出し候補リストを初期化
-        this._filterHeadings('');
+        // 見出し候補リストを初期化（非表示のまま）
+        if (this.linkHeadingList) {
+            this.linkHeadingList.classList.add('hidden');
+            this.linkHeadingList.innerHTML = '';
+        }
 
         // 位置計算
         const position = this._calculatePanelPosition();

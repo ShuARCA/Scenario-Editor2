@@ -569,9 +569,43 @@ export class FlowchartApp {
 
     /**
      * すべてのシェイプのz-indexを更新します。
+     * 子ノードは親ノードより上に表示されるようにします。
      */
     updateAllZIndexes() {
-        // 必要に応じて実装
+        let zIndex = 1;
+
+        // ルートノード（親を持たないノード）を取得
+        const rootShapes = [];
+        this.shapes.forEach(shape => {
+            if (!shape.parent) {
+                rootShapes.push(shape);
+            }
+        });
+
+        // 再帰的にz-indexを設定（子は親より高いz-indexを持つ）
+        const setZIndexRecursive = (shape, baseZ) => {
+            if (shape.element) {
+                shape.element.style.zIndex = baseZ;
+            }
+
+            let currentZ = baseZ;
+
+            if (shape.children && shape.children.length > 0) {
+                shape.children.forEach(childId => {
+                    const child = this.shapes.get(childId);
+                    if (child) {
+                        currentZ = setZIndexRecursive(child, currentZ + 1);
+                    }
+                });
+            }
+
+            return currentZ;
+        };
+
+        // ルートノードから順に処理
+        rootShapes.forEach(shape => {
+            zIndex = setZIndexRecursive(shape, zIndex) + 1;
+        });
     }
 
     // ========================================

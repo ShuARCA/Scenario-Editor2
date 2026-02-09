@@ -206,8 +206,8 @@ export const ResizableImage = Node.create({
                 };
             }
 
-            // 4隅リサイズハンドルを作成
-            const positions = ['nw', 'ne', 'sw', 'se'];
+            // リサイズハンドルを作成（8方向）
+            const positions = ['nw', 'ne', 'sw', 'se', 'n', 's', 'e', 'w'];
             const handles = [];
 
             positions.forEach(posName => {
@@ -215,21 +215,47 @@ export const ResizableImage = Node.create({
                 handle.className = `resize-handle ${posName}`;
 
                 let isResizing = false;
-                let startX, startWidth;
+                let startX, startY, startWidth, startHeight;
 
                 const onMouseMove = (e) => {
                     if (!isResizing) return;
                     e.preventDefault();
 
-                    let deltaX = e.clientX - startX;
+                    const currentX = e.clientX;
+                    const currentY = e.clientY;
 
-                    // ハンドル位置に応じて計算方向を調整
-                    if (posName === 'nw' || posName === 'sw') {
-                        deltaX = -deltaX;
+                    let deltaX = currentX - startX;
+                    let deltaY = currentY - startY;
+
+                    // 新しい幅
+                    let newWidth = startWidth;
+
+                    // アスペクト比
+                    const aspectRatio = startWidth / startHeight;
+
+                    // ハンドル位置に応じたリサイズ計算
+                    if (['n', 's'].includes(posName)) {
+                        // 上下ハンドルの場合、Y軸の移動量から幅を計算（アスペクト比維持）
+
+                        // 上ハンドルの場合はY移動量が逆
+                        if (posName === 'n') {
+                            deltaY = -deltaY;
+                        }
+
+                        // 高さの変化に応じた幅の変化を計算
+                        const newHeight = Math.max(50 / aspectRatio, startHeight + deltaY);
+                        newWidth = newHeight * aspectRatio;
+
+                    } else {
+                        // 左右を含むハンドルの場合、X軸の移動量を使用
+
+                        // 左側ハンドルの場合は移動量が逆
+                        if (posName.includes('w')) {
+                            deltaX = -deltaX;
+                        }
+
+                        newWidth = Math.max(50, startWidth + deltaX);
                     }
-
-                    // 新しい幅を計算
-                    const newWidth = Math.max(50, startWidth + deltaX);
 
                     // リアルタイムで画像とコンテナのサイズを更新
                     img.style.width = `${newWidth}px`;
@@ -274,7 +300,9 @@ export const ResizableImage = Node.create({
                     isResizing = true;
                     container.classList.add('resizing');
                     startX = e.clientX;
+                    startY = e.clientY;
                     startWidth = img.offsetWidth;
+                    startHeight = img.offsetHeight;
                     document.addEventListener('mousemove', onMouseMove);
                     document.addEventListener('mouseup', onMouseUp);
                 });
@@ -297,41 +325,39 @@ export const ResizableImage = Node.create({
                 container.classList.add('selected');
             });
 
-            // 選択解除
-            const handleDocClick = (e) => {
-                if (!container.contains(e.target)) {
-                    container.classList.remove('selected');
-                }
-            };
-            document.addEventListener('click', handleDocClick);
 
+            // NodeViewの戻り値
             return {
                 dom: container,
+                // ノードの更新
                 update: (updatedNode) => {
-                    if (updatedNode.type.name !== 'image') {
-                        return false;
-                    }
+                    if (updatedNode.type.name !== 'image') return false;
 
-                    // 属性更新
-                    if (img.src !== updatedNode.attrs.src) {
-                        img.src = updatedNode.attrs.src;
-                    }
-                    if (updatedNode.attrs.alt) img.alt = updatedNode.attrs.alt;
-                    if (updatedNode.attrs.title) img.title = updatedNode.attrs.title;
-
-                    // 幅の更新
-                    if (updatedNode.attrs.width) {
+                    // 属性変更の反映
+                    if (updatedNode.attrs.src !== node.attrs.src) img.src = updatedNode.attrs.src;
+                    if (updatedNode.attrs.alt !== node.attrs.alt) img.alt = updatedNode.attrs.alt;
+                    if (updatedNode.attrs.title !== node.attrs.title) img.title = updatedNode.attrs.title;
+                    if (updatedNode.attrs.width !== node.attrs.width) {
                         img.style.width = `${updatedNode.attrs.width}px`;
                         container.style.width = `${updatedNode.attrs.width}px`;
                     }
 
-                    // 配置・floatクラスを更新
                     applyAlignmentClasses(container, updatedNode.attrs);
                     return true;
                 },
+                // ノードが選択された時
+                selectNode: () => {
+                    container.classList.add('selected');
+                    container.classList.add('ProseMirror-selectednode');
+                },
+                // ノードの選択が解除された時
+                deselectNode: () => {
+                    container.classList.remove('selected');
+                    container.classList.remove('ProseMirror-selectednode');
+                },
+                // ノード削除時
                 destroy: () => {
                     handles.forEach(h => h.cleanup());
-                    document.removeEventListener('click', handleDocClick);
                 }
             };
         };

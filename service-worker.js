@@ -13,7 +13,7 @@ const ASSETS = [
   './',
   './index.html',
   './manifest.json',
-  
+
   // JavaScriptモジュール
   './src/main.js',
   './src/editor.js',
@@ -26,18 +26,18 @@ const ASSETS = [
   './src/settings.js',
   './src/eventBus.js',
   './src/config.js',
-  
+
   // スタイルシート
   './styles/main.css',
   './styles/editor.css',
   './styles/flowchart.css',
   './styles/search.css',
   './styles/settings.css',
-  
+
   // ライブラリ
   './assets/lib/jszip.min.js',
   './assets/lib/FileSaver.min.js',
-  
+
   // アイコン
   './icon/icon.png'
 ];
@@ -76,18 +76,35 @@ self.addEventListener('fetch', (event) => {
           // キャッシュにヒットした場合
           return cachedResponse;
         }
-        
+
         // キャッシュにない場合はネットワークから取得
         return fetch(event.request)
           .then((networkResponse) => {
-            // 有効なレスポンスの場合、キャッシュに追加
-            if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
-              const responseToCache = networkResponse.clone();
-              caches.open(CACHE_NAME)
-                .then((cache) => {
-                  cache.put(event.request, responseToCache);
-                });
+            // Check if we received a valid response
+            if (!networkResponse || networkResponse.status !== 200 || networkResponse.type !== 'basic') {
+              return networkResponse;
             }
+
+            // Skip caching for unsupported schemes
+            const url = new URL(event.request.url);
+            if (url.protocol === 'chrome-extension:' || url.protocol === 'chrome:') {
+              return networkResponse;
+            }
+
+            // IMPORTANT: Clone the response. A response is a stream
+            // and because we want the browser to consume the response
+            // as well as the cache consuming the response, we need
+            // to clone it so we have two streams.
+            var responseToCache = networkResponse.clone();
+
+            caches.open(CACHE_NAME)
+              .then(function (cache) {
+                try {
+                  cache.put(event.request, responseToCache);
+                } catch (err) {
+                  console.warn('Failed to cache request:', event.request.url, err);
+                }
+              });
             return networkResponse;
           })
           .catch(() => {

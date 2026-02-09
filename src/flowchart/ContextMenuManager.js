@@ -59,6 +59,7 @@ export class ContextMenuManager {
         this.ctxShapeBg = document.getElementById('ctx-shape-bg');
         this.ctxShapeBorder = document.getElementById('ctx-shape-border');
         this.ctxShapeText = document.getElementById('ctx-shape-text');
+        this.ctxShapeType = document.getElementById('ctx-shape-type');
         this.ctxConnectionStyle = document.getElementById('ctx-connection-style');
         this.ctxConnectionArrow = document.getElementById('ctx-connection-arrow');
         this.ctxConnectionColor = document.getElementById('ctx-connection-color');
@@ -256,6 +257,9 @@ export class ContextMenuManager {
             this._updateSwatch(this.ctxShapeBg, shape.backgroundColor || '#ffffff');
             this._updateSwatch(this.ctxShapeBorder, shape.borderColor || '#cbd5e1');
             this._updateSwatch(this.ctxShapeText, shape.color || '#334155');
+            if (this.ctxShapeType) {
+                this.ctxShapeType.value = shape.type || 'rounded';
+            }
         }
     }
 
@@ -327,6 +331,13 @@ export class ContextMenuManager {
                 });
             });
         }
+
+        // 形状タイプ
+        if (this.ctxShapeType) {
+            this.ctxShapeType.addEventListener('change', (e) => {
+                this._updateShapeStyle('type', e.target.value);
+            });
+        }
     }
 
     /**
@@ -376,7 +387,8 @@ export class ContextMenuManager {
         const shape = this.app.shapes.get(this.selectedShapeForContext);
         if (shape && shape.element) {
             shape[prop] = value;
-            shape.element.style[prop] = value;
+            // ShapeManagerに更新処理を委譲（CSS変数対応など）
+            this.app.updateShapeElement(shape);
         }
     }
 

@@ -204,13 +204,13 @@ export class GroupManager {
 
         const oldWidth = shape.width;
         const oldHeight = shape.height;
+        const oldX = shape.x;
+        const oldY = shape.y;
+
         shape.collapsed = !shape.collapsed;
 
         const toggle = shape.element.querySelector('.group-toggle');
         if (toggle) toggle.textContent = shape.collapsed ? '+' : '-';
-
-        // 子要素の表示/非表示
-        this.setChildrenVisibility(shape, !shape.collapsed);
 
         // サイズ復元または再計算
         if (shape.collapsed) {
@@ -234,15 +234,66 @@ export class GroupManager {
             }
         }
 
-        // レイアウト調整（水平・垂直両方向）
-        const deltaX = shape.width - oldWidth;
-        const deltaY = shape.height - oldHeight;
+        // レイアウト調整（右端・下端の移動量に基づいて移動）
+        const oldRight = oldX + oldWidth;
+        const oldBottom = oldY + oldHeight;
+        const newRight = shape.x + shape.width;
+        const newBottom = shape.y + shape.height;
 
-        if (deltaX !== 0 || deltaY !== 0) {
-            this.adjustLayout(shape, deltaX, deltaY, oldWidth, oldHeight);
+        const moveX = newRight - oldRight;
+        const moveY = newBottom - oldBottom;
+
+        if (moveX !== 0 || moveY !== 0) {
+            this.adjustLayout(shape, moveX, moveY, oldRight, oldBottom);
         }
 
+        // 親階層へのサイズ更新とレイアウト調整の伝播
+        if (shape.parent) {
+            this.updateAncestorsLayout(shape.parent);
+        }
+
+        // 子要素の表示/非表示（レイアウト調整後に実行することで誤衝突を防ぐ）
+        this.setChildrenVisibility(shape, !shape.collapsed);
+
         this.app.drawConnections();
+    }
+
+    /**
+     * 親階層を遡ってサイズ更新とレイアウト調整を行います。
+     * 子ノードの変更（展開など）により親ノードが拡大した場合、
+     * 親ノードの兄弟ノードなども退避させる必要があります。
+     * 
+     * @param {string} startParentId - 開始する親ID
+     */
+    updateAncestorsLayout(startParentId) {
+        let currentId = startParentId;
+
+        while (currentId) {
+            const parent = this.shapes.get(currentId);
+            if (!parent) break;
+
+            const oldWidth = parent.width;
+            const oldHeight = parent.height;
+            const oldX = parent.x;
+            const oldY = parent.y;
+            const oldRight = oldX + oldWidth;
+            const oldBottom = oldY + oldHeight;
+
+            // 親のサイズを更新
+            this.updateParentSize(parent);
+
+            // レイアウト調整
+            const newRight = parent.x + parent.width;
+            const newBottom = parent.y + parent.height;
+            const moveX = newRight - oldRight;
+            const moveY = newBottom - oldBottom;
+
+            if (moveX !== 0 || moveY !== 0) {
+                this.adjustLayout(parent, moveX, moveY, oldRight, oldBottom);
+            }
+
+            currentId = parent.parent;
+        }
     }
 
     /**
@@ -338,69 +389,55 @@ export class GroupManager {
 
     /**
      * グループの展開/折りたたみに伴うレイアウト調整を行います。
-     * 他のノードが重ならないように移動させます。
+     * 
+     * 仕様:
+     * - 移動対象: ソースノードの操作前の右下座標より右または下に左上座標があるノード（境界含む）
+     * - 移動量: 
+     *   - 右にだけあるノード → X だけ移動
+     *   - 下にだけあるノード → Y だけ移動
+     *   - 右かつ下にあるノード → X と Y 両方移動
+     * 
+     * @param {Object} sourceShape - 展開/折りたたみを行ったシェイプ
+     * @param {number} moveX - 右端の移動量
+     * @param {number} moveY - 下端の移動量
+     * @param {number} oldRight - 操作前の右端座標
+     * @param {number} oldBottom - 操作前の下端座標
      */
-    adjustLayout(sourceShape, deltaX, deltaY, oldWidth, oldHeight) {
-        const checkWidth = oldWidth ?? sourceShape.width;
-        const checkHeight = oldHeight ?? sourceShape.height;
-
-        const oldRight = sourceShape.x + checkWidth;
-        const oldBottom = sourceShape.y + checkHeight;
-        const newRight = sourceShape.x + sourceShape.width;
-        const newBottom = sourceShape.y + sourceShape.height;
-
+    adjustLayout(sourceShape, moveX, moveY, oldRight, oldBottom) {
         const sourceParentId = sourceShape.parent;
 
-        const effectiveDeltaX = this.calculateEffectiveDelta(
-            deltaX, sourceShape, 'x', oldRight, newRight, sourceParentId
-        );
-        const effectiveDeltaY = this.calculateEffectiveDelta(
-            deltaY, sourceShape, 'y', oldBottom, newBottom, sourceParentId
-        );
-
+        // 移動対象のノードを特定して移動
         this.shapes.forEach(shape => {
+            // 自分自身は除外
             if (shape.id === sourceShape.id) return;
+            // 自分の子孫は除外
             if (this.isDescendant(sourceShape.id, shape.id)) return;
+            // 同じ階層のノードのみ対象
             if (!this.isSameLevel(shape, sourceParentId)) return;
 
-            let dx = 0;
-            let dy = 0;
+            // 左上座標がソースの操作前の右下より右にあるか
+            const isRight = shape.x >= oldRight;
+            // 左上座標がソースの操作前の右下より下にあるか
+            const isBelow = shape.y >= oldBottom;
 
-            if (effectiveDeltaX !== 0) {
-                if (deltaX > 0) {
-                    const shapeEnd = shape.x + shape.width;
-                    if (shapeEnd > oldRight) {
-                        dx = effectiveDeltaX;
-                    }
-                } else {
-                    if (shape.x >= oldRight) {
-                        dx = effectiveDeltaX;
-                    }
-                }
-            }
+            // 移動対象でない場合はスキップ
+            if (!isRight && !isBelow) return;
 
-            if (effectiveDeltaY !== 0) {
-                if (deltaY > 0) {
-                    const shapeEnd = shape.y + shape.height;
-                    if (shapeEnd > oldBottom) {
-                        dy = effectiveDeltaY;
-                    }
-                } else {
-                    if (shape.y >= oldBottom) {
-                        dy = effectiveDeltaY;
-                    }
-                }
-            }
+            // 移動量を計算
+            const dx = isRight ? moveX : 0;
+            const dy = isBelow ? moveY : 0;
 
-            if (dx !== 0 || dy !== 0) {
-                this.moveShape(shape, dx, dy);
-            }
+            this.moveShape(shape, dx, dy);
         });
     }
 
     /**
      * シェイプを移動させます（再帰的）。
      * ShapeManagerのmoveShapeと重複しますが、GroupManager内で完結させるため実装します。
+     * 
+     * @param {Object} shape - 移動するシェイプ
+     * @param {number} dx - X方向の移動量
+     * @param {number} dy - Y方向の移動量
      */
     moveShape(shape, dx, dy) {
         shape.x += dx;
@@ -411,6 +448,7 @@ export class GroupManager {
             shape.element.style.top = `${shape.y}px`;
         }
 
+        // 子要素も再帰的に移動
         if (shape.children) {
             shape.children.forEach(childId => {
                 const child = this.shapes.get(childId);
@@ -421,74 +459,18 @@ export class GroupManager {
         }
     }
 
-    calculateEffectiveDelta(delta, sourceShape, axis, oldEdge, newEdge, sourceParentId) {
-        if (delta < 0) {
-            const blockingNode = this.findBlockingExpandedNode(
-                newEdge, oldEdge, axis, sourceShape.id, sourceParentId
-            );
-            return this.calculateAdjustedDeltaForCollapse(delta, blockingNode, oldEdge);
-        } else if (delta > 0) {
-            const hasOverlap = this.checkExpandOverlap(sourceShape, axis, oldEdge);
-            return hasOverlap ? delta : 0;
-        }
-        return 0;
-    }
-
+    /**
+     * 2つのシェイプが同じ階層にあるか判定します。
+     * 
+     * @param {Object} shape - 判定対象のシェイプ
+     * @param {string|null} sourceParentId - ソースシェイプの親ID
+     * @returns {boolean}
+     */
     isSameLevel(shape, sourceParentId) {
         if (sourceParentId) {
             return shape.parent === sourceParentId;
         } else {
             return !shape.parent;
-        }
-    }
-
-    findBlockingExpandedNode(newEdge, oldEdge, axis, sourceId, sourceParentId) {
-        for (const [id, shape] of this.shapes) {
-            if (id === sourceId) continue;
-            if (!shape.children || shape.children.length === 0) continue;
-            if (shape.collapsed) continue;
-            if (this.isDescendant(sourceId, id)) continue;
-            if (!this.isSameLevel(shape, sourceParentId)) continue;
-
-            const { start, end } = this.getShapeEdge(shape, axis);
-
-            if (end > newEdge && start < oldEdge) {
-                return { shapeStart: start, shapeEnd: end };
-            }
-        }
-        return null;
-    }
-
-    calculateAdjustedDeltaForCollapse(delta, blockingNode, oldEdge) {
-        if (!blockingNode) {
-            return delta;
-        }
-        const adjustedDelta = blockingNode.shapeEnd - oldEdge;
-        return (adjustedDelta >= 0) ? 0 : adjustedDelta;
-    }
-
-    checkExpandOverlap(sourceShape, axis, oldEdge) {
-        const newEdge = this.getShapeEdge(sourceShape, axis).end;
-
-        for (const [id, shape] of this.shapes) {
-            if (id === sourceShape.id) continue;
-            if (this.isDescendant(sourceShape.id, id)) continue;
-            if (shape.parent) continue;
-
-            const { start, end } = this.getShapeEdge(shape, axis);
-
-            if (end > oldEdge && start < newEdge) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    getShapeEdge(shape, axis) {
-        if (axis === 'x') {
-            return { start: shape.x, end: shape.x + shape.width };
-        } else {
-            return { start: shape.y, end: shape.y + shape.height };
         }
     }
 }
