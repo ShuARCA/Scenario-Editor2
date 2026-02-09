@@ -13,6 +13,7 @@ import { Comment } from '../extensions/comment.js';
 import { Link, isValidUrl } from '../extensions/link.js'; // isValidUrlをインポート
 import { HeadingWithId } from '../extensions/headingWithId.js';
 import { ResizableImage } from '../extensions/resizableImage.js';
+import { BoxExtension } from '../extensions/BoxExtension.js'; // Import custom box extension
 import { Sanitizer } from '../utils/Sanitizer.js';
 import { CONFIG } from './Config.js';
 import { debounce } from '../utils/helpers.js';
@@ -23,7 +24,9 @@ import {
     Underline,
     TextStyle,
     Color,
-    Highlight
+    Highlight,
+    TaskList,
+    TaskItem
 } from 'tiptap';
 
 /**
@@ -123,13 +126,19 @@ export class EditorCore {
         return [
             StarterKit.configure({
                 heading: false,
-                image: false
+                image: false,
+                codeBlock: false // Disable default codeBlock
             }),
             HeadingWithId,
             Ruby,
             Comment,
             Link,
             ResizableImage,
+            BoxExtension, // Add custom box
+            TaskList,
+            TaskItem.configure({
+                nested: true,
+            }),
             TextStyle,
             Color,
             Underline.extend({
@@ -221,7 +230,9 @@ export class EditorCore {
             'underline': () => this.tiptap.chain().focus().toggleUnderline().run(),
             'strike': () => this.tiptap.chain().focus().toggleStrike().run(),
             'insertUnorderedList': () => this.tiptap.chain().focus().toggleBulletList().run(),
-            'insertOrderedList': () => this.tiptap.chain().focus().toggleOrderedList().run()
+            'insertUnorderedList': () => this.tiptap.chain().focus().toggleBulletList().run(),
+            'insertOrderedList': () => this.tiptap.chain().focus().toggleOrderedList().run(),
+            'insertTaskList': () => this.tiptap.chain().focus().toggleTaskList().run()
         };
 
         if (commandMap[style]) {
@@ -288,13 +299,13 @@ export class EditorCore {
     }
 
     /**
-     * コードブロックを挿入/解除します。
+     * ボックスを挿入/解除します。
      * 
      * @returns {boolean} 成功したかどうか
      */
-    toggleCodeBlock() {
+    toggleBox() {
         if (!this.tiptap) return false;
-        return this.tiptap.chain().focus().toggleCodeBlock().run();
+        return this.tiptap.chain().focus().toggleBox().run();
     }
 
     /**
@@ -305,6 +316,16 @@ export class EditorCore {
     toggleBlockquote() {
         if (!this.tiptap) return false;
         return this.tiptap.chain().focus().toggleBlockquote().run();
+    }
+
+    /**
+     * タスクリストを挿入/解除します。
+     * 
+     * @returns {boolean} 成功したかどうか
+     */
+    toggleTaskList() {
+        if (!this.tiptap) return false;
+        return this.tiptap.chain().focus().toggleTaskList().run();
     }
 
     // =====================================================

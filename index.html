@@ -253,14 +253,39 @@
                     d="M5,21H19V19H5V21M12,17A6,6 0 0,0 18,11V3H15.5V11A3.5,3.5 0 0,1 12,14.5A3.5,3.5 0 0,1 8.5,11V3H6V11A6,6 0 0,0 12,17Z" />
             </svg></button>
         <div class="separator"></div>
-        <button data-cmd="insertUnorderedList" title="箇条書き"><svg class="icon" viewBox="0 0 24 24">
-                <path
-                    d="M7,5H21V7H7V5M7,13V11H21V13H7M4,4.5A1.5,1.5 0 0,1 5.5,6A1.5,1.5 0 0,1 4,7.5A1.5,1.5 0 0,1 2.5,6A1.5,1.5 0 0,1 4,4.5M4,10.5A1.5,1.5 0 0,1 5.5,12A1.5,1.5 0 0,1 4,13.5A1.5,1.5 0 0,1 2.5,12A1.5,1.5 0 0,1 4,10.5M7,19V17H21V19H7M4,16.5A1.5,1.5 0 0,1 5.5,18A1.5,1.5 0 0,1 4,19.5A1.5,1.5 0 0,1 2.5,18A1.5,1.5 0 0,1 4,16.5Z" />
-            </svg></button>
-        <button data-cmd="insertOrderedList" title="番号付きリスト"><svg class="icon" viewBox="0 0 24 24">
-                <path
-                    d="M7,13V11H21V13H7M7,19V17H21V19H7M7,7V5H21V7H7M3,8V5H2V4H4V8H3M2,17V16H5V20H2V19H4V18.5H3V17.5H4V17H2M4.25,10A0.75,0.75 0 0,1 5,10.75C5,10.95 4.92,11.14 4.79,11.27L3.12,13H5V14H2V13.08L4,11H2V10H4.25Z" />
-            </svg></button>
+        <!-- リストドロップダウン -->
+        <div class="dropdown-container" id="listDropdown">
+            <button class="dropdown-trigger" title="リスト">
+                <svg class="icon" viewBox="0 0 24 24">
+                    <path
+                        d="M7,5H21V7H7V5M7,13V11H21V13H7M4,4.5A1.5,1.5 0 0,1 5.5,6A1.5,1.5 0 0,1 4,7.5A1.5,1.5 0 0,1 2.5,6A1.5,1.5 0 0,1 4,4.5M4,10.5A1.5,1.5 0 0,1 5.5,12A1.5,1.5 0 0,1 4,13.5A1.5,1.5 0 0,1 2.5,12A1.5,1.5 0 0,1 4,10.5M7,19V17H21V19H7M4,16.5A1.5,1.5 0 0,1 5.5,18A1.5,1.5 0 0,1 4,19.5A1.5,1.5 0 0,1 2.5,18A1.5,1.5 0 0,1 4,16.5Z" />
+                </svg>
+            </button>
+            <div class="dropdown-menu">
+                <button class="dropdown-item" data-cmd="insertUnorderedList">
+                    <svg class="icon" viewBox="0 0 24 24">
+                        <path
+                            d="M7,5H21V7H7V5M7,13V11H21V13H7M4,4.5A1.5,1.5 0 0,1 5.5,6A1.5,1.5 0 0,1 4,7.5A1.5,1.5 0 0,1 2.5,6A1.5,1.5 0 0,1 4,4.5M4,10.5A1.5,1.5 0 0,1 5.5,12A1.5,1.5 0 0,1 4,13.5A1.5,1.5 0 0,1 2.5,12A1.5,1.5 0 0,1 4,10.5M7,19V17H21V19H7M4,16.5A1.5,1.5 0 0,1 5.5,18A1.5,1.5 0 0,1 4,19.5A1.5,1.5 0 0,1 2.5,18A1.5,1.5 0 0,1 4,16.5Z" />
+                    </svg>
+                    <span>箇条書き</span>
+                </button>
+                <button class="dropdown-item" data-cmd="insertOrderedList">
+                    <svg class="icon" viewBox="0 0 24 24">
+                        <path
+                            d="M7,13V11H21V13H7M7,19V17H21V19H7M7,7V5H21V7H7M3,8V5H2V4H4V8H3M2,17V16H5V20H2V19H4V18.5H3V17.5H4V17H2M4.25,10A0.75,0.75 0 0,1 5,10.75C5,10.95 4.92,11.14 4.79,11.27L3.12,13H5V14H2V13.08L4,11H2V10H4.25Z" />
+                    </svg>
+                    <span>番号付きリスト</span>
+                </button>
+                <button class="dropdown-item" data-cmd="insertTaskList">
+                    <svg class="icon" xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960"
+                        width="24px" fill="#1f1f1f">
+                        <path
+                            d="M222-200 80-342l56-56 85 85 170-170 56 57-225 226Zm0-320L80-662l56-56 85 85 170-170 56 57-225 226Zm298 240v-80h360v80H520Zm0-320v-80h360v80H520Z" />
+                    </svg>
+                    <span>タスクリスト</span>
+                </button>
+            </div>
+        </div>
         <div class="separator"></div>
         <select id="formatBlockSelect">
             <option value="p">テキスト</option>
@@ -269,30 +294,25 @@
             <option value="h3">見出し 3</option>
             <option value="h4">見出し 4</option>
             <option value="blockquote">引用</option>
+            <option value="box">ボックス</option>
         </select>
         <div class="separator"></div>
         <button id="textColorBtn" title="文字色">
-            <svg class="icon" viewBox="0 0 24 24">
-                <path d="M9.62,12L12,5.67L14.37,12M11,3L5.5,17H7.75L8.87,14H15.12L16.25,17H18.5L13,3H11Z" />
+            <svg class="icon" viewBox="0 -960 960 960">
+                <path
+                    d="M80 0v-160h800V0H80Zm140-280 210-560h100l210 560h-96l-50-144H368l-52 144h-96Zm176-224h168l-82-232h-4l-82 232Z" />
             </svg>
         </button>
         <button id="highlightBtn" title="背景色">
-            <svg class="icon" viewBox="0 0 24 24">
+            <svg class="icon" viewBox="0 -960 960 960">
                 <path
-                    d="M18.5,1.15C17.97,1.15 17.46,1.34 17.07,1.73L11.26,7.55L16.91,13.2L22.73,7.39C23.5,6.61 23.5,5.35 22.73,4.56L19.89,1.73C19.5,1.34 19,1.15 18.5,1.15M10.3,8.5L4.34,14.46C3.56,15.24 3.56,16.5 4.36,17.31C3.14,18.54 1.9,19.77 0.67,21H6.33L7.19,20.14C7.97,20.9 9.22,20.89 10,20.12L15.95,14.16" />
+                    d="M544-400 440-504 240-304l104 104 200-200Zm-47-161 104 104 199-199-104-104-199 199Zm-84-28 216 216-229 229q-24 24-56 24t-56-24l-2-2-26 26H60l126-126-2-2q-24-24-24-56t24-56l229-229Zm0 0 227-227q24-24 56-24t56 24l104 104q24 24 24 56t-24 56L629-373 413-589Z" />
             </svg>
         </button>
         <div class="separator"></div>
         <button id="rubyBtn" title="ルビ">
             <span style="font-weight: bold; font-size: 12px;">ルビ</span>
         </button>
-        <button id="codeBtn" title="コード">
-            <svg class="icon" viewBox="0 0 24 24">
-                <path
-                    d="M14.6,16.6L19.2,12L14.6,7.4L16,6L22,12L16,18L14.6,16.6M9.4,16.6L4.8,12L9.4,7.4L8,6L2,12L8,18L9.4,16.6Z" />
-            </svg>
-        </button>
-        <div class="separator"></div>
         <button id="linkBtn" title="リンク">
             <svg class="icon" viewBox="0 0 24 24">
                 <path
@@ -515,6 +535,16 @@
                 <div class="context-menu-row">
                     <label>枠線色</label>
                     <div id="ctx-shape-border" class="color-swatch" tabindex="0"></div>
+                </div>
+                <div class="context-menu-row">
+                    <label>形状</label>
+                    <select id="ctx-shape-type">
+                        <option value="rounded">角丸</option>
+                        <option value="rectangle">四角</option>
+                        <option value="circle">円</option>
+                        <option value="diamond">ひし形</option>
+                        <option value="underline">下線</option>
+                    </select>
                 </div>
                 <div class="context-menu-row">
                     <label>文字色</label>

@@ -63,10 +63,25 @@ export class ShapeManager {
         el.style.width = `${shapeData.width}px`;
         el.style.height = `${shapeData.height}px`;
 
+        // SVG背景（ひし形用）
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.setAttribute('class', 'shape-bg-svg');
+        svg.setAttribute('viewBox', '0 0 100 100');
+        svg.setAttribute('preserveAspectRatio', 'none');
+
+        const polygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+        polygon.setAttribute('class', 'shape-bg-polygon');
+        polygon.setAttribute('points', '0,50 50,0 100,50 50,100');
+        svg.appendChild(polygon);
+        el.appendChild(svg); // テキストの後ろ、接続ポイントの前くらいが良いが、z-indexで制御しているのでappendChildでOK
+
         // スタイルの適用
-        if (shapeData.backgroundColor) el.style.backgroundColor = shapeData.backgroundColor;
-        if (shapeData.borderColor) el.style.borderColor = shapeData.borderColor;
-        if (shapeData.color) el.style.color = shapeData.color;
+        if (shapeData.backgroundColor) el.style.setProperty('--shape-bg', shapeData.backgroundColor);
+        if (shapeData.borderColor) el.style.setProperty('--shape-border-color', shapeData.borderColor);
+        if (shapeData.color) el.style.setProperty('--shape-text-color', shapeData.color);
+
+        // 形状タイプ
+        el.dataset.shape = shapeData.type || 'rounded';
 
         // 接続ポイントの追加
         ['top', 'bottom', 'left', 'right'].forEach(pos => {
@@ -77,7 +92,7 @@ export class ShapeManager {
         });
 
         // リサイズハンドル
-        ['nw', 'ne', 'sw', 'se'].forEach(pos => {
+        ['nw', 'ne', 'sw', 'se', 'n', 's', 'e', 'w'].forEach(pos => {
             const handle = document.createElement('div');
             handle.className = `resize-handle ${pos}`;
             handle.dataset.pos = pos;
@@ -99,6 +114,7 @@ export class ShapeManager {
         const shape = {
             id: id,
             text: options.text || '新規ノード',
+            type: options.type || 'rounded',
             x: options.x ?? CONFIG.FLOWCHART.LAYOUT.START_X,
             y: options.y ?? CONFIG.FLOWCHART.LAYOUT.START_Y,
             width: options.width ?? CONFIG.FLOWCHART.SHAPE.WIDTH,
@@ -133,6 +149,16 @@ export class ShapeManager {
             shapeData.element.insertBefore(textEl, shapeData.element.firstChild);
         }
         textEl.textContent = shapeData.text;
+
+        // スタイルの更新
+        if (shapeData.backgroundColor) shapeData.element.style.setProperty('--shape-bg', shapeData.backgroundColor);
+        if (shapeData.borderColor) shapeData.element.style.setProperty('--shape-border-color', shapeData.borderColor);
+        if (shapeData.color) shapeData.element.style.setProperty('--shape-text-color', shapeData.color);
+
+        // 形状タイプの更新
+        if (shapeData.type) {
+            shapeData.element.dataset.shape = shapeData.type;
+        }
     }
 
     /**
@@ -282,11 +308,49 @@ export class ShapeManager {
         const mouseX = (e.clientX - canvasRect.left + this.app.canvas.scrollLeft) / zoomLevel;
         const mouseY = (e.clientY - canvasRect.top + this.app.canvas.scrollTop) / zoomLevel;
 
-        shape.x = Math.max(0, mouseX - this.dragOffset.x);
-        shape.y = Math.max(0, mouseY - this.dragOffset.y);
+        const newX = Math.max(0, mouseX - this.dragOffset.x);
+        const newY = Math.max(0, mouseY - this.dragOffset.y);
 
+        // 親ノードの移動量を計算
+        const deltaX = newX - shape.x;
+        const deltaY = newY - shape.y;
+
+        // 親ノードの位置を更新
+        shape.x = newX;
+        shape.y = newY;
         this.updateShapePosition(shape);
+
+        // 子ノードも追従させる
+        if (shape.children && shape.children.length > 0) {
+            this.moveChildrenRecursive(shape, deltaX, deltaY);
+        }
+
         this.app.drawConnections();
+    }
+
+    /**
+     * 子ノードを再帰的に移動します。
+     * 
+     * @param {Object} parentShape - 親シェイプ
+     * @param {number} deltaX - X方向の移動量
+     * @param {number} deltaY - Y方向の移動量
+     */
+    moveChildrenRecursive(parentShape, deltaX, deltaY) {
+        if (!parentShape.children) return;
+
+        parentShape.children.forEach(childId => {
+            const child = this.app.shapes.get(childId);
+            if (child) {
+                child.x += deltaX;
+                child.y += deltaY;
+                this.updateShapePosition(child);
+
+                // 孫ノードも再帰的に移動
+                if (child.children && child.children.length > 0) {
+                    this.moveChildrenRecursive(child, deltaX, deltaY);
+                }
+            }
+        });
     }
 
     /**

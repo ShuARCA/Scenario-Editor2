@@ -68,10 +68,106 @@ export class ImageManager {
 
         // 削除ボタン
         if (this.deleteImageBtn) {
-            this.deleteImageBtn.addEventListener('click', (e) => {
-                e.preventDefault();
+            this.deleteImageBtn.addEventListener('click', () => {
                 this._deleteImage();
             });
+        }
+
+        // エディタ内の右クリックイベント設定
+        this._setupEditorRightClick();
+
+        // 外部クリックイベント設定（メニュー外クリック時の閉じる処理）
+        this._setupOutsideClickListener();
+    }
+
+    /**
+     * エディタ内の右クリックイベントを設定します。
+     * 画像を右クリックした際に選択状態にし、ツールバーを表示します。
+     * @private
+     */
+    _setupEditorRightClick() {
+        // エディタコンテナの取得（ファサード経由または直接ID指定）
+        const editorElement = this.editor.editorContainer || document.getElementById('editor');
+        if (!editorElement) return;
+
+        editorElement.addEventListener('contextmenu', (e) => {
+            const target = e.target;
+            // 画像またはリサイズコンテナ内の画像を右クリックした場合
+            if (target.tagName === 'IMG' && target.closest('.resizable-container')) {
+                e.preventDefault(); // ブラウザ標準のコンテキストメニューを抑制
+                e.stopPropagation();
+
+                // 画像を選択状態にする
+                this._selectImageByElement(target);
+
+                // 選択状態の更新イベントは非同期で発生する可能性があるため
+                // 直後にツールバーの表示更新を試みる
+                setTimeout(() => {
+                    this.showImageToolbar();
+                }, 10);
+            }
+        });
+    }
+
+    /**
+     * 画像またはツールバー以外をクリックした際の処理を設定します。
+     * @private
+     */
+    _setupOutsideClickListener() {
+        document.addEventListener('click', (e) => {
+            // エディタが存在しない場合は何もしない
+            if (!this.editor.tiptap) return;
+
+            const target = e.target;
+
+            // クリックされた要素がどこにあるか判定
+            const isInsideToolbar = this.imageToolbar && this.imageToolbar.contains(target);
+            const isInsideImage = target.closest('.resizable-container');
+
+            // ツールバーでも画像でもない場所がクリックされた場合
+            if (!isInsideToolbar && !isInsideImage) {
+                // 画像が選択されているか確認
+                if (this.isImageSelected()) {
+                    // 画像の選択状態を解除（カーソル位置を選択開始位置に戻す＝テキスト選択状態にする）
+                    // これによりNodeSelectionが解除され、NodeViewのdeselectNodeが発火して.selectedクラスが消える
+                    const { from } = this.editor.tiptap.state.selection;
+                    this.editor.tiptap.commands.setTextSelection(from);
+
+                    // ツールバーを隠す
+                    this.hideImageToolbar();
+                } else {
+                    // 画像が選択されていなくても（何らかの理由で）ツールバーが出ていたら隠す
+                    if (this.imageToolbar && !this.imageToolbar.classList.contains('hidden')) {
+                        this.hideImageToolbar();
+                    }
+                }
+            }
+        });
+    }
+
+    /**
+     * DOM要素から画像を選択状態にします。
+     * @param {HTMLElement} imgElement 
+     * @private
+     */
+    _selectImageByElement(imgElement) {
+        if (!this.editor.tiptap) return;
+
+        // TiptapのViewからDOM位置に対応するドキュメント位置を取得
+        // closest('.resizable-container') でコンテナを取得し、そこから位置を探るのが確実
+        const container = imgElement.closest('.resizable-container');
+        if (!container) return;
+
+        try {
+            // DOM要素の位置を取得
+            const pos = this.editor.tiptap.view.posAtDOM(container, 0);
+
+            if (pos !== null && pos !== undefined) {
+                // その位置のノードを選択状態にする
+                this.editor.tiptap.commands.setNodeSelection(pos);
+            }
+        } catch (error) {
+            console.warn('Image selection failed:', error);
         }
     }
 
@@ -146,35 +242,54 @@ export class ImageManager {
      * 画像ツールバーを表示します。
      */
     showImageToolbar() {
-        if (!this.imageToolbar || !this.editor.tiptap) return;
+        if (!this.editor.tiptap || !this.imageToolbar) return;
 
         const imageAttrs = this._getSelectedImageAttrs();
         if (!imageAttrs) return;
 
-        // DOM内の選択された画像要素を探す
-        const editorElement = this.editor.editorContainer?.querySelector('.tiptap');
-        const selectedImage = editorElement?.querySelector('.image-container.selected img');
+        this._updateImageToolbarState(imageAttrs); // 状態更新
 
-        if (!selectedImage) return;
+        // 選択された画像要素（のラッパー）を見つける
+        // TiptapのNodeSelectionからDOM要素を特定するのは少し難しいが、
+        // .resizable-container.selected を探すのが手っ取り早い
+        const selectedContainer = this.editor.editorContainer.querySelector('.resizable-container.selected');
 
-        const rect = selectedImage.getBoundingClientRect();
-        const toolbarHeight = 40;
-
-        // 画像の上に配置
-        this.imageToolbar.style.top = `${rect.top - toolbarHeight - 8 + window.scrollY}px`;
-        this.imageToolbar.style.left = `${rect.left + window.scrollX}px`;
-        this.imageToolbar.classList.remove('hidden');
-
-        this._updateImageToolbarState(imageAttrs);
+        if (selectedContainer) {
+            this.imageToolbar.classList.remove('hidden');
+            this._positionImageToolbar(selectedContainer);
+        }
     }
 
     /**
      * 画像ツールバーを非表示にします。
+     * @private
      */
     hideImageToolbar() {
+        this._hideImageToolbar();
+    }
+
+    /**
+     * 画像ツールバーを非表示にします（内部用）。
+     * @private
+     */
+    _hideImageToolbar() {
         if (this.imageToolbar) {
             this.imageToolbar.classList.add('hidden');
         }
+    }
+
+    /**
+     * ツールバーの位置を調整します。
+     * @param {HTMLElement} selectedContainer - 選択された画像を含むコンテナ要素
+     * @private
+     */
+    _positionImageToolbar(selectedContainer) {
+        const rect = selectedContainer.getBoundingClientRect();
+        const toolbarHeight = 40; // ツールバーの高さ（CSSで定義されていると仮定）
+
+        // 画像の上に配置
+        this.imageToolbar.style.top = `${rect.top - toolbarHeight - 8 + window.scrollY}px`;
+        this.imageToolbar.style.left = `${rect.left + window.scrollX}px`;
     }
 
     // =====================================================
@@ -277,7 +392,28 @@ export class ImageManager {
     _deleteImage() {
         if (!this.editor.tiptap) return;
 
-        this.editor.tiptap.chain().focus().deleteSelection().run();
+        // まず、現在の選択範囲が画像を含んでいるか確認
+        let isImageSelected = this.isImageSelected();
+
+        // 選択されていない場合、DOM上の選択状態からリカバリを試みる
+        if (!isImageSelected) {
+            const selectedContainer = this.editor.editorContainer.querySelector('.resizable-container.selected');
+            if (selectedContainer) {
+                const img = selectedContainer.querySelector('img');
+                if (img) {
+                    this._selectImageByElement(img);
+                    isImageSelected = true;
+                }
+            }
+        }
+
+        // 削除実行
+        // フォーカスを確実に戻してから削除コマンドを実行
+        this.editor.tiptap.chain()
+            .focus()
+            .deleteSelection()
+            .run();
+
         this.hideImageToolbar();
     }
 

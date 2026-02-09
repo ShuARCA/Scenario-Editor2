@@ -207,8 +207,6 @@
 
 .shape {
     position: absolute;
-    background-color: var(--surface-color);
-    border: 2px solid var(--flowchart-grid-color);
     border-radius: 8px;
     padding: 4px 24px;
     min-width: 100px;
@@ -218,7 +216,16 @@
     user-select: none;
     font-size: 14px;
     font-weight: 500;
-    color: var(--flowchart-text-color);
+
+    /* Defaults */
+    --shape-bg: var(--surface-color);
+    --shape-border-color: var(--flowchart-grid-color);
+    --shape-text-color: var(--flowchart-text-color);
+
+    background-color: var(--shape-bg);
+    border: 2px solid var(--shape-border-color);
+    color: var(--shape-text-color);
+
     transition: box-shadow 0.2s, border-color 0.2s;
     z-index: 10;
     display: flex;
@@ -239,8 +246,76 @@
 .shape:hover,
 .shape.selected {
     border-color: var(--primary-color);
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-color) 50%, transparent);
+    box-shadow: 0 0 3px color-mix(in srgb, var(--primary-color) 50%, transparent);
 }
+
+/* ============================================
+   シェイプ形状バリエーション
+   ============================================ */
+.shape[data-shape="rectangle"] {
+    border-radius: 0;
+}
+
+.shape[data-shape="circle"] {
+    border-radius: 50%;
+}
+
+.shape[data-shape="underline"] {
+    border: none;
+    border-bottom: 2px solid var(--shape-border-color);
+    border-radius: 0;
+    box-shadow: none;
+}
+
+.shape[data-shape="underline"]:hover,
+.shape[data-shape="underline"].selected {
+    border-bottom: 2px solid var(--primary-color);
+    box-shadow: 0 0 3px color-mix(in srgb, var(--primary-color) 50%, transparent);
+}
+
+.shape[data-shape="diamond"] {
+    background-color: transparent;
+    border: none;
+    box-shadow: none;
+}
+
+/* ひし形(Diamond)用のSVGオーバーレイ */
+.shape-bg-svg {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: -1;
+    display: none;
+    overflow: visible;
+}
+
+.shape[data-shape="diamond"] .shape-bg-svg {
+    display: block;
+}
+
+.shape-bg-polygon {
+    fill: var(--shape-bg);
+    stroke: var(--shape-border-color);
+    stroke-width: 2px;
+    vector-effect: non-scaling-stroke;
+}
+
+/* ダイヤモンド選択時のスタイル調整 */
+.shape[data-shape="diamond"].selected .shape-bg-polygon,
+.shape[data-shape="diamond"]:hover .shape-bg-polygon {
+    stroke: var(--primary-color);
+    filter: drop-shadow(0 0 3px color-mix(in srgb, var(--primary-color) 50%, transparent));
+}
+
+.shape[data-shape="diamond"].selected,
+.shape[data-shape="diamond"]:hover {
+    box-shadow: none;
+    border-color: transparent;
+}
+
 
 /* ============================================
    グループ化スタイル
@@ -514,7 +589,7 @@
     height: 8px;
     background-color: var(--surface-color);
     border: 1px solid var(--primary-color);
-    border-radius: 50%;
+    /* border-radius: 50%; 丸から四角へ変更 */
     z-index: 40;
     opacity: 0;
     transition: opacity 0.2s;
@@ -525,6 +600,7 @@
     opacity: 1;
 }
 
+/* 隅のハンドル */
 .resize-handle.nw {
     top: -4px;
     left: -4px;
@@ -547,4 +623,33 @@
     bottom: -4px;
     right: -4px;
     cursor: se-resize;
+}
+
+/* 辺の中央ハンドル */
+.resize-handle.n {
+    top: -4px;
+    left: 50%;
+    transform: translateX(-50%);
+    cursor: n-resize;
+}
+
+.resize-handle.s {
+    bottom: -4px;
+    left: 50%;
+    transform: translateX(-50%);
+    cursor: s-resize;
+}
+
+.resize-handle.w {
+    top: 50%;
+    left: -4px;
+    transform: translateY(-50%);
+    cursor: w-resize;
+}
+
+.resize-handle.e {
+    top: 50%;
+    right: -4px;
+    transform: translateY(-50%);
+    cursor: e-resize;
 }

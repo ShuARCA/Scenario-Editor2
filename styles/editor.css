@@ -99,6 +99,36 @@
     padding-inline-start: 2em;
 }
 
+/* ============================================
+   タスクリスト (Task List)
+   ============================================ */
+#editor ul[data-type="taskList"] {
+    list-style: none;
+    padding: 0;
+}
+
+#editor ul[data-type="taskList"] li {
+    display: flex;
+    align-items: center;
+}
+
+#editor ul[data-type="taskList"] li>label {
+    flex: 0 0 auto;
+    margin-right: 0.5rem;
+    user-select: none;
+    cursor: pointer;
+}
+
+#editor ul[data-type="taskList"] li>div {
+    flex: 1 1 auto;
+}
+
+#editor ul[data-type="taskList"] li[data-checked="true"]>div {
+    text-decoration: line-through;
+    color: #888;
+    text-decoration-thickness: 1px;
+}
+
 #editor blockquote {
     margin: 0.6em 1em;
     padding: 0em 1em;
@@ -202,7 +232,7 @@
     height: 8px;
     background-color: var(--surface-color);
     border: 1px solid var(--primary-color);
-    border-radius: 50%;
+    /* border-radius: 50%; 丸から四角へ変更 */
     z-index: 40;
     opacity: 0;
     transition: opacity 0.2s;
@@ -213,6 +243,7 @@
     opacity: 1;
 }
 
+/* 隅のハンドル */
 .resizable-container .resize-handle.nw {
     top: -4px;
     left: -4px;
@@ -235,6 +266,35 @@
     bottom: -4px;
     right: -4px;
     cursor: se-resize;
+}
+
+/* 辺の中央ハンドル */
+.resizable-container .resize-handle.n {
+    top: -4px;
+    left: 50%;
+    transform: translateX(-50%);
+    cursor: n-resize;
+}
+
+.resizable-container .resize-handle.s {
+    bottom: -4px;
+    left: 50%;
+    transform: translateX(-50%);
+    cursor: s-resize;
+}
+
+.resizable-container .resize-handle.w {
+    top: 50%;
+    left: -4px;
+    transform: translateY(-50%);
+    cursor: w-resize;
+}
+
+.resizable-container .resize-handle.e {
+    top: 50%;
+    right: -4px;
+    transform: translateY(-50%);
+    cursor: e-resize;
 }
 
 /* ============================================
@@ -1188,11 +1248,286 @@
     display: none;
 }
 
-.block-copy-button.copied .check-icon {
+.block-copy-button.copied {
+    opacity: 1;
+}
+
+/* ============================================
+   カスタムコードブロック
+   ============================================ */
+/* ============================================
+   カスタムボックス (Box) コンポーネント
+   ============================================ */
+.box-container {
+    border: 2px solid var(--box-border-color, #cbd5e1);
+    border-radius: 8px;
+    margin: 2em 0;
+    padding: 12px 0 2px 0;
+    /* タイトルとの兼ね合いでpadding調整 */
+    position: relative;
+    transition: border-color 0.2s;
+    /* デフォルトのボーダー色変数 */
+    --box-border-color: #cbd5e1;
+}
+
+/* タイトルスタイル: ボックス内 (inside) - デフォルト */
+.box-container[data-title-style="inside"] .box-title {
+    background-color: var(--box-border-color, #cbd5e1);
+    padding: 2px 12px;
+    display: inline-block;
+    border-radius: 4px;
+    margin: 0 12px;
+    font-weight: bold;
+    position: relative;
+    top: auto;
+    left: auto;
+}
+
+/* タイトルスタイル: 枠線上 (on-border) */
+.box-container[data-title-style="on-border"] .box-title {
+    position: absolute;
+    top: -16px;
+    left: 24px;
+    background-color: var(--box-border-color, #cbd5e1);
+    padding: 2px 12px;
+    border-radius: 4px;
+    line-height: 1.4;
+    font-weight: bold;
+    z-index: 1;
+    /* 枠線より上に */
+    margin: 0;
+}
+
+/* タイトルスタイル: なし (none) */
+.box-container[data-title-style="none"] .box-title {
+    display: none;
+}
+
+/* ボックスタイトル共通 */
+.box-title {
+    outline: none;
+}
+
+/* ボックスコンテンツエリア */
+.box-container .box-body {
+    margin: 0 !important;
+    padding: 12px;
+    background-color: transparent !important;
+    font-size: 0.9em;
+    line-height: 1.6;
+    color: #334155;
+}
+
+/* ボックス内のリストスタイル */
+.box-container .box-body ul,
+.box-container .box-body ol {
+    margin: 0.5em 0;
+    padding-left: 1.5em;
+}
+
+.box-container .box-body p {
+    margin: 0.5em 0;
+}
+
+/* --- コントロールボタン (コピー & 設定) --- */
+.box-controls {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    display: flex;
+    gap: 4px;
+    z-index: 10;
+}
+
+.box-control-btn {
+    width: 28px;
+    height: 28px;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    color: #64748b;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    opacity: 0;
+}
+
+.box-container:hover .box-control-btn,
+.box-control-btn:focus,
+.box-control-btn.active {
+    opacity: 1;
+}
+
+.box-control-btn:hover {
+    background-color: #e2e8f0;
+    color: #475569;
+}
+
+/* --- ボックス設定メニュー --- */
+.box-settings-panel {
+    position: fixed;
+    background-color: var(--surface-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 1100;
+    min-width: 180px;
+    padding: 4px 0;
+    cursor: default;
+    display: flex;
+    flex-direction: column;
+
+    /* CSS Anchor Positioning */
+    position-anchor: --box-settings-anchor;
+    position-area: bottom span-left;
+    margin-top: 4px;
+}
+
+.box-settings-panel.hidden {
+    display: none;
+}
+
+.box-settings-section {
+    padding: 8px 12px;
+}
+
+.box-settings-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--flowchart-muted-color, #64748b);
+    /* フォールバック色指定 */
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 8px;
+}
+
+.box-settings-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.box-settings-row:last-child {
+    margin-bottom: 0;
+}
+
+.box-settings-row label {
+    font-size: 13px;
+    color: var(--text-color);
+    flex-shrink: 0;
+}
+
+.box-settings-row select {
+    flex: 1;
+    padding: 4px 8px;
+    font-size: 13px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background-color: var(--surface-color);
+    color: var(--text-color);
+    cursor: pointer;
+}
+
+/* カラー入力（スウォッチ）のスタイル */
+.box-settings-color-swatch {
+    width: 24px;
+    height: 24px;
+    border-radius: 4px;
+    border: 1px solid var(--border-color);
+    cursor: pointer;
+    background-image: linear-gradient(45deg, #d4d6db 25%, transparent 25%), linear-gradient(-45deg, #d4d6db 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #d4d6db 75%), linear-gradient(-45deg, transparent 75%, #d4d6db 75%);
+    background-size: 8px 8px;
+    position: relative;
+    box-sizing: border-box;
+    flex-shrink: 0;
     display: block;
+}
+
+.box-settings-color-swatch::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-color: var(--swatch-color, transparent);
+    border-radius: 3px;
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.1);
+}
+
+.box-settings-color-swatch:hover {
+    border-color: var(--primary-color);
+}
+
+.box-settings-color-swatch:focus {
+    outline: 2px solid color-mix(in srgb, var(--primary-color) 50%, transparent);
+    border-color: var(--primary-color);
+}
+
+/* ============================================
+   リストドロップダウンメニュー
+   ============================================ */
+.dropdown-container {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+}
+
+/* トリガーボタンは通常のツールバーボタンと同じスタイルを継承 */
+
+.dropdown-menu {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    z-index: 1000;
+    display: none;
+    flex-direction: column;
+    min-width: 180px;
+    padding: 4px;
+    margin-top: 4px;
+    background-color: var(--surface-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.dropdown-menu.show {
+    display: flex;
+}
+
+.dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 8px 12px;
+    border: none;
+    background: none;
+    cursor: pointer;
+    text-align: left;
+    font-size: 14px;
+    color: var(--text-color);
+    border-radius: 4px;
+    transition: background-color 0.1s;
+}
+
+.dropdown-item:hover {
+    background-color: var(--border-color);
+}
+
+.dropdown-item.active {
+    background-color: color-mix(in srgb, var(--primary-color) 15%, transparent);
     color: var(--primary-color);
 }
 
-.block-copy-button.copied {
-    opacity: 1;
+.dropdown-item svg {
+    width: 20px;
+    height: 20px;
+    fill: currentColor;
+    flex-shrink: 0;
+}
+
+.dropdown-item span {
+    flex-grow: 1;
 }
