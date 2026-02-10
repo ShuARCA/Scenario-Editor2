@@ -22,6 +22,9 @@ export class ToolbarManager {
         // DOM参照
         this.floatToolbar = document.getElementById('float-toolbar');
         this.formatSelect = document.getElementById('formatBlockSelect');
+
+        /** @type {boolean} 編集ロック状態 */
+        this._locked = false;
     }
 
     // =====================================================
@@ -168,10 +171,23 @@ export class ToolbarManager {
     // =====================================================
 
     /**
+     * 編集ロック状態を設定します。
+     * ロック中はフローティングツールバーの表示をブロックします。
+     * 
+     * @param {boolean} locked - trueでロック、falseで解除
+     */
+    setLocked(locked) {
+        this._locked = locked;
+        if (locked) {
+            this.hideFloatToolbar();
+        }
+    }
+
+    /**
      * フローティングツールバーを表示します。
      */
     showFloatToolbar() {
-        if (!this.editor.tiptap) return;
+        if (!this.editor.tiptap || this._locked) return;
 
         const { from, to } = this.editor.tiptap.state.selection;
         if (from === to) return;

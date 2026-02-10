@@ -47,6 +47,9 @@ export class LinkManager {
         this.linkBtn = document.getElementById('linkBtn');
         this.linkPopup = document.getElementById('link-popup');
         this.floatToolbar = document.getElementById('float-toolbar');
+
+        /** @type {boolean} 編集ロック状態 */
+        this._locked = false;
     }
 
     // =====================================================
@@ -171,6 +174,31 @@ export class LinkManager {
     }
 
     // =====================================================
+    // ロック制御
+    // =====================================================
+
+    /**
+     * 編集ロック状態を設定します。
+     * ロック中はリンク挿入/編集をブロックします。
+     * ポップアップでのリンク先表示やCtrl+クリックジャンプは維持されます。
+     * 
+     * @param {boolean} locked - trueでロック、falseで解除
+     */
+    setLocked(locked) {
+        this._locked = locked;
+        if (locked) {
+            this.hideLinkPanel();
+        }
+        // ポップアップ内の編集ボタンの表示/非表示
+        if (this.linkPopup) {
+            const editBtn = this.linkPopup.querySelector('.link-popup-edit-btn');
+            if (editBtn) {
+                editBtn.style.display = locked ? 'none' : '';
+            }
+        }
+    }
+
+    // =====================================================
     // リンク操作
     // =====================================================
 
@@ -178,7 +206,7 @@ export class LinkManager {
      * リンクを挿入/編集します。
      */
     insertLink() {
-        if (!this.editor.tiptap) return;
+        if (!this.editor.tiptap || this._locked) return;
 
         const { from, to, empty } = this.editor.tiptap.state.selection;
 

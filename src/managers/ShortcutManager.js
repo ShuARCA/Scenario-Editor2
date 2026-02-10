@@ -22,6 +22,9 @@ export class ShortcutManager {
         /** @type {string|null} 現在アクティブなコンテキスト */
         this.activeContext = null;
 
+        /** @type {boolean} 編集ロック状態 */
+        this._locked = false;
+
         this._setupGlobalListener();
     }
 
@@ -41,6 +44,9 @@ export class ShortcutManager {
      * @private
      */
     _handleKeyDown(e) {
+        // ロック中はoutlineコンテキストのショートカットをブロック
+        if (this._locked && this.activeContext === 'outline') return;
+
         // アクティブなコンテキストのハンドラーを取得
         const contextHandlers = this.handlers.get(this.activeContext);
         if (!contextHandlers) return;
@@ -92,6 +98,16 @@ export class ShortcutManager {
      */
     setActiveContext(context) {
         this.activeContext = context;
+    }
+
+    /**
+     * 編集ロック状態を設定します。
+     * ロック中はアウトラインコンテキストのショートカットをブロックします。
+     * 
+     * @param {boolean} locked - trueでロック、falseで解除
+     */
+    setLocked(locked) {
+        this._locked = locked;
     }
 
     /**

@@ -333,6 +333,17 @@ export class EditorCore {
     // =====================================================
 
     /**
+     * 編集ロック状態を設定します。
+     * ロック中はTiptapのeditableをfalseにし、あらゆる編集操作をブロックします。
+     * 
+     * @param {boolean} locked - trueでロック、falseで解除
+     */
+    setLocked(locked) {
+        if (!this.tiptap) return;
+        this.tiptap.setEditable(!locked);
+    }
+
+    /**
      * エディタにフォーカスを設定します。
      */
     focus() {

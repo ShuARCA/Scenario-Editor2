@@ -40,6 +40,9 @@ export class OutlineManager {
 
         /** @type {HTMLElement|null} 現在アンカーとなっているボタン要素 */
         this.currentAnchorButton = null;
+
+        /** @type {boolean} 編集ロック状態 */
+        this._locked = false;
     }
 
     // =====================================================
@@ -471,8 +474,29 @@ export class OutlineManager {
     }
 
     // =====================================================
+    // ロック制御
+    // =====================================================
+
+    /**
+     * 編集ロック状態を設定します。
+     * ロック中はコンテキストメニュー・アイコン変更をブロックします。
+     * クリックジャンプ・展開/折りたたみは維持されます。
+     * 
+     * @param {boolean} locked - trueでロック、falseで解除
+     */
+    setLocked(locked) {
+        this._locked = locked;
+        // ロック時は開いているメニューを閉じる
+        if (locked) {
+            this.hideContextMenu();
+            this.hideIconPicker();
+        }
+    }
+
+    // =====================================================
     // アイコンピッカー
     // =====================================================
+
 
     /**
      * アイコンピッカーを表示します。
@@ -481,7 +505,7 @@ export class OutlineManager {
      * @param {HTMLElement} iconEl - アイコン要素
      */
     showIconPicker(headingId, iconEl) {
-        if (!this.iconPicker) return;
+        if (!this.iconPicker || this._locked) return;
 
         this.currentIconTarget = { headingId, iconEl };
 
@@ -545,7 +569,7 @@ export class OutlineManager {
      * @private
      */
     _showContextMenuFromButton(headingId, level, buttonEl) {
-        if (!this.contextMenu) return;
+        if (!this.contextMenu || this._locked) return;
 
         this.contextMenuTargetId = headingId;
 
@@ -582,7 +606,7 @@ export class OutlineManager {
      * @private
      */
     _showContextMenuAtCoords(headingId, level, x, y) {
-        if (!this.contextMenu) return;
+        if (!this.contextMenu || this._locked) return;
 
         this.contextMenuTargetId = headingId;
 

@@ -104,6 +104,12 @@ body {
   color: var(--primary-color);
 }
 
+/* ロックボタン（アクティブ状態） */
+#lockBtn.active {
+  background-color: color-mix(in srgb, var(--primary-color) 15%, transparent);
+  color: var(--primary-color);
+}
+
 /* レイアウト */
 #container {
   display: flex;
@@ -355,6 +361,16 @@ body {
   width: 16px;
   height: 16px;
   fill: currentColor;
+}
+
+/* ロック中はメニューボタンを非表示、アイコンのクリック操作を無効化 */
+body.locked .outline-menu-btn {
+  display: none !important;
+}
+
+body.locked .outline-icon {
+  pointer-events: none;
+  cursor: default;
 }
 
 /* ============================================

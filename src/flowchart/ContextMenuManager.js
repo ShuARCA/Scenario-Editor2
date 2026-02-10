@@ -78,10 +78,19 @@ export class ContextMenuManager {
                 this.showContextMenu(e.clientX, e.clientY, 'shape');
             }
         };
-        // 右クリックイベント
-        this.app.canvas.addEventListener('contextmenu', shapemenu);
-        // ダブルクリックイベント
-        this.app.canvas.addEventListener('dblclick', shapemenu);
+        // 右クリックイベント（ロック中はブロック）
+        this.app.canvas.addEventListener('contextmenu', (e) => {
+            if (this.app._locked) {
+                e.preventDefault();
+                return;
+            }
+            shapemenu(e);
+        });
+        // ダブルクリックイベント（ロック中はブロック）
+        this.app.canvas.addEventListener('dblclick', (e) => {
+            if (this.app._locked) return;
+            shapemenu(e);
+        });
 
         // メニュークリック
         this.contextMenu.addEventListener('click', (e) => {

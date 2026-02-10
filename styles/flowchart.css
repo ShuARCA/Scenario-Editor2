@@ -600,6 +600,23 @@
     opacity: 1;
 }
 
+/* ロック中はリサイズハンドルと接続ポイントを非表示 */
+body.locked .resize-handle {
+    display: none !important;
+}
+
+body.locked .connection-point {
+    display: none !important;
+}
+
+body.locked .shape {
+    cursor: pointer;
+}
+
+body.locked .toolbar-separator {
+    display: none !important;
+}
+
 /* 隅のハンドル */
 .resize-handle.nw {
     top: -4px;
