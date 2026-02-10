@@ -271,6 +271,9 @@ class BoxNodeView {
     }
 
     _toggleSettings() {
+        // ロック中は設定パネルの表示をブロック
+        if (document.body.classList.contains('locked')) return;
+
         const isHidden = this.settingsPanel.classList.contains(CLASS_NAMES.HIDDEN);
 
         if (isHidden) {

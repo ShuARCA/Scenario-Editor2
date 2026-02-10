@@ -123,7 +123,11 @@ export class FlowchartApp {
         // モード切り替えボタン
         document.querySelectorAll('.mode-btn').forEach(btn => {
             if (btn.dataset.mode) {
-                btn.addEventListener('click', () => this.setMode(btn.dataset.mode));
+                btn.addEventListener('click', () => {
+                    // ロック中はモード切替をブロック
+                    if (this._locked) return;
+                    this.setMode(btn.dataset.mode);
+                });
             }
         });
 
@@ -326,6 +330,7 @@ export class FlowchartApp {
      * コンテキストメニューを表示します。
      */
     showContextMenu(x, y, type) {
+        if (this._locked) return;
         this.contextMenuManager.showContextMenu(x, y, type);
     }
 
@@ -334,6 +339,45 @@ export class FlowchartApp {
      */
     hideContextMenu() {
         this.contextMenuManager.hideContextMenu();
+    }
+
+    // ========================================
+    // ロック制御
+    // ========================================
+
+    /**
+     * 編集ロック状態を設定します。
+     * ロック中は選択モードに固定し、ドラッグ、リサイズ、接続、コンテキストメニューをブロックします。
+     * パン、ズーム、展開/折りたたみ、テキストジャンプは維持されます。
+     * 
+     * @param {boolean} locked - trueでロック、falseで解除
+     */
+    setLocked(locked) {
+        this._locked = locked;
+        if (locked) {
+            // ロック前のモードを保存し、選択モードに強制切替
+            this._modeBeforeLock = this.mode;
+            if (this.mode !== 'select') {
+                this.setMode('select');
+            }
+            this.hideContextMenu();
+
+            // 選択/接続モード切替ボタンのみ非表示（ズーム・全体表示は維持）
+            document.querySelectorAll('.mode-btn[data-mode]').forEach(btn => {
+                btn.style.display = 'none';
+            });
+        } else {
+            // ロック解除時にモード切替ボタンを再表示
+            document.querySelectorAll('.mode-btn[data-mode]').forEach(btn => {
+                btn.style.display = '';
+            });
+
+            // ロック前のモードが保存されていれば復帰
+            if (this._modeBeforeLock && this._modeBeforeLock !== this.mode) {
+                this.setMode(this._modeBeforeLock);
+            }
+            this._modeBeforeLock = null;
+        }
     }
 
     // ========================================
@@ -348,14 +392,16 @@ export class FlowchartApp {
     handleMouseDown(e) {
         const target = e.target;
 
-        // リサイズハンドル
+        // リサイズハンドル（ロック中はブロック）
         if (target.classList.contains('resize-handle')) {
+            if (this._locked) return;
             this.shapeManager.startResize(e, target);
             return;
         }
 
-        // 接続ポイント
+        // 接続ポイント（ロック中はブロック）
         if (this.mode === 'connect' && target.classList.contains('connection-point')) {
+            if (this._locked) return;
             this.connectionManager.startConnect(target);
             return;
         }
@@ -364,8 +410,22 @@ export class FlowchartApp {
         const shapeEl = target.closest('.shape');
         if (shapeEl) {
             if (this.mode === 'select') {
+                if (this._locked) {
+                    // ロック中は選択＋テキストジャンプ（ドラッグなし）
+                    const shapeId = shapeEl.id;
+                    this.selectShape(shapeId);
+                    // mousedown中のscrollはフォーカスと競合するため非同期実行
+                    setTimeout(() => {
+                        const shape = this.core.shapes.get(shapeId);
+                        if (shape && shape.headingId && this.editorManager) {
+                            this.editorManager.scrollToHeading(shape.headingId);
+                        }
+                    }, 0);
+                    return;
+                }
                 this.shapeManager.startDrag(e, shapeEl);
             } else if (this.mode === 'connect') {
+                if (this._locked) return;
                 // 接続モードで図形をクリック
                 const point = target.closest('.connection-point');
                 if (point) {

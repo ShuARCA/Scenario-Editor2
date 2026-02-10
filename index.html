@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="Markdownベースのリッチテキスト編集とフローチャート可視化を統合したPWAアプリケーション">
-    <meta name="theme-color" content="#0d9488">
+    <meta name="theme-color" content="#1F1F1F">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="iEditWeb">
@@ -71,6 +71,9 @@
         </div>
         <div id="filename">無題のドキュメント</div>
         <div class="header-controls">
+            <button id="lockBtn" title="編集をロック">
+                <!-- LockManagerが動的にSVGを設定 -->
+            </button>
             <button id="searchBtn" title="検索 (Ctrl+F)">
                 <svg class="icon" viewBox="0 0 24 24">
                     <path
@@ -241,6 +244,18 @@
 
     <!-- Floating Toolbar -->
     <div id="float-toolbar" class="hidden">
+        <!-- スタイル -->
+        <select id="formatBlockSelect">
+            <option value="p">テキスト</option>
+            <option value="h1">見出し 1</option>
+            <option value="h2">見出し 2</option>
+            <option value="h3">見出し 3</option>
+            <option value="h4">見出し 4</option>
+            <option value="blockquote">引用</option>
+            <option value="box">ボックス</option>
+        </select>
+        <div class="separator"></div>
+        <!-- 太字・斜字・下線 -->
         <button data-cmd="bold" title="太字"><svg class="icon" viewBox="0 0 24 24">
                 <path
                     d="M13.5,15.5H10V12.5H13.5A1.5,1.5 0 0,1 15,14A1.5,1.5 0 0,1 13.5,15.5M10,6.5H13A1.5,1.5 0 0,1 14.5,8A1.5,1.5 0 0,1 13,9.5H10M15.6,10.79C16.57,10.11 17.25,9.02 17.25,8C17.25,5.74 15.5,4 13.25,4H7V18H14.04C16.14,18 17.75,16.3 17.75,14.21C17.75,12.69 16.89,11.39 15.6,10.79Z" />
@@ -253,12 +268,29 @@
                     d="M5,21H19V19H5V21M12,17A6,6 0 0,0 18,11V3H15.5V11A3.5,3.5 0 0,1 12,14.5A3.5,3.5 0 0,1 8.5,11V3H6V11A6,6 0 0,0 12,17Z" />
             </svg></button>
         <div class="separator"></div>
+        <!-- 文字色・背景色 -->
+        <button id="textColorBtn" title="文字色">
+            <svg class="icon" viewBox="0 -960 960 960">
+                <path
+                    d="M80 0v-160h800V0H80Zm140-280 210-560h100l210 560h-96l-50-144H368l-52 144h-96Zm176-224h168l-82-232h-4l-82 232Z" />
+            </svg>
+        </button>
+        <button id="highlightBtn" title="背景色">
+            <svg class="icon" viewBox="0 -960 960 960">
+                <path
+                    d="M544-400 440-504 240-304l104 104 200-200Zm-47-161 104 104 199-199-104-104-199 199Zm-84-28 216 216-229 229q-24 24-56 24t-56-24l-2-2-26 26H60l126-126-2-2q-24-24-24-56t24-56l229-229Zm0 0 227-227q24-24 56-24t56 24l104 104q24 24 24 56t-24 56L629-373 413-589Z" />
+            </svg>
+        </button>
+        <div class="separator"></div>
         <!-- リストドロップダウン -->
         <div class="dropdown-container" id="listDropdown">
             <button class="dropdown-trigger" title="リスト">
                 <svg class="icon" viewBox="0 0 24 24">
                     <path
                         d="M7,5H21V7H7V5M7,13V11H21V13H7M4,4.5A1.5,1.5 0 0,1 5.5,6A1.5,1.5 0 0,1 4,7.5A1.5,1.5 0 0,1 2.5,6A1.5,1.5 0 0,1 4,4.5M4,10.5A1.5,1.5 0 0,1 5.5,12A1.5,1.5 0 0,1 4,13.5A1.5,1.5 0 0,1 2.5,12A1.5,1.5 0 0,1 4,10.5M7,19V17H21V19H7M4,16.5A1.5,1.5 0 0,1 5.5,18A1.5,1.5 0 0,1 4,19.5A1.5,1.5 0 0,1 2.5,18A1.5,1.5 0 0,1 4,16.5Z" />
+                </svg>
+                <svg class="icon" viewBox="0 -960 960 960" style="width: 14px;">
+                    <path d="M480-344 240-584l56-56 184 184 184-184 56 56-240 240Z" />
                 </svg>
             </button>
             <div class="dropdown-menu">
@@ -277,39 +309,16 @@
                     <span>番号付きリスト</span>
                 </button>
                 <button class="dropdown-item" data-cmd="insertTaskList">
-                    <svg class="icon" xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960"
-                        width="24px" fill="#1f1f1f">
+                    <svg class="icon" viewBox="0 -960 960 960">
                         <path
                             d="M222-200 80-342l56-56 85 85 170-170 56 57-225 226Zm0-320L80-662l56-56 85 85 170-170 56 57-225 226Zm298 240v-80h360v80H520Zm0-320v-80h360v80H520Z" />
                     </svg>
-                    <span>タスクリスト</span>
+                    <span>チェックリスト</span>
                 </button>
             </div>
         </div>
         <div class="separator"></div>
-        <select id="formatBlockSelect">
-            <option value="p">テキスト</option>
-            <option value="h1">見出し 1</option>
-            <option value="h2">見出し 2</option>
-            <option value="h3">見出し 3</option>
-            <option value="h4">見出し 4</option>
-            <option value="blockquote">引用</option>
-            <option value="box">ボックス</option>
-        </select>
-        <div class="separator"></div>
-        <button id="textColorBtn" title="文字色">
-            <svg class="icon" viewBox="0 -960 960 960">
-                <path
-                    d="M80 0v-160h800V0H80Zm140-280 210-560h100l210 560h-96l-50-144H368l-52 144h-96Zm176-224h168l-82-232h-4l-82 232Z" />
-            </svg>
-        </button>
-        <button id="highlightBtn" title="背景色">
-            <svg class="icon" viewBox="0 -960 960 960">
-                <path
-                    d="M544-400 440-504 240-304l104 104 200-200Zm-47-161 104 104 199-199-104-104-199 199Zm-84-28 216 216-229 229q-24 24-56 24t-56-24l-2-2-26 26H60l126-126-2-2q-24-24-24-56t24-56l229-229Zm0 0 227-227q24-24 56-24t56 24l104 104q24 24 24 56t-24 56L629-373 413-589Z" />
-            </svg>
-        </button>
-        <div class="separator"></div>
+        <!-- ルビ・リンク・コメント -->
         <button id="rubyBtn" title="ルビ">
             <span style="font-weight: bold; font-size: 12px;">ルビ</span>
         </button>

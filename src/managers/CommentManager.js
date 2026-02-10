@@ -40,6 +40,9 @@ export class CommentManager {
         this.commentList = document.getElementById('comment-list');
         this.commentPopup = document.getElementById('comment-popup');
         this.commentDisplaySelect = document.getElementById('comment-display-select');
+
+        /** @type {boolean} 編集ロック状態 */
+        this._locked = false;
     }
 
     // =====================================================
@@ -190,6 +193,38 @@ export class CommentManager {
     }
 
     // =====================================================
+    // ロック制御
+    // =====================================================
+
+    /**
+     * 編集ロック状態を設定します。
+     * ロック中はコメント挿入/編集をブロックします。
+     * コメントの閲覧（ポップアップ表示、サイドバー表示）は維持されます。
+     * 
+     * @param {boolean} locked - trueでロック、falseで解除
+     */
+    setLocked(locked) {
+        this._locked = locked;
+        if (locked) {
+            this.hideCommentPanel();
+        }
+        // ポップアップ内の編集ボタンの表示/非表示
+        if (this.commentPopup) {
+            const editBtn = this.commentPopup.querySelector('.comment-popup-edit-btn');
+            if (editBtn) {
+                editBtn.style.display = locked ? 'none' : '';
+            }
+        }
+        // サイドバー内の編集ボタンの表示/非表示
+        if (this.commentList) {
+            const editBtns = this.commentList.querySelectorAll('.comment-list-item-edit-btn');
+            editBtns.forEach(btn => {
+                btn.style.display = locked ? 'none' : '';
+            });
+        }
+    }
+
+    // =====================================================
     // コメント操作
     // =====================================================
 
@@ -197,7 +232,7 @@ export class CommentManager {
      * コメントを挿入/編集します。
      */
     insertComment() {
-        if (!this.editor.tiptap) return;
+        if (!this.editor.tiptap || this._locked) return;
 
         const { from, to, empty } = this.editor.tiptap.state.selection;
 

@@ -1365,6 +1365,11 @@
     color: #475569;
 }
 
+/* ロック中はボックス設定ボタンを非表示（コピーボタンは維持） */
+body.locked .box-settings-btn {
+    display: none !important;
+}
+
 /* --- ボックス設定メニュー --- */
 .box-settings-panel {
     position: fixed;
@@ -1483,7 +1488,7 @@
     z-index: 1000;
     display: none;
     flex-direction: column;
-    min-width: 180px;
+    min-width: 160px;
     padding: 4px;
     margin-top: 4px;
     background-color: var(--surface-color);

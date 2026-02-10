@@ -25,7 +25,8 @@ import {
     ImageManager,
     ColorPickerManager,
     ToolbarManager,
-    BlockCopyManager
+    BlockCopyManager,
+    LockManager
 } from './managers/index.js';
 import { ShortcutManager } from './managers/ShortcutManager.js';
 
@@ -44,6 +45,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // 2. UIマネージャーの初期化
     const uiManager = new UIManager();
     const settingsManager = new SettingsManager();
+
+    // 2.5 ロックマネージャーの初期化
+    const lockManager = new LockManager(eventBus);
 
     // 3. エディタ機能マネージャーの初期化
     // 各マネージャーの作成（依存関係注入）
@@ -157,6 +161,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const { from, to, empty } = selection;
         const isImageSelected = editorManagers.image.isImageSelected();
 
+        // ロック中はフローティングツールバー・画像ツールバーを表示しない
+        if (lockManager.isLocked()) {
+            editorManagers.toolbar.hideFloatToolbar();
+            editorManagers.image.hideImageToolbar();
+            editorManagers.outline.updateOutlineHighlightByPosition();
+            return;
+        }
+
         if (isImageSelected) {
             editorManagers.toolbar.hideFloatToolbar();
             editorManagers.image.showImageToolbar();
@@ -191,11 +203,24 @@ document.addEventListener('DOMContentLoaded', () => {
     const searchManager = new SearchManager(editorCore);
 
     // StorageManagerには依存関係をフルセットで渡す
-    const storageManager = new StorageManager(editorCore, editorManagers.colorPicker, flowchartApp, settingsManager);
+    const storageManager = new StorageManager(editorCore, editorManagers.colorPicker, flowchartApp, settingsManager, lockManager);
 
     // 9. 初期同期
     editorManagers.outline.updateOutline();
     eventBus.emit('editor:update', editorManagers.outline.getHeadings());
+
+    // 10. ロック変更イベントリスナー
+    eventBus.on('lock:changed', (isLocked) => {
+        editorCore.setLocked(isLocked);
+        editorManagers.outline.setLocked(isLocked);
+        editorManagers.toolbar.setLocked(isLocked);
+        editorManagers.image.setLocked(isLocked);
+        editorManagers.link.setLocked(isLocked);
+        editorManagers.comment.setLocked(isLocked);
+        searchManager.setLocked(isLocked);
+        shortcutManager.setLocked(isLocked);
+        flowchartApp.setLocked(isLocked);
+    });
 
     console.log('iEditWeb Initialized (Full Modular Structure)');
 

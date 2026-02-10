@@ -24,6 +24,9 @@ export class SearchManager {
         this.regexMode = false;
         this.caseSensitive = false;
 
+        /** @type {boolean} 編集ロック状態 */
+        this._locked = false;
+
         this.init();
     }
 
@@ -91,6 +94,21 @@ export class SearchManager {
                 this.searchInput.focus();
             }
         });
+    }
+
+    /**
+     * 編集ロック状態を設定します。
+     * ロック中は置換機能をブロックしますが、検索はそのまま利用可能です。
+     * 
+     * @param {boolean} locked - trueでロック、falseで解除
+     */
+    setLocked(locked) {
+        this._locked = locked;
+        // 置換関連UIの表示/非表示
+        const replaceRow = document.getElementById('replace-row');
+        if (replaceRow) {
+            replaceRow.style.display = locked ? 'none' : '';
+        }
     }
 
     /**
@@ -409,6 +427,7 @@ export class SearchManager {
      * 現在のマッチを置換します（UIボタン用）。
      */
     replaceCurrent() {
+        if (this._locked) return;
         this.replace();
     }
 
@@ -418,6 +437,7 @@ export class SearchManager {
      * @returns {number} 置換した件数
      */
     replaceAll(replacement) {
+        if (this._locked) return 0;
         const query = this.searchInput.value;
         const replaceText = replacement !== undefined ? replacement : this.replaceInput.value;
         if (!query) return 0;

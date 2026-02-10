@@ -26,6 +26,9 @@ export class ImageManager {
         this.alignRightBtn = document.getElementById('align-right-btn');
         this.floatToggleBtn = document.getElementById('float-toggle-btn');
         this.deleteImageBtn = document.getElementById('delete-image-btn');
+
+        /** @type {boolean} 編集ロック状態 */
+        this._locked = false;
     }
 
     // =====================================================
@@ -239,10 +242,23 @@ export class ImageManager {
     // =====================================================
 
     /**
+     * 編集ロック状態を設定します。
+     * ロック中は画像ツールバーの表示をブロックします。
+     * 
+     * @param {boolean} locked - trueでロック、falseで解除
+     */
+    setLocked(locked) {
+        this._locked = locked;
+        if (locked) {
+            this.hideImageToolbar();
+        }
+    }
+
+    /**
      * 画像ツールバーを表示します。
      */
     showImageToolbar() {
-        if (!this.editor.tiptap || !this.imageToolbar) return;
+        if (!this.editor.tiptap || !this.imageToolbar || this._locked) return;
 
         const imageAttrs = this._getSelectedImageAttrs();
         if (!imageAttrs) return;

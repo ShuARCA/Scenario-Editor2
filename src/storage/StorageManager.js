@@ -22,12 +22,14 @@ export class StorageManager {
      * @param {import('../managers/ColorPickerManager.js').ColorPickerManager} colorPickerManager
      * @param {import('../flowchart/FlowchartApp.js').FlowchartApp} flowchartApp 
      * @param {import('../ui/SettingsManager.js').SettingsManager} settingsManager
+     * @param {import('../managers/LockManager.js').LockManager} [lockManager] - ロックマネージャー
      */
-    constructor(editorCore, colorPickerManager, flowchartApp, settingsManager) {
+    constructor(editorCore, colorPickerManager, flowchartApp, settingsManager, lockManager) {
         this.editorCore = editorCore;
         this.colorPickerManager = colorPickerManager;
         this.flowchartApp = flowchartApp;
         this.settingsManager = settingsManager;
+        this.lockManager = lockManager || null;
         this.sanitizer = new Sanitizer();
 
         // ヘルパーインスタンス
@@ -358,7 +360,8 @@ export class StorageManager {
             connections: this.flowchartApp.connections,
             zoomLevel: this.flowchartApp.zoomLevel || 1.0,
             settings: settings,
-            customColors: this.colorPickerManager.getCustomColors()
+            customColors: this.colorPickerManager.getCustomColors(),
+            locked: this.lockManager ? this.lockManager.isLocked() : false
         };
     }
 
@@ -463,6 +466,9 @@ export class StorageManager {
 
         // カスタムカラーを復元
         this._restoreCustomColors(data);
+
+        // ロック状態を復元
+        this._restoreLockState(data);
     }
 
     /**
@@ -541,6 +547,16 @@ export class StorageManager {
                 text: data.customColors,
                 highlight: []
             });
+        }
+    }
+
+    /**
+     * ロック状態を復元します。
+     * @private
+     */
+    _restoreLockState(data) {
+        if (this.lockManager && data.locked !== undefined) {
+            this.lockManager.setLocked(data.locked);
         }
     }
 }
