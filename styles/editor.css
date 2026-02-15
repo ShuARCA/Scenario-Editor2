@@ -1262,7 +1262,7 @@
     border: 2px solid var(--box-border-color, #cbd5e1);
     border-radius: 8px;
     margin: 2em 0;
-    padding: 12px 0 2px 0;
+    padding: 12px 0 6px 0;
     /* タイトルとの兼ね合いでpadding調整 */
     position: relative;
     transition: border-color 0.2s;
@@ -1277,7 +1277,6 @@
     display: inline-block;
     border-radius: 4px;
     margin: 0 12px;
-    font-weight: bold;
     position: relative;
     top: auto;
     left: auto;
@@ -1292,7 +1291,6 @@
     padding: 2px 12px;
     border-radius: 4px;
     line-height: 1.4;
-    font-weight: bold;
     z-index: 1;
     /* 枠線より上に */
     margin: 0;
@@ -1311,7 +1309,7 @@
 /* ボックスコンテンツエリア */
 .box-container .box-body {
     margin: 0 !important;
-    padding: 12px;
+    padding: 6px 12px;
     background-color: transparent !important;
     font-size: 0.9em;
     line-height: 1.6;
@@ -1535,4 +1533,73 @@ body.locked .box-settings-btn {
 
 .dropdown-item span {
     flex-grow: 1;
+}
+
+/* ============================================
+   フォーマット選択ドロップダウン (カスタム)
+   ============================================ */
+#formatBlockDropdown .dropdown-trigger {
+    display: flex;
+    align-items: center;
+    padding: 4px 8px;
+    height: 32px;
+    min-width: 100px;
+    /* 幅を確保 */
+    justify-content: space-between;
+    border-radius: 6px;
+    transition: background-color 0.2s;
+}
+
+#formatBlockDropdown .dropdown-trigger:hover {
+    background-color: var(--toolbar-button-hover-bg);
+}
+
+#formatBlockDropdown .dropdown-trigger .icon {
+    width: 20px;
+    height: 20px;
+    margin: 0;
+    fill: currentColor;
+    flex-shrink: 0;
+}
+
+/* アイコンとテキストの間隔調整 */
+#formatBlockDropdown .dropdown-trigger .icon-display {
+    margin-right: 2px;
+}
+
+#formatBlockDropdown .dropdown-trigger span {
+    flex-grow: 1;
+    text-align: left;
+    white-space: nowrap;
+    font-size: 14px;
+    font-weight: 500;
+    margin-top: 1px;
+    /* 視覚調整 */
+}
+
+/* ドロップダウンメニュー項目 */
+#formatBlockDropdown .dropdown-menu {
+    min-width: 120px;
+    padding: 6px;
+    gap: 2px;
+}
+
+#formatBlockDropdown .dropdown-item {
+    padding: 2px;
+    border-radius: 4px;
+}
+
+#formatBlockDropdown .dropdown-item .icon {
+    width: 20px;
+    height: 20px;
+    fill: currentColor;
+    opacity: 0.7;
+}
+
+#formatBlockDropdown .dropdown-item.active .icon {
+    opacity: 1;
+}
+
+#formatBlockDropdown .dropdown-item:hover .icon {
+    opacity: 1;
 }

@@ -53,6 +53,16 @@ export const CONFIG = {
         DEBOUNCE_WAIT: 500,      // デバウンス待機時間（ms）
         MAX_IMAGE_WIDTH: 500,    // 画像の最大幅（px）
 
+        /** エラーメッセージ */
+        ERRORS: {
+            CONTAINER_NOT_FOUND: 'エディタコンテナが見つかりません',
+        },
+
+        /** デフォルトコンテンツ */
+        DEFAULTS: {
+            CONTENT: '<h1>ここにタイトルを入力...</h1><p>本文をここに入力してください。</p>',
+        },
+
         /** 
          * 文字色用カラーパレット
          * 1行目左上がnull = デフォルト色に戻す

@@ -200,6 +200,8 @@ export class ConnectionManager {
         path.setAttribute('stroke', actualColor);
         path.setAttribute('stroke-width', isSelected ? '3' : '2');
         path.setAttribute('fill', 'none');
+        path.setAttribute('stroke-linejoin', 'round');
+        path.setAttribute('stroke-linecap', 'round');
         path.style.pointerEvents = 'none';
 
         // 点線スタイル
@@ -371,12 +373,22 @@ export class ConnectionManager {
         this.clearConnectionPreview();
 
         const startPt = this._getConnectionPoint(fromShape, this.connectStartPoint || 'bottom');
+        const endPt = { x: mouseX, y: mouseY };
+        const previewToPoint = this._inferPreviewToPoint(startPt, endPt);
+        const pathD = this._calculatePath(
+            startPt,
+            endPt,
+            this.connectStartPoint || 'bottom',
+            previewToPoint
+        );
 
         const preview = document.createElementNS('http://www.w3.org/2000/svg', 'path');
         preview.id = 'connection-preview';
-        preview.setAttribute('d', `M ${startPt.x} ${startPt.y} L ${mouseX} ${mouseY}`);
+        preview.setAttribute('d', pathD);
         preview.setAttribute('stroke', '#3b82f6');
         preview.setAttribute('stroke-width', '2');
+        preview.setAttribute('stroke-linejoin', 'round');
+        preview.setAttribute('stroke-linecap', 'round');
         preview.setAttribute('stroke-dasharray', '5,5');
         preview.setAttribute('fill', 'none');
 
@@ -447,45 +459,259 @@ export class ConnectionManager {
      * @private
      */
     _calculatePath(start, end, fromPoint, toPoint) {
+        const normalizedFromPoint = fromPoint || 'bottom';
+        const normalizedToPoint = toPoint || 'top';
+        const points = this._buildOrthogonalPoints(start, end, normalizedFromPoint, normalizedToPoint);
+        return this._buildRoundedPath(points);
+    }
+
+    /**
+     * 端子向きからベクトルを取得します。
+     *
+     * @param {string} point - top|bottom|left|right
+     * @returns {{x: number, y: number}} 方向ベクトル
+     * @private
+     */
+    _getDirectionVector(point) {
+        switch (point) {
+            case 'top':
+                return { x: 0, y: -1 };
+            case 'bottom':
+                return { x: 0, y: 1 };
+            case 'left':
+                return { x: -1, y: 0 };
+            case 'right':
+                return { x: 1, y: 0 };
+            default:
+                return { x: 0, y: 1 };
+        }
+    }
+
+    /**
+     * 接続端子が左右方向かを返します。
+     *
+     * @param {string} point - top|bottom|left|right
+     * @returns {boolean}
+     * @private
+     */
+    _isHorizontalPoint(point) {
+        return point === 'left' || point === 'right';
+    }
+
+    /**
+     * 開始・終了点距離に応じたスタブ長を返します。
+     *
+     * @param {{x: number, y: number}} start - 開始点
+     * @param {{x: number, y: number}} end - 終了点
+     * @returns {number} スタブ長
+     * @private
+     */
+    _calculateStubLength(start, end) {
         const dx = Math.abs(end.x - start.x);
         const dy = Math.abs(end.y - start.y);
-        const offset = Math.min(50, Math.max(dx, dy) / 2);
+        const base = Math.max(dx, dy);
+        return Math.max(16, Math.min(40, base * 0.25));
+    }
 
-        let cp1 = { x: start.x, y: start.y };
-        let cp2 = { x: end.x, y: end.y };
+    /**
+     * 角丸鍵線用の折れ点列を生成します。
+     *
+     * @param {{x: number, y: number}} start - 開始点
+     * @param {{x: number, y: number}} end - 終了点
+     * @param {string} fromPoint - 開始端子向き
+     * @param {string} toPoint - 終了端子向き
+     * @returns {Array<{x: number, y: number}>} 折れ点列
+     * @private
+     */
+    _buildOrthogonalPoints(start, end, fromPoint, toPoint) {
+        const startDir = this._getDirectionVector(fromPoint);
+        const endDir = this._getDirectionVector(toPoint);
+        const stubLength = this._calculateStubLength(start, end);
 
-        // 開始点のコントロールポイント
-        switch (fromPoint) {
-            case 'top':
-                cp1.y = start.y - offset;
-                break;
-            case 'bottom':
-                cp1.y = start.y + offset;
-                break;
-            case 'left':
-                cp1.x = start.x - offset;
-                break;
-            case 'right':
-                cp1.x = start.x + offset;
-                break;
+        const startStub = {
+            x: start.x + startDir.x * stubLength,
+            y: start.y + startDir.y * stubLength
+        };
+        const endStub = {
+            x: end.x + endDir.x * stubLength,
+            y: end.y + endDir.y * stubLength
+        };
+
+        const points = [start, startStub];
+        const sameX = Math.abs(startStub.x - endStub.x) < 0.5;
+        const sameY = Math.abs(startStub.y - endStub.y) < 0.5;
+
+        if (sameX || sameY) {
+            points.push(endStub);
+        } else {
+            const fromHorizontal = this._isHorizontalPoint(fromPoint);
+            const toHorizontal = this._isHorizontalPoint(toPoint);
+
+            if (fromHorizontal !== toHorizontal) {
+                if (fromHorizontal) {
+                    points.push({ x: endStub.x, y: startStub.y });
+                } else {
+                    points.push({ x: startStub.x, y: endStub.y });
+                }
+            } else if (fromHorizontal) {
+                const midX = (startStub.x + endStub.x) / 2;
+                points.push({ x: midX, y: startStub.y });
+                points.push({ x: midX, y: endStub.y });
+            } else {
+                const midY = (startStub.y + endStub.y) / 2;
+                points.push({ x: startStub.x, y: midY });
+                points.push({ x: endStub.x, y: midY });
+            }
         }
 
-        // 終了点のコントロールポイント
-        switch (toPoint) {
-            case 'top':
-                cp2.y = end.y - offset;
-                break;
-            case 'bottom':
-                cp2.y = end.y + offset;
-                break;
-            case 'left':
-                cp2.x = end.x - offset;
-                break;
-            case 'right':
-                cp2.x = end.x + offset;
-                break;
+        points.push(endStub);
+        points.push(end);
+
+        return this._simplifyOrthogonalPoints(points);
+    }
+
+    /**
+     * 重複点・同一直線上の中間点を除去します。
+     *
+     * @param {Array<{x: number, y: number}>} points - 点列
+     * @returns {Array<{x: number, y: number}>} 簡略化後の点列
+     * @private
+     */
+    _simplifyOrthogonalPoints(points) {
+        const epsilon = 0.5;
+        const deduped = [];
+
+        points.forEach(point => {
+            const last = deduped[deduped.length - 1];
+            if (
+                !last ||
+                Math.abs(last.x - point.x) > epsilon ||
+                Math.abs(last.y - point.y) > epsilon
+            ) {
+                deduped.push(point);
+            }
+        });
+
+        if (deduped.length <= 2) {
+            return deduped;
         }
 
-        return `M ${start.x} ${start.y} C ${cp1.x} ${cp1.y}, ${cp2.x} ${cp2.y}, ${end.x} ${end.y}`;
+        const simplified = [deduped[0]];
+        for (let i = 1; i < deduped.length - 1; i++) {
+            const prev = simplified[simplified.length - 1];
+            const current = deduped[i];
+            const next = deduped[i + 1];
+
+            const prevHorizontal = Math.abs(prev.y - current.y) < epsilon;
+            const nextHorizontal = Math.abs(current.y - next.y) < epsilon;
+            const prevVertical = Math.abs(prev.x - current.x) < epsilon;
+            const nextVertical = Math.abs(current.x - next.x) < epsilon;
+
+            const isCollinearHorizontal = prevHorizontal && nextHorizontal;
+            const isCollinearVertical = prevVertical && nextVertical;
+
+            if (isCollinearHorizontal || isCollinearVertical) {
+                continue;
+            }
+
+            simplified.push(current);
+        }
+
+        simplified.push(deduped[deduped.length - 1]);
+        return simplified;
+    }
+
+    /**
+     * 折れ点列から角丸のSVGパスを構築します。
+     *
+     * @param {Array<{x: number, y: number}>} points - 折れ点列
+     * @returns {string} SVGパス
+     * @private
+     */
+    _buildRoundedPath(points) {
+        if (!points.length) {
+            return '';
+        }
+
+        if (points.length === 1) {
+            return `M ${points[0].x} ${points[0].y}`;
+        }
+
+        const cornerRadius = 12;
+        let path = `M ${points[0].x} ${points[0].y}`;
+
+        for (let i = 1; i < points.length; i++) {
+            const prev = points[i - 1];
+            const current = points[i];
+            const next = points[i + 1];
+
+            if (!next) {
+                path += ` L ${current.x} ${current.y}`;
+                continue;
+            }
+
+            const inDx = current.x - prev.x;
+            const inDy = current.y - prev.y;
+            const outDx = next.x - current.x;
+            const outDy = next.y - current.y;
+            const inLength = Math.hypot(inDx, inDy);
+            const outLength = Math.hypot(outDx, outDy);
+
+            if (inLength < 0.001 || outLength < 0.001) {
+                continue;
+            }
+
+            const inUnit = { x: inDx / inLength, y: inDy / inLength };
+            const outUnit = { x: outDx / outLength, y: outDy / outLength };
+            const noTurn =
+                Math.abs(inUnit.x - outUnit.x) < 0.001 &&
+                Math.abs(inUnit.y - outUnit.y) < 0.001;
+
+            if (noTurn) {
+                path += ` L ${current.x} ${current.y}`;
+                continue;
+            }
+
+            const radius = Math.min(cornerRadius, inLength / 2, outLength / 2);
+            if (radius < 0.5) {
+                path += ` L ${current.x} ${current.y}`;
+                continue;
+            }
+
+            const cornerStart = {
+                x: current.x - inUnit.x * radius,
+                y: current.y - inUnit.y * radius
+            };
+            const cornerEnd = {
+                x: current.x + outUnit.x * radius,
+                y: current.y + outUnit.y * radius
+            };
+            const cross = inUnit.x * outUnit.y - inUnit.y * outUnit.x;
+            const sweepFlag = cross > 0 ? 1 : 0;
+
+            path += ` L ${cornerStart.x} ${cornerStart.y}`;
+            path += ` A ${radius} ${radius} 0 0 ${sweepFlag} ${cornerEnd.x} ${cornerEnd.y}`;
+        }
+
+        return path;
+    }
+
+    /**
+     * プレビュー終点の接続向きを推定します。
+     *
+     * @param {{x: number, y: number}} start - 開始点
+     * @param {{x: number, y: number}} end - 終了点
+     * @returns {string} top|bottom|left|right
+     * @private
+     */
+    _inferPreviewToPoint(start, end) {
+        const dx = end.x - start.x;
+        const dy = end.y - start.y;
+
+        if (Math.abs(dx) >= Math.abs(dy)) {
+            return dx >= 0 ? 'left' : 'right';
+        }
+
+        return dy >= 0 ? 'top' : 'bottom';
     }
 }

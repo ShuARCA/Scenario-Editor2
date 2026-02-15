@@ -65,17 +65,37 @@ class BoxNodeView {
         this.copyBtn = null;
         this.styleSelect = null; // select要素への参照
         this.colorSwatch = null; // スウォッチ要素への参照
+        this.bgColorSwatch = null; // 背景色スウォッチ要素への参照
         this.activeColorPicker = null; // ColorPickerインスタンス
+        this.activePickerTarget = null; // 現在ピッカーで編集中のターゲット ('border' or 'background')
+        this.activePickerElement = null; // 現在アクティブなピッカーのトリガー要素
         this.globalPickerContainer = document.getElementById('global-color-picker-container');
 
         // イベントハンドラをバインド（削除時に参照が必要なため）
         this.outsideClickHandler = (e) => {
             if (!this.settingsPanel.classList.contains(CLASS_NAMES.HIDDEN)) {
                 // パネル内または設定ボタン内のクリックは無視
-                if (this.settingsPanel.contains(e.target) || this.settingsBtn.contains(e.target)) {
+                if (this.settingsPanel.contains(e.target) || e.target.closest(`.${CLASS_NAMES.SETTINGS_BTN}`)) {
+                    return;
+                }
+                // グローバルカラーピッカー内のクリックも無視
+                if (e.target.closest('#global-color-picker-container')) {
                     return;
                 }
                 this.closeSettings();
+            }
+        };
+
+        this.pickerOutsideClickHandler = (e) => {
+            if (this.activeColorPicker) {
+                // ピッカー内なら何もしない
+                if (e.target.closest('#global-color-picker-container')) {
+                    return;
+                }
+                // トリガー要素（スウォッチ）のクリックは、そちらのイベントハンドラで処理される（再オープン等）ため
+                // ここで閉じても問題ないが、競合を避けるために一応チェックしても良い
+                // 今回はシンプルに「ピッカー外」なら閉じる
+                this._closeColorPicker();
             }
         };
 
@@ -149,9 +169,9 @@ class BoxNodeView {
 
         this.styleSelect = document.createElement('select');
         const styles = [
+            { value: 'none', label: 'なし' },
             { value: 'inside', label: 'ボックス内' },
-            { value: 'on-border', label: '枠線上' },
-            { value: 'none', label: 'なし' }
+            { value: 'on-border', label: '枠線上' }
         ];
 
         styles.forEach(style => {
@@ -169,12 +189,12 @@ class BoxNodeView {
         styleRow.appendChild(this.styleSelect);
         section.appendChild(styleRow);
 
-        // Color Row
+        // Border Color Row
         const colorRow = document.createElement('div');
         colorRow.className = CLASS_NAMES.SETTINGS_ROW;
 
         const colorLabel = document.createElement('label');
-        colorLabel.textContent = '枠線の色';
+        colorLabel.textContent = '枠線色';
         colorRow.appendChild(colorLabel);
 
         this.colorSwatch = document.createElement('div');
@@ -184,55 +204,100 @@ class BoxNodeView {
         // イベント設定
         this.colorSwatch.addEventListener('click', (e) => {
             const currentColor = this.node.attrs.borderColor || '#cbd5e1';
-            this._openColorPicker(this.colorSwatch, currentColor);
+            this._openColorPicker(this.colorSwatch, currentColor, 'border');
         });
 
         colorRow.appendChild(this.colorSwatch);
         section.appendChild(colorRow);
 
+        // Background Color Row
+        const bgColorRow = document.createElement('div');
+        bgColorRow.className = CLASS_NAMES.SETTINGS_ROW;
+
+        const bgColorLabel = document.createElement('label');
+        bgColorLabel.textContent = '背景色';
+        bgColorRow.appendChild(bgColorLabel);
+
+        this.bgColorSwatch = document.createElement('div');
+        this.bgColorSwatch.className = CLASS_NAMES.COLOR_SWATCH;
+        this.bgColorSwatch.tabIndex = 0;
+
+        // イベント設定
+        this.bgColorSwatch.addEventListener('click', (e) => {
+            const currentColor = this.node.attrs.backgroundColor || 'rgba(255, 255, 255, 0)';
+            this._openColorPicker(this.bgColorSwatch, currentColor, 'background');
+        });
+
+        bgColorRow.appendChild(this.bgColorSwatch);
+        section.appendChild(bgColorRow);
+
         return panel;
     }
 
-    _openColorPicker(targetEl, initialColor) {
+    _openColorPicker(targetEl, initialColor, targetProperty) {
         // 既存のピッカーがあれば閉じる（他で開いている場合など）
         this._closeColorPicker();
 
         if (!this.globalPickerContainer) return;
 
-        // 位置計算 (Box設定メニューの横に出すなど)
-        const rect = targetEl.getBoundingClientRect();
-        const top = rect.top + window.scrollY;
-        const left = rect.right + 5 + window.scrollX;
+        // アンカー設定
+        targetEl.style.anchorName = '--color-picker-anchor';
+        this.activePickerElement = targetEl;
 
-        this.globalPickerContainer.style.top = `${top}px`;
-        this.globalPickerContainer.style.left = `${left}px`;
         this.globalPickerContainer.style.display = 'block';
+
+        this.activePickerTarget = targetProperty;
 
         // ピッカー生成
         this.activeColorPicker = new ColorPicker(this.globalPickerContainer, {
             color: initialColor,
             onChange: (hex) => {
-                // UIへの即時反映（プレビュー）
-                this.dom.style.setProperty('--box-border-color', hex);
-                this._updateSwatch(hex);
-                // 属性更新
-                this._handleAttributeChange({ borderColor: hex });
+                if (this.activePickerTarget === 'border') {
+                    // UIへの即時反映（プレビュー）
+                    this.dom.style.setProperty('--box-border-color', hex);
+                    this._updateSwatch(hex, this.colorSwatch);
+                    // 属性更新
+                    this._handleAttributeChange({ borderColor: hex });
+                } else if (this.activePickerTarget === 'background') {
+                    // UIへの即時反映（プレビュー）
+                    this.dom.style.setProperty('--box-bg-color', hex);
+                    this._updateSwatch(hex, this.bgColorSwatch);
+                    // 属性更新
+                    this._handleAttributeChange({ backgroundColor: hex });
+                }
             }
+        });
+
+        // 外側クリック監視を追加
+        requestAnimationFrame(() => {
+            document.addEventListener('mousedown', this.pickerOutsideClickHandler, true);
         });
     }
 
     _closeColorPicker() {
+        // イベント解除
+        document.removeEventListener('mousedown', this.pickerOutsideClickHandler, true);
+
         if (this.globalPickerContainer) {
             this.globalPickerContainer.innerHTML = '';
             this.globalPickerContainer.style.display = 'none';
         }
+        // アンカー解除
+        if (this.activePickerElement) {
+            this.activePickerElement.style.anchorName = '';
+            this.activePickerElement = null;
+        }
+
         this.activeColorPicker = null;
+        this.activePickerTarget = null;
     }
 
-    _updateSwatch(color) {
-        if (this.colorSwatch) {
-            this.colorSwatch.style.setProperty('--swatch-color', color);
-            this.colorSwatch.dataset.color = color;
+    _updateSwatch(color, swatchEl) {
+        if (swatchEl) {
+            // 背景色が透明の場合や、見やすくするためにswatch自体のスタイルも考慮
+            swatchEl.style.setProperty('--swatch-color', color);
+            swatchEl.dataset.color = color;
+            swatchEl.style.backgroundColor = color; // 直接背景色としても適用
         }
     }
 
@@ -334,13 +399,20 @@ class BoxNodeView {
     }
 
     _updateAttributes(attrs) {
-        const titleStyle = attrs.titleStyle || 'inside';
+        const titleStyle = attrs.titleStyle || 'none';
         const borderColor = attrs.borderColor || '#cbd5e1';
+        const backgroundColor = attrs.backgroundColor || 'rgba(255, 255, 255, 0)';
 
         // DOM属性の更新
         this.dom.setAttribute('data-title-style', titleStyle);
         this.dom.setAttribute('data-border-color', borderColor);
+        this.dom.setAttribute('data-background-color', backgroundColor);
+
         this.dom.style.setProperty('--box-border-color', borderColor);
+        this.dom.style.setProperty('--box-bg-color', backgroundColor);
+
+        // 背景色の適用（直接スタイルにも適用してCSS変数のフォールバックとして機能させる）
+        this.dom.style.backgroundColor = backgroundColor;
 
         // セレクトボックスの更新
         if (this.styleSelect && this.styleSelect.value !== titleStyle) {
@@ -348,7 +420,8 @@ class BoxNodeView {
         }
 
         // スウォッチの更新
-        this._updateSwatch(borderColor);
+        this._updateSwatch(borderColor, this.colorSwatch);
+        this._updateSwatch(backgroundColor, this.bgColorSwatch);
     }
 
     update(node) {
@@ -486,10 +559,13 @@ export const BoxContainer = Node.create({
     addAttributes() {
         return {
             titleStyle: {
-                default: 'inside', // 'none', 'inside', 'on-border'
+                default: 'none', // 'none', 'inside', 'on-border'
             },
             borderColor: {
                 default: '#cbd5e1',
+            },
+            backgroundColor: {
+                default: 'rgba(255, 255, 255, 0)',
             }
         }
     },
@@ -502,10 +578,12 @@ export const BoxContainer = Node.create({
                 contentElement: `.${CLASS_NAMES.CONTENT_WRAPPER}`,
                 getAttrs: node => {
                     const style = node.getAttribute('data-title-style');
-                    const color = node.getAttribute('data-border-color') || node.style.getPropertyValue('--box-border-color');
+                    const borderColor = node.getAttribute('data-border-color') || node.style.getPropertyValue('--box-border-color');
+                    const backgroundColor = node.getAttribute('data-background-color') || node.style.getPropertyValue('--box-bg-color');
                     return {
-                        titleStyle: style || 'inside',
-                        borderColor: color || '#cbd5e1'
+                        titleStyle: style || 'none',
+                        borderColor: borderColor || '#cbd5e1',
+                        backgroundColor: backgroundColor || 'rgba(255, 255, 255, 0)'
                     };
                 }
             }
@@ -520,7 +598,8 @@ export const BoxContainer = Node.create({
                 class: CLASS_NAMES.WRAPPER,
                 'data-title-style': HTMLAttributes.titleStyle,
                 'data-border-color': HTMLAttributes.borderColor,
-                style: `--box-border-color: ${HTMLAttributes.borderColor}`
+                'data-background-color': HTMLAttributes.backgroundColor,
+                style: `--box-border-color: ${HTMLAttributes.borderColor}; --box-bg-color: ${HTMLAttributes.backgroundColor}; background-color: ${HTMLAttributes.backgroundColor};`
             }),
             ['div', { class: CLASS_NAMES.CONTENT_WRAPPER }, 0]
         ]
