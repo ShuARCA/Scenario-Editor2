@@ -49,61 +49,84 @@ export class ToolbarManager {
             });
         });
 
-        // ドロップダウントリガー
-        const dropdownTrigger = this.floatToolbar.querySelector('.dropdown-trigger');
-        const dropdownMenu = this.floatToolbar.querySelector('.dropdown-menu');
+        // ドロップダウントリガー (汎用処理)
+        const dropdownTriggers = this.floatToolbar.querySelectorAll('.dropdown-trigger');
 
-        if (dropdownTrigger && dropdownMenu) {
-            dropdownTrigger.addEventListener('click', (e) => {
+        dropdownTriggers.forEach(trigger => {
+            trigger.addEventListener('click', (e) => {
                 e.preventDefault();
-                e.stopPropagation(); // ツールバーのクリックイベントが伝播しないようにする
-                dropdownMenu.classList.toggle('show');
-            });
+                e.stopPropagation();
 
-            // ドロップダウン外クリックで閉じる
-            document.addEventListener('click', (e) => {
-                if (!dropdownTrigger.contains(e.target) && !dropdownMenu.contains(e.target)) {
-                    dropdownMenu.classList.remove('show');
+                const container = trigger.closest('.dropdown-container');
+                const menu = container ? container.querySelector('.dropdown-menu') : null;
+
+                if (menu) {
+                    // 他の開いているメニューを閉じる
+                    this.floatToolbar.querySelectorAll('.dropdown-menu.show').forEach(m => {
+                        if (m !== menu) m.classList.remove('show');
+                    });
+                    menu.classList.toggle('show');
                 }
             });
-        }
+        });
 
-        // フォーマットブロック選択
-        if (this.formatSelect) {
-            this.formatSelect.addEventListener('change', () => {
-                const value = this.formatSelect.value;
-                const isBox = this.editor.tiptap.isActive('boxContainer');
+        // ドロップダウン外クリックで閉じる (汎用)
+        document.addEventListener('click', (e) => {
+            const dropdowns = this.floatToolbar.querySelectorAll('.dropdown-menu.show');
+            dropdowns.forEach(menu => {
+                const container = menu.closest('.dropdown-container');
+                if (container && !container.contains(e.target)) {
+                    menu.classList.remove('show');
+                }
+            });
+        });
 
-                // Box解除処理 (他スタイル選択時)
-                if (isBox && value !== 'box') {
-                    // まずBoxを解除してParagraphに戻す
-                    this.editor.tiptap.chain().focus().unsetBox().run();
+        // フォーマットブロック選択 (カスタムドロップダウン)
+        this.formatBlockDropdown = document.getElementById('formatBlockDropdown');
+        if (this.formatBlockDropdown) {
+            const items = this.formatBlockDropdown.querySelectorAll('.dropdown-item');
 
-                    // Paragraph以外が選択されていたら、さらにそのスタイルを適用
-                    // (unsetBoxでParagraphになっている前提)
-                    if (value !== 'p') {
-                        // 少し待たないとDOM更新/Selection更新が間に合わない可能性があるが、Chainでいけるはず
-                        // ただしunsetBoxの実装次第。
-                        if (value === 'blockquote') {
-                            this.editor.tiptap.chain().focus().toggleBlockquote().run();
-                        } else if (value.startsWith('h')) {
-                            const level = parseInt(value[1]);
-                            this.editor.tiptap.chain().focus().toggleHeading({ level }).run();
+            // 項目選択
+            items.forEach(item => {
+                item.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    // ドロップダウンを閉じる
+                    const menu = item.closest('.dropdown-menu');
+                    if (menu) menu.classList.remove('show');
+
+                    const value = item.dataset.value;
+                    const isBox = this.editor.tiptap.isActive('boxContainer');
+
+                    // Box解除処理 (他スタイル選択時)
+                    if (isBox && value !== 'box') {
+                        // まずBoxを解除してParagraphに戻す
+                        this.editor.tiptap.chain().focus().unsetBox().run();
+
+                        // Paragraph以外が選択されていたら、さらにそのスタイルを適用
+                        if (value !== 'p') {
+                            if (value === 'blockquote') {
+                                this.editor.tiptap.chain().focus().toggleBlockquote().run();
+                            } else if (value.startsWith('h')) {
+                                const level = parseInt(value.replace('h', ''));
+                                this.editor.tiptap.chain().focus().toggleHeading({ level }).run();
+                            }
                         }
+                        return;
                     }
-                    return;
-                }
 
-                if (value === 'p') {
-                    this.editor.tiptap.chain().focus().setParagraph().run();
-                } else if (value === 'blockquote') {
-                    this.editor.tiptap.chain().focus().toggleBlockquote().run();
-                } else if (value === 'box') {
-                    this.editor.tiptap.chain().focus().toggleBox().run();
-                } else if (value.startsWith('h')) {
-                    const level = parseInt(value[1]);
-                    this.editor.tiptap.chain().focus().toggleHeading({ level }).run();
-                }
+                    if (value === 'p') {
+                        this.editor.tiptap.chain().focus().setParagraph().run();
+                    } else if (value === 'blockquote') {
+                        this.editor.tiptap.chain().focus().toggleBlockquote().run();
+                    } else if (value === 'box') {
+                        this.editor.tiptap.chain().focus().toggleBox().run();
+                    } else if (value.startsWith('h')) {
+                        const level = parseInt(value.replace('h', ''));
+                        this.editor.tiptap.chain().focus().toggleHeading({ level }).run();
+                    }
+
+                    this.updateToolbarState();
+                });
             });
         }
 
@@ -229,10 +252,8 @@ export class ToolbarManager {
         this.floatToolbar.classList.add('hidden');
 
         // ドロップダウンも閉じる
-        const dropdownMenu = this.floatToolbar.querySelector('.dropdown-menu');
-        if (dropdownMenu) {
-            dropdownMenu.classList.remove('show');
-        }
+        const dropdownMenus = this.floatToolbar.querySelectorAll('.dropdown-menu');
+        dropdownMenus.forEach(menu => menu.classList.remove('show'));
 
         // カラーピッカーも非表示
         if (this.editor.colorPickerManager) {
@@ -279,23 +300,65 @@ export class ToolbarManager {
             dropdownTrigger.classList.toggle('active', isAnyListActive);
         }
 
-        // フォーマット選択の更新
-        if (this.formatSelect) {
+        // フォーマット選択の更新 (カスタムドロップダウン)
+        this.formatBlockDropdown = document.getElementById('formatBlockDropdown');
+        if (this.formatBlockDropdown) {
+            const triggerText = this.formatBlockDropdown.querySelector('.dropdown-trigger span');
+            const triggerIcon = this.formatBlockDropdown.querySelector('.dropdown-trigger .icon:not(.dropdown-arrow) path');
+
+            let currentFormat = 'p';
+            let currentLabel = 'テキスト';
+
+            // アイコンパス定義
+            const iconPaths = {
+                'p': "M420-160v-520H200v-120h560v120H540v520H420Z",
+                'h1': "M200-280v-400h80v160h160v-160h80v400h-80v-160H280v160h-80Zm480 0v-320h-80v-80h160v400h-80Z",
+                'h2': "M120-280v-400h80v160h160v-160h80v400h-80v-160H200v160h-80Zm400 0v-160q0-33 23.5-56.5T600-520h160v-80H520v-80h240q33 0 56.5 23.5T840-600v80q0 33-23.5 56.5T760-440H600v80h240v80H520Z",
+                'h3': "M120-280v-400h80v160h160v-160h80v400h-80v-160H200v160h-80Zm400 0v-80h240v-80H600v-80h160v-80H520v-80h240q33 0 56.5 23.5T840-600v240q0 33-23.5 56.5T760-280H520Z",
+                'h4': "M120-280v-400h80v160h160v-160h80v400h-80v-160H200v160h-80Zm600 0v-120H520v-280h80v200h120v-200h80v200h80v80h-80v120h-80Z",
+                'blockquote': "m228-240 92-160q-66 0-113-47t-47-113q0-66 47-113t113-47q66 0 113 47t47 113q0 23-5.5 42.5T458-480L320-240h-92Zm360 0 92-160q-66 0-113-47t-47-113q0-66 47-113t113-47q66 0 113 47t47 113q0 23-5.5 42.5T818-480L680-240h-92Z",
+                'box': "M200-280h560v-80H200v80Zm0-160h560v-80H200v80Zm0-160h400v-80H200v80Zm-40 440q-33 0-56.5-23.5T80-240v-480q0-33 23.5-56.5T160-800h640q33 0 56.5 23.5T880-720v480q0 33-23.5 56.5T800-160H160Zm0-80h640v-480H160v480Zm0 0v-480 480Z"
+            };
+
             if (this.editor.tiptap.isActive('heading', { level: 1 })) {
-                this.formatSelect.value = 'h1';
+                currentFormat = 'h1';
+                currentLabel = '見出し 1';
             } else if (this.editor.tiptap.isActive('heading', { level: 2 })) {
-                this.formatSelect.value = 'h2';
+                currentFormat = 'h2';
+                currentLabel = '見出し 2';
             } else if (this.editor.tiptap.isActive('heading', { level: 3 })) {
-                this.formatSelect.value = 'h3';
+                currentFormat = 'h3';
+                currentLabel = '見出し 3';
             } else if (this.editor.tiptap.isActive('heading', { level: 4 })) {
-                this.formatSelect.value = 'h4';
+                currentFormat = 'h4';
+                currentLabel = '見出し 4';
             } else if (this.editor.tiptap.isActive('blockquote')) {
-                this.formatSelect.value = 'blockquote';
+                currentFormat = 'blockquote';
+                currentLabel = '引用';
             } else if (this.editor.tiptap.isActive('boxContainer')) {
-                this.formatSelect.value = 'box';
+                currentFormat = 'box';
+                currentLabel = 'ボックス';
             } else {
-                this.formatSelect.value = 'p';
+                currentFormat = 'p';
+                currentLabel = 'テキスト';
             }
+
+            // アイコンとラベルの更新
+            if (triggerText) triggerText.textContent = currentLabel;
+            if (triggerIcon && iconPaths[currentFormat]) {
+                triggerIcon.setAttribute('d', iconPaths[currentFormat]);
+            }
+
+            // ドロップダウン項目のアクティブ表示
+            const items = this.formatBlockDropdown.querySelectorAll('.dropdown-item');
+            items.forEach(item => {
+                if (item.dataset.value === currentFormat) {
+                    item.classList.add('active');
+                    // SVGの色もactiveクラスCSSで変わるはずだが、念のため確認
+                } else {
+                    item.classList.remove('active');
+                }
+            });
         }
 
         // 文字色・背景色のアイコン反映

@@ -69,48 +69,46 @@ self.addEventListener('install', (event) => {
  * キャッシュファースト戦略：キャッシュにあればキャッシュから、なければネットワークから取得
  */
 self.addEventListener('fetch', (event) => {
+  if (event.request.method !== 'GET') {
+    return;
+  }
+
+  let requestUrl;
+  try {
+    requestUrl = new URL(event.request.url);
+  } catch (_error) {
+    return;
+  }
+
+  if (requestUrl.protocol !== 'http:' && requestUrl.protocol !== 'https:') {
+    return;
+  }
+
   event.respondWith(
     caches.match(event.request)
       .then((cachedResponse) => {
         if (cachedResponse) {
-          // キャッシュにヒットした場合
           return cachedResponse;
         }
 
-        // キャッシュにない場合はネットワークから取得
-        return fetch(event.request)
-          .then((networkResponse) => {
-            // Check if we received a valid response
-            if (!networkResponse || networkResponse.status !== 200 || networkResponse.type !== 'basic') {
-              return networkResponse;
-            }
-
-            // Skip caching for unsupported schemes
-            const url = new URL(event.request.url);
-            if (url.protocol === 'chrome-extension:' || url.protocol === 'chrome:') {
-              return networkResponse;
-            }
-
-            // IMPORTANT: Clone the response. A response is a stream
-            // and because we want the browser to consume the response
-            // as well as the cache consuming the response, we need
-            // to clone it so we have two streams.
-            var responseToCache = networkResponse.clone();
-
-            caches.open(CACHE_NAME)
-              .then(function (cache) {
-                try {
-                  cache.put(event.request, responseToCache);
-                } catch (err) {
-                  console.warn('Failed to cache request:', event.request.url, err);
-                }
-              });
+        return fetch(event.request).then((networkResponse) => {
+          if (!networkResponse || networkResponse.status !== 200 || networkResponse.type !== 'basic') {
             return networkResponse;
-          })
-          .catch(() => {
-            // オフラインでキャッシュにもない場合
-            console.log('[Service Worker] オフライン - リソースが利用できません:', event.request.url);
-          });
+          }
+
+          const responseToCache = networkResponse.clone();
+          caches.open(CACHE_NAME)
+            .then((cache) => cache.put(event.request, responseToCache))
+            .catch((cacheError) => {
+              console.warn('[Service Worker] Failed to cache request:', event.request.url, cacheError);
+            });
+
+          return networkResponse;
+        });
+      })
+      .catch((error) => {
+        console.warn('[Service Worker] Fetch handler failed:', event.request.url, error);
+        return Response.error();
       })
   );
 });

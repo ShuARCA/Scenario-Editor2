@@ -225,3 +225,21 @@
 .cp-toggle:hover {
     background: #f1f5f9;
 }
+
+#global-color-picker-container {
+    position: fixed;
+    /* アンカー設定 */
+    position-anchor: --color-picker-anchor;
+
+    /* 基本位置: アンカーの下側、左端揃え */
+    top: anchor(bottom);
+    left: anchor(left);
+    margin-top: 5px;
+    /* 少し隙間を空ける */
+
+    /* フォールバック設定: 上下反転、左右反転 */
+    position-try-fallbacks: flip-block, flip-inline, flip-block flip-inline;
+
+    z-index: 10000;
+    /* 最前面 */
+}

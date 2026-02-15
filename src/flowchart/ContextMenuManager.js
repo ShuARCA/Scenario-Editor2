@@ -41,7 +41,18 @@ export class ContextMenuManager {
 
         // カラーピッカー関連
         this.activeColorPicker = null;
+        this.activePickerElement = null; // 現在アクティブなピッカーのトリガー要素
         this.globalPickerContainer = null;
+
+        this.pickerOutsideClickHandler = (e) => {
+            if (this.activeColorPicker && this.globalPickerContainer) {
+                // ピッカー内なら何もしない
+                if (this.globalPickerContainer.contains(e.target)) {
+                    return;
+                }
+                this._closeColorPicker();
+            }
+        };
     }
 
     // =====================================================
@@ -205,34 +216,36 @@ export class ContextMenuManager {
      * @param {HTMLElement} targetEl - スウォッチ要素
      * @param {string} initialColor - 初期色
      * @param {Function} onChange - 変更時コールバック
+     * @param {boolean} [hasAlpha=true] - アルファチャンネル有効フラグ
      * @private
      */
-    _openColorPicker(targetEl, initialColor, onChange) {
+    _openColorPicker(targetEl, initialColor, onChange, hasAlpha = true) {
         // 既存のピッカーがあれば閉じる
         this._closeColorPicker();
 
         if (!this.globalPickerContainer) return;
 
-        // 位置計算
-        const rect = targetEl.getBoundingClientRect();
-        // コンテキストメニューの少し右側に表示するなどの調整
-        // シンプルに要素の下や横に
-        const top = rect.top + window.scrollY;
-        const left = rect.right + 5 + window.scrollX; // 右側に表示
+        // アンカー設定
+        targetEl.style.anchorName = '--color-picker-anchor';
+        this.activePickerElement = targetEl;
 
-        this.globalPickerContainer.style.top = `${top}px`;
-        this.globalPickerContainer.style.left = `${left}px`;
         this.globalPickerContainer.style.display = 'block';
 
         // ピッカー生成
         this.activeColorPicker = new ColorPicker(this.globalPickerContainer, {
             color: initialColor,
+            hasAlpha: hasAlpha,
             onChange: (hex) => {
                 // スウォッチ自体の色も更新
                 targetEl.style.setProperty('--swatch-color', hex);
                 targetEl.dataset.color = hex;
                 onChange(hex);
             }
+        });
+
+        // 外側クリック監視を追加
+        requestAnimationFrame(() => {
+            document.addEventListener('mousedown', this.pickerOutsideClickHandler, true);
         });
     }
 
@@ -241,9 +254,17 @@ export class ContextMenuManager {
      * @private
      */
     _closeColorPicker() {
+        // イベント解除
+        document.removeEventListener('mousedown', this.pickerOutsideClickHandler, true);
+
         if (this.globalPickerContainer) {
             this.globalPickerContainer.innerHTML = '';
             this.globalPickerContainer.style.display = 'none';
+        }
+        // アンカー解除
+        if (this.activePickerElement) {
+            this.activePickerElement.style.anchorName = '';
+            this.activePickerElement = null;
         }
         this.activeColorPicker = null;
     }
@@ -337,7 +358,7 @@ export class ContextMenuManager {
                 const currentColor = e.target.dataset.color || '#334155';
                 this._openColorPicker(e.target, currentColor, (hex) => {
                     this._updateShapeStyle('color', hex);
-                });
+                }, false); // hasAlpha: false
             });
         }
 

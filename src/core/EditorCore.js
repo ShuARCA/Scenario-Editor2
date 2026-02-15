@@ -1,4 +1,4 @@
-/**
+﻿/**
  * エディタコア
  * 
  * Tiptapエディタの初期化と基本操作を担当します。
@@ -14,6 +14,7 @@ import { Link, isValidUrl } from '../extensions/link.js'; // isValidUrlをイン
 import { HeadingWithId } from '../extensions/headingWithId.js';
 import { ResizableImage } from '../extensions/resizableImage.js';
 import { BoxExtension } from '../extensions/BoxExtension.js'; // Import custom box extension
+import { Indent } from '../extensions/indent.js'; // Import Indent extension
 import { Sanitizer } from '../utils/Sanitizer.js';
 import { CONFIG } from './Config.js';
 import { debounce } from '../utils/helpers.js';
@@ -77,7 +78,7 @@ export class EditorCore {
         }
 
         if (!this.editorContainer) {
-            throw new Error('エディタコンテナが見つかりません');
+            throw new Error(CONFIG.EDITOR.ERRORS.CONTAINER_NOT_FOUND);
         }
 
         // 既存のコンテンツを取得
@@ -87,16 +88,20 @@ export class EditorCore {
         this.editorContainer.removeAttribute('contenteditable');
         this.editorContainer.innerHTML = '';
 
-        // Tiptapエディタを作成
+        // Tiptapエディタを初期化
         this.tiptap = new Editor({
             element: this.editorContainer,
+            // ネスト配列ではなく拡張配列をそのまま渡す（schema の doc 欠落を防ぐ）
             extensions: this._getExtensions(),
-            content: initialContent || '<h1>ここにタイトルを入力...</h1><p>本文をここに入力してください。</p>',
+            content: initialContent || CONFIG.EDITOR.DEFAULTS.CONTENT,
             autofocus: options.autofocus ?? true,
             editorProps: {
                 attributes: {
                     id: 'editor',
                     spellcheck: 'false'
+                },
+                clipboardTextSerializer: (slice) => {
+                    return this._serializeClipboardText(slice);
                 },
                 handlePaste: (view, event, slice) => {
                     return this._handlePaste(view, event, slice);
@@ -135,6 +140,7 @@ export class EditorCore {
             Link,
             ResizableImage,
             BoxExtension, // Add custom box
+            Indent,
             TaskList,
             TaskItem.configure({
                 nested: true,
@@ -230,7 +236,6 @@ export class EditorCore {
             'underline': () => this.tiptap.chain().focus().toggleUnderline().run(),
             'strike': () => this.tiptap.chain().focus().toggleStrike().run(),
             'insertUnorderedList': () => this.tiptap.chain().focus().toggleBulletList().run(),
-            'insertUnorderedList': () => this.tiptap.chain().focus().toggleBulletList().run(),
             'insertOrderedList': () => this.tiptap.chain().focus().toggleOrderedList().run(),
             'insertTaskList': () => this.tiptap.chain().focus().toggleTaskList().run()
         };
@@ -244,7 +249,7 @@ export class EditorCore {
     /**
      * 見出しレベルを設定します。
      * 
-     * @param {number} level - 見出しレベル（1-4）、0の場合は段落
+     * @param {number} level - 見出しレベル（0-4）。0の場合は段落
      * @returns {boolean} 成功したかどうか
      */
     setHeadingLevel(level) {
@@ -398,12 +403,28 @@ export class EditorCore {
     }
 
     // =====================================================
-    // プライベートメソッド
+    // プライベートヘルパー
     // =====================================================
 
     /**
+     * クリップボードへコピーするプレーンテキストを生成します。
+     * ブロック間の区切りは単一改行に統一し、不自然な空行を防ぎます。
+     *
+     * @param {*} slice - ProseMirror Slice
+     * @returns {string} プレーンテキスト
+     * @private
+     */
+    _serializeClipboardText(slice) {
+        if (!slice?.content || typeof slice.content.textBetween !== 'function') {
+            return '';
+        }
+
+        return slice.content.textBetween(0, slice.content.size, '\n');
+    }
+
+    /**
      * エディタ更新時の処理
-     * 
+     *
      * @private
      */
     _onEditorUpdate() {
@@ -415,8 +436,8 @@ export class EditorCore {
     }
 
     /**
-     * 選択更新時の処理
-     * 
+     * 選択範囲更新時の処理
+     *
      * @private
      */
     _onSelectionUpdate() {
@@ -531,7 +552,7 @@ export class EditorCore {
     _insertLinkFromPaste(url) {
         if (!this.tiptap) return;
 
-        // http/httpsが無い場合は追加
+        // http/httpsが無い場合の追加
         let href = url;
         if (!href.startsWith('http://') && !href.startsWith('https://')) {
             href = 'https://' + href;
@@ -540,13 +561,13 @@ export class EditorCore {
         const { from, to, empty } = this.tiptap.state.selection;
 
         if (!empty && from !== to) {
-            // テキスト選択がある場合: 選択テキストにリンクを適用
+            // テキスト選択がある場合、選択テキストにリンクを適用
             this.tiptap.chain()
                 .focus()
                 .setLink({ href })
                 .run();
         } else {
-            // テキスト選択がない場合: URLをテキストとして挿入し、リンクを適用
+            // テキスト選択がない場合、URLをテキストとして挿入し、リンクを適用
             this.tiptap.chain()
                 .focus()
                 .insertContent(url)
@@ -570,3 +591,5 @@ export class EditorCore {
         }
     }
 }
+
+
