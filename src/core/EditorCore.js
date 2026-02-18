@@ -27,7 +27,8 @@ import {
     Color,
     Highlight,
     TaskList,
-    TaskItem
+    TaskItem,
+    TextAlign
 } from 'tiptap';
 
 /**
@@ -145,6 +146,9 @@ export class EditorCore {
             TaskItem.configure({
                 nested: true,
             }),
+            TextAlign.configure({
+                types: ['heading', 'paragraph', 'boxContainer'],
+            }),
             TextStyle,
             Color,
             Underline.extend({
@@ -237,7 +241,11 @@ export class EditorCore {
             'strike': () => this.tiptap.chain().focus().toggleStrike().run(),
             'insertUnorderedList': () => this.tiptap.chain().focus().toggleBulletList().run(),
             'insertOrderedList': () => this.tiptap.chain().focus().toggleOrderedList().run(),
-            'insertTaskList': () => this.tiptap.chain().focus().toggleTaskList().run()
+            'insertAnnotatedList': () => this.tiptap.chain().focus().toggleAnnotatedList().run(), // Assuming this exists or will be added
+            'insertTaskList': () => this.tiptap.chain().focus().toggleTaskList().run(),
+            'alignLeft': () => this.tiptap.chain().focus().setTextAlign('left').run(),
+            'alignCenter': () => this.tiptap.chain().focus().setTextAlign('center').run(),
+            'alignRight': () => this.tiptap.chain().focus().setTextAlign('right').run()
         };
 
         if (commandMap[style]) {

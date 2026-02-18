@@ -8,7 +8,7 @@
  * - ルビテキスト（rt要素）は編集不可（パネル経由のみ）
  * - NodeViewで<ruby>ベーステキスト<rt contenteditable="false">...</rt></ruby>を生成
  */
-import { Node, mergeAttributes } from 'tiptap';
+import { Node, mergeAttributes, DOMParser } from 'tiptap';
 
 export const Ruby = Node.create({
     name: 'ruby',
@@ -57,16 +57,25 @@ export const Ruby = Node.create({
                 tag: 'ruby',
                 // rt要素を除いたコンテンツを本文として取得
                 getContent: (element, schema) => {
-                    const content = [];
-                    for (const node of element.childNodes) {
-                        if (node.nodeType === 3) { // TEXT_NODE
-                            content.push(node.textContent);
-                        } else if (node.nodeType === 1 &&
-                            node.tagName !== 'RT' && node.tagName !== 'RP') {
-                            content.push(node.textContent);
+                    // 一時的なコンテナ（インライン要素としてパースさせるためspanを使用）
+                    const temp = document.createElement('span');
+
+                    // 子要素を走査
+                    Array.from(element.childNodes).forEach(node => {
+                        // RT, RP 要素以外を抽出
+                        const nodeName = node.nodeName.toUpperCase();
+                        if (nodeName !== 'RT' && nodeName !== 'RP') {
+                            temp.appendChild(node.cloneNode(true));
                         }
-                    }
-                    return content.join('');
+                    });
+
+                    // DOMParserを使ってパース（マークを保持）
+                    // contentDOMとして扱うため、Sliceとしてパース
+                    const parser = DOMParser.fromSchema(schema);
+                    const slice = parser.parseSlice(temp);
+
+                    // Fragmentの内容を配列として返す（ProseMirrorがgetContentに期待する形式）
+                    return slice.content;
                 }
             }
         ];
@@ -96,9 +105,9 @@ export const Ruby = Node.create({
             rtAttrs.style = rubyStyle.join('; ');
         }
 
-        // <ruby>0(コンテンツ)<rt contenteditable="false">ルビ</rt></ruby>
+        // <ruby><span>0(コンテンツ)</span><rt contenteditable="false">ルビ</rt></ruby>
         // 0はTiptapのcontent hole（ベーステキストが入る）
-        return ['ruby', rubyAttrs, 0, ['rt', rtAttrs, rubyText]];
+        return ['ruby', rubyAttrs, ['span', 0], ['rt', rtAttrs, rubyText]];
     },
 
     // NodeViewの追加（rt要素を動的に管理）
@@ -166,13 +175,17 @@ export const Ruby = Node.create({
                 // スタイル適用
                 if (color) {
                     rt.style.color = color;
+                    dom.style.color = color;
                 } else {
                     rt.style.color = '';
+                    dom.style.color = '';
                 }
                 if (backgroundColor) {
                     rt.style.backgroundColor = backgroundColor;
+                    dom.style.backgroundColor = backgroundColor;
                 } else {
                     rt.style.backgroundColor = '';
+                    dom.style.backgroundColor = '';
                 }
             };
 

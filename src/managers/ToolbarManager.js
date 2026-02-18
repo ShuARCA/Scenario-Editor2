@@ -361,6 +361,48 @@ export class ToolbarManager {
             });
         }
 
+        // テキスト配置の更新
+        const alignDropdown = document.getElementById('alignDropdown');
+        if (alignDropdown) {
+            const triggerIcon = alignDropdown.querySelector('.dropdown-trigger .icon:not([style*="width"]) path');
+
+            let currentAlign = 'left';
+            if (this.editor.tiptap.isActive({ textAlign: 'center' })) {
+                currentAlign = 'center';
+            } else if (this.editor.tiptap.isActive({ textAlign: 'right' })) {
+                currentAlign = 'right';
+            }
+            // default is left (or undefined which behaves like left)
+
+            const alignIcons = {
+                'left': "M3,3H21V5H3V3M3,7H15V9H3V7M3,11H21V13H3V11M3,15H15V17H3V15M3,19H21V21H3V19Z",
+                'center': "M3,3H21V5H3V3M7,7H17V9H7V7M3,11H21V13H3V11M7,15H17V17H7V15M3,19H21V21H3V19Z",
+                'right': "M3,3H21V5H3V3M9,7H21V9H9V7M3,11H21V13H3V11M9,15H21V17H9V15M3,19H21V21H3V19Z"
+            };
+
+            // トリガーアイコン更新
+            if (triggerIcon && alignIcons[currentAlign]) {
+                triggerIcon.setAttribute('d', alignIcons[currentAlign]);
+            }
+
+            // ドロップダウン項目のアクティブ表示
+            const items = alignDropdown.querySelectorAll('.dropdown-item');
+            items.forEach(item => {
+                const cmd = item.dataset.cmd; // alignLeft, alignCenter, alignRight
+                const alignTypes = {
+                    'alignLeft': 'left',
+                    'alignCenter': 'center',
+                    'alignRight': 'right'
+                };
+
+                if (alignTypes[cmd] === currentAlign) {
+                    item.classList.add('active');
+                } else {
+                    item.classList.remove('active');
+                }
+            });
+        }
+
         // 文字色・背景色のアイコン反映
         // 文字色
         const textColorBtn = document.getElementById('textColorBtn');

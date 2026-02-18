@@ -323,7 +323,6 @@
 .shape.group-parent {
     align-items: flex-start;
     padding-top: 6px;
-    background-color: var(--surface-color);
 }
 
 .group-toggle {
@@ -373,7 +372,7 @@
 
 .connection-path.selected {
     stroke: var(--primary-color);
-    stroke-width: 3;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-color) 50%, transparent);
 }
 
 /* 接続線プレビュー */
@@ -669,4 +668,9 @@ body.locked .toolbar-separator {
     right: -4px;
     transform: translateY(-50%);
     cursor: e-resize;
+}
+
+/* 接続モード中はリサイズハンドルを非表示 */
+.connect-mode .resize-handle {
+    display: none !important;
 }

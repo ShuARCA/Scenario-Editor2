@@ -167,11 +167,11 @@ export class ConnectionManager {
         // パスを計算
         const pathD = this._calculatePath(startPt, endPt, conn.fromPoint, conn.toPoint);
 
-        // 当たり判定用の太いパス
+        // 当たり判定用の太いパス（クリックしやすくするため）
         const hitPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
         hitPath.id = `conn-hit-${conn.id}`;
         hitPath.setAttribute('d', pathD);
-        hitPath.setAttribute('stroke', 'rgba(0,0,0,0)'); // Transparent but hit-testable
+        hitPath.setAttribute('stroke', 'rgba(0,0,0,0)'); // 透明だが判定はある
         hitPath.setAttribute('stroke-width', '20');
         hitPath.setAttribute('fill', 'none');
         hitPath.style.pointerEvents = 'stroke';
@@ -209,12 +209,44 @@ export class ConnectionManager {
             path.setAttribute('stroke-dasharray', '8,4');
         }
 
-        // -------------------------------------------------------------
-        // 動的マーカー生成 (Backup logic restored)
-        // -------------------------------------------------------------
+        // マーカーの更新と適用
+        const { markerId, markerTailId } = this._updateConnectionMarkers(conn.id, actualColor);
+        const arrowStyle = conn.style?.arrow || 'end';
+
+        // 終点マーカー
+        if (arrowStyle === 'end' || arrowStyle === 'both') {
+            path.setAttribute('marker-end', `url(#${markerId})`);
+        } else {
+            path.removeAttribute('marker-end');
+        }
+
+        // 始点マーカー
+        if (arrowStyle === 'both') {
+            path.setAttribute('marker-start', `url(#${markerTailId})`);
+        } else {
+            path.removeAttribute('marker-start');
+        }
+
+        this.app.connectionsLayer.appendChild(path);
+
+        // ラベル
+        if (conn.style?.label) {
+            this._drawConnectionLabel(conn, startPt, endPt);
+        }
+    }
+
+    /**
+     * 接続線のマーカー（矢印）を作成・更新します。
+     * 
+     * @param {string} connId - 接続線ID
+     * @param {string} color - 色コード
+     * @returns {{markerId: string, markerTailId: string}} マーカーID
+     * @private
+     */
+    _updateConnectionMarkers(connId, color) {
         const defs = this.app.connectionsLayer.querySelector('defs');
-        const markerId = `arrow-${conn.id}`;
-        const markerTailId = `arrow-tail-${conn.id}`;
+        const markerId = `arrow-${connId}`;
+        const markerTailId = `arrow-tail-${connId}`;
 
         // 終点マーカー作成・更新
         let marker = document.getElementById(markerId);
@@ -231,7 +263,7 @@ export class ConnectionManager {
             marker.appendChild(markerPath);
             defs.appendChild(marker);
         }
-        marker.querySelector('path').setAttribute('fill', actualColor);
+        marker.querySelector('path').setAttribute('fill', color);
 
         // 始点マーカー作成・更新
         let markerTail = document.getElementById(markerTailId);
@@ -244,7 +276,6 @@ export class ConnectionManager {
             markerTail.setAttribute('refY', '3');
             markerTail.setAttribute('orient', 'auto');
             const markerTailPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-            // 矢印を反対向きに（終点マーカーと逆方向）
             markerTailPath.setAttribute('d', 'M6,0 L0,3 L6,6');
             markerTail.appendChild(markerTailPath);
             defs.appendChild(markerTail);
@@ -253,31 +284,9 @@ export class ConnectionManager {
             markerTail.setAttribute('refX', '0');
             markerTail.querySelector('path').setAttribute('d', 'M6,0 L0,3 L6,6');
         }
-        markerTail.querySelector('path').setAttribute('fill', actualColor);
+        markerTail.querySelector('path').setAttribute('fill', color);
 
-        // マーカーの適用
-        const arrowStyle = conn.style?.arrow || 'end';
-
-        // 終点
-        if (arrowStyle === 'end' || arrowStyle === 'both') {
-            path.setAttribute('marker-end', `url(#${markerId})`);
-        } else {
-            path.removeAttribute('marker-end');
-        }
-
-        // 始点
-        if (arrowStyle === 'both') {
-            path.setAttribute('marker-start', `url(#${markerTailId})`);
-        } else {
-            path.removeAttribute('marker-start');
-        }
-
-        this.app.connectionsLayer.appendChild(path);
-
-        // ラベル
-        if (conn.style?.label) {
-            this._drawConnectionLabel(conn, startPt, endPt);
-        }
+        return { markerId, markerTailId };
     }
 
     /**
@@ -335,17 +344,18 @@ export class ConnectionManager {
      * @param {string} id - 接続線ID
      */
     removeConnection(id) {
-        this.app.connections = this.app.connections.filter(c => c.id !== id);
+        // コアから接続データを削除
+        this.app.core.removeConnection(id);
 
-        // パスと当たり判定の削除
+        // パスと当たり判定、ラベルの削除
         const path = document.getElementById(`conn-path-${id}`);
         const hit = document.getElementById(`conn-hit-${id}`);
-        const label = document.getElementById(`conn-label-${id}`); // ラベルも削除
+        const label = document.getElementById(`conn-label-${id}`);
         if (path) path.remove();
         if (hit) hit.remove();
         if (label) label.remove();
 
-        // マーカーの削除 (ロバスト性向上のため追加)
+        // マーカーの削除
         const marker = document.getElementById(`arrow-${id}`);
         const markerTail = document.getElementById(`arrow-tail-${id}`);
         if (marker) marker.remove();
@@ -499,22 +509,7 @@ export class ConnectionManager {
     }
 
     /**
-     * 開始・終了点距離に応じたスタブ長を返します。
-     *
-     * @param {{x: number, y: number}} start - 開始点
-     * @param {{x: number, y: number}} end - 終了点
-     * @returns {number} スタブ長
-     * @private
-     */
-    _calculateStubLength(start, end) {
-        const dx = Math.abs(end.x - start.x);
-        const dy = Math.abs(end.y - start.y);
-        const base = Math.max(dx, dy);
-        return Math.max(16, Math.min(40, base * 0.25));
-    }
-
-    /**
-     * 角丸鍵線用の折れ点列を生成します。
+     * 角丸鍵線用の折れ点列を生成します（SmoothStep風ロジック）。
      *
      * @param {{x: number, y: number}} start - 開始点
      * @param {{x: number, y: number}} end - 終了点
@@ -524,43 +519,145 @@ export class ConnectionManager {
      * @private
      */
     _buildOrthogonalPoints(start, end, fromPoint, toPoint) {
-        const startDir = this._getDirectionVector(fromPoint);
-        const endDir = this._getDirectionVector(toPoint);
-        const stubLength = this._calculateStubLength(start, end);
+        const sourceDir = this._getDirectionVector(fromPoint);
+        const targetDir = this._getDirectionVector(toPoint);
 
+        // 1. 初期スタブの計算
+        // ノードから少し離れた位置まで必ず直進させる
+        const minDistance = 20;
         const startStub = {
-            x: start.x + startDir.x * stubLength,
-            y: start.y + startDir.y * stubLength
+            x: start.x + sourceDir.x * minDistance,
+            y: start.y + sourceDir.y * minDistance
         };
         const endStub = {
-            x: end.x + endDir.x * stubLength,
-            y: end.y + endDir.y * stubLength
+            x: end.x + targetDir.x * minDistance,
+            y: end.y + targetDir.y * minDistance
         };
 
+        // 2. 中間点の計算
         const points = [start, startStub];
-        const sameX = Math.abs(startStub.x - endStub.x) < 0.5;
-        const sameY = Math.abs(startStub.y - endStub.y) < 0.5;
 
-        if (sameX || sameY) {
-            points.push(endStub);
+        const isHorizontalStart = this._isHorizontalPoint(fromPoint);
+        const isHorizontalEnd = this._isHorizontalPoint(toPoint);
+
+        if (isHorizontalStart === isHorizontalEnd) {
+            // 同じ向き（水平同士 or 垂直同士）
+            const isHorizontal = isHorizontalStart;
+            // ベクトルの向きが完全に一致するか（Right->Right など）
+            const isSameDirection = (sourceDir.x === targetDir.x) && (sourceDir.y === targetDir.y);
+
+            if (isHorizontal) {
+                // 水平同士
+                if (isSameDirection) {
+                    // Right->Right または Left->Left
+                    // 常に迂回が必要。endStubへの進入方向とtargetDirが逆になるため、
+                    // endStubの手前で折り返す（180度ターン）のを避けるには、
+                    // endStubよりも「奥」まで行ってから戻る必要がある。
+                    const dir = sourceDir.x; // 1 or -1
+                    // 2つのStubのうち、進行方向により奥にある方を取得し、さらにマージンを追加
+                    let detourX;
+                    if (dir > 0) { // Right
+                        detourX = Math.max(startStub.x, endStub.x) + minDistance;
+                    } else { // Left
+                        detourX = Math.min(startStub.x, endStub.x) - minDistance;
+                    }
+
+                    points.push({ x: detourX, y: startStub.y });
+                    points.push({ x: detourX, y: endStub.y });
+
+                } else {
+                    // Right->Left または Left->Right (対面または背中合わせ)
+                    const dir = sourceDir.x;
+                    const targetRelX = (endStub.x - startStub.x) * dir;
+
+                    if (targetRelX > 0) {
+                        // 対面（向き合っている）: 中間で縦移動
+                        const midX = (startStub.x + endStub.x) / 2;
+                        points.push({ x: midX, y: startStub.y });
+                        points.push({ x: midX, y: endStub.y });
+                    } else {
+                        // 背中合わせ: 縦に迂回が必要
+                        const midY = (startStub.y + endStub.y) / 2;
+                        points.push({ x: startStub.x, y: midY });
+                        points.push({ x: endStub.x, y: midY });
+                    }
+                }
+            } else {
+                // 垂直同士
+                if (isSameDirection) {
+                    // Top->Top または Bottom->Bottom
+                    const dir = sourceDir.y; // 1 or -1
+                    let detourY;
+                    if (dir > 0) { // Bottom
+                        detourY = Math.max(startStub.y, endStub.y) + minDistance;
+                    } else { // Top
+                        detourY = Math.min(startStub.y, endStub.y) - minDistance;
+                    }
+
+                    points.push({ x: startStub.x, y: detourY });
+                    points.push({ x: endStub.x, y: detourY });
+
+                } else {
+                    // Top->Bottom または Bottom->Top
+                    const dir = sourceDir.y;
+                    const targetRelY = (endStub.y - startStub.y) * dir;
+
+                    if (targetRelY > 0) {
+                        // 対面: 中間で横移動
+                        const midY = (startStub.y + endStub.y) / 2;
+                        points.push({ x: startStub.x, y: midY });
+                        points.push({ x: endStub.x, y: midY });
+                    } else {
+                        // 背中合わせ: 横に迂回
+                        const midX = (startStub.x + endStub.x) / 2;
+                        points.push({ x: midX, y: startStub.y });
+                        points.push({ x: midX, y: endStub.y });
+                    }
+                }
+            }
         } else {
-            const fromHorizontal = this._isHorizontalPoint(fromPoint);
-            const toHorizontal = this._isHorizontalPoint(toPoint);
+            // 異なる向き（水平 -> 垂直 or 垂直 -> 水平）
+            if (isHorizontalStart) {
+                // 水平(Start) -> 垂直(End)
+                const dirX = sourceDir.x;
+                const isTargetAheadX = (endStub.x - startStub.x) * dirX > 0;
 
-            if (fromHorizontal !== toHorizontal) {
-                if (fromHorizontal) {
+                const dirY = targetDir.y;
+                // endStubへの進入方向チェック（Endに入るにはtargetDirの逆から入る必要がある）
+                const canEnterDirectly = (endStub.y - startStub.y) * targetDir.y < 0;
+
+                if (isTargetAheadX && canEnterDirectly) {
+                    // L字で接続可能
                     points.push({ x: endStub.x, y: startStub.y });
                 } else {
+                    // 迂回が必要
+                    // どちらの軸を優先するか？ 
+                    // 交点 (startStub.x, endStub.y) を使うと:
+                    // startStub -> 交点 (垂直移動。Startは水平なのにここで直角？) -> おかしい。
+                    // startStubからは水平にしか出られない。
+                    // なので、必ず startStub -> (something, startStub.y) -> ... と続く。
+
+                    // L字が無理なら、2回曲がる必要がある。
+                    // パターンA: X軸を合わせてから縦移動 (isTargetAheadXならこれだった)
+                    // パターンB: Y軸を合わせてから... いやStartは水平移動しかできない。
+
+                    // なので、必ず「startStubから水平移動」して「endStubと同じX」または「中間X」まで行く。
+                    // しかし isTargetAheadX でない（背中側）なら、一度戻らないといけない。
+                    // または、Xはあってるが canEnterDirectly でない（ターゲットの後ろ側に回り込む必要がある）場合。
+
                     points.push({ x: startStub.x, y: endStub.y });
                 }
-            } else if (fromHorizontal) {
-                const midX = (startStub.x + endStub.x) / 2;
-                points.push({ x: midX, y: startStub.y });
-                points.push({ x: midX, y: endStub.y });
             } else {
-                const midY = (startStub.y + endStub.y) / 2;
-                points.push({ x: startStub.x, y: midY });
-                points.push({ x: endStub.x, y: midY });
+                // 垂直(Start) -> 水平(End)
+                const dirY = sourceDir.y;
+                const isTargetAheadY = (endStub.y - startStub.y) * dirY > 0;
+                const canEnterDirectly = (endStub.x - startStub.x) * targetDir.x < 0;
+
+                if (isTargetAheadY && canEnterDirectly) {
+                    points.push({ x: startStub.x, y: endStub.y });
+                } else {
+                    points.push({ x: endStub.x, y: startStub.y });
+                }
             }
         }
 
@@ -578,46 +675,46 @@ export class ConnectionManager {
      * @private
      */
     _simplifyOrthogonalPoints(points) {
+        if (points.length < 2) return points;
+
         const epsilon = 0.5;
-        const deduped = [];
+        const simplified = [points[0]];
 
-        points.forEach(point => {
-            const last = deduped[deduped.length - 1];
-            if (
-                !last ||
-                Math.abs(last.x - point.x) > epsilon ||
-                Math.abs(last.y - point.y) > epsilon
-            ) {
-                deduped.push(point);
-            }
-        });
-
-        if (deduped.length <= 2) {
-            return deduped;
-        }
-
-        const simplified = [deduped[0]];
-        for (let i = 1; i < deduped.length - 1; i++) {
+        for (let i = 1; i < points.length - 1; i++) {
             const prev = simplified[simplified.length - 1];
-            const current = deduped[i];
-            const next = deduped[i + 1];
+            const curr = points[i];
+            const next = points[i + 1];
 
-            const prevHorizontal = Math.abs(prev.y - current.y) < epsilon;
-            const nextHorizontal = Math.abs(current.y - next.y) < epsilon;
-            const prevVertical = Math.abs(prev.x - current.x) < epsilon;
-            const nextVertical = Math.abs(current.x - next.x) < epsilon;
-
-            const isCollinearHorizontal = prevHorizontal && nextHorizontal;
-            const isCollinearVertical = prevVertical && nextVertical;
-
-            if (isCollinearHorizontal || isCollinearVertical) {
+            // 1. 重複削除
+            if (Math.abs(prev.x - curr.x) < epsilon && Math.abs(prev.y - curr.y) < epsilon) {
                 continue;
             }
 
-            simplified.push(current);
+            // 2. 同一直線上の点削除
+            // 垂直線上
+            const isVertical =
+                Math.abs(prev.x - curr.x) < epsilon &&
+                Math.abs(curr.x - next.x) < epsilon;
+
+            // 水平線上
+            const isHorizontal =
+                Math.abs(prev.y - curr.y) < epsilon &&
+                Math.abs(curr.y - next.y) < epsilon;
+
+            if (isVertical || isHorizontal) {
+                continue;
+            }
+
+            simplified.push(curr);
         }
 
-        simplified.push(deduped[deduped.length - 1]);
+        // 最後の点を追加（重複チェック）
+        const last = simplified[simplified.length - 1];
+        const end = points[points.length - 1];
+        if (Math.abs(last.x - end.x) > epsilon || Math.abs(last.y - end.y) > epsilon) {
+            simplified.push(end);
+        }
+
         return simplified;
     }
 
