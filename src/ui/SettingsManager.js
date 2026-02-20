@@ -13,7 +13,7 @@ const DEFAULT_SETTINGS = {
     primaryColor: '#0d9488',
     fontFamily: 'sans-serif',
     fontSize: '16px',
-    editorBgColor: '#fdfdfdff',
+    editorBgColor: '#feffffff',
     editorTextColor: '#2c2c2c',
     backgroundImage: null,
     commentDisplayMode: 'hover'
@@ -35,9 +35,9 @@ const THEME_COLORS = {
     },
     [THEMES.DARK]: {
         surface: '#303030',
-        text: '#f8fafc',
+        text: '#e7e7e7',
         border: '#3c3c3d',
-        background: '#141414ff',
+        background: '#282829ff',
         editorBgFallback: '#303030'
     }
 };
@@ -109,7 +109,8 @@ const ELEMENT_IDS = {
     bgImagePreview: 'bg-image-preview',
     editor: 'editor',
     mainContent: 'main-content',
-    editorContainer: 'editor-container'
+    editorContainer: 'editor-container',
+    openCustomCssBtn: 'open-custom-css-btn'
 };
 
 
@@ -179,6 +180,13 @@ export class SettingsManager {
                 }
             });
         }
+
+        // カスタムCSS設定ボタン
+        this._addEventListener(ELEMENT_IDS.openCustomCssBtn, 'click', () => {
+            if (this._onOpenCustomCss) {
+                this._onOpenCustomCss();
+            }
+        });
     }
 
     /**

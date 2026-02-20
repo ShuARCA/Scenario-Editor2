@@ -43,3 +43,9 @@ export {
 
 // HTMLサニタイザー
 export { Sanitizer } from './Sanitizer.js';
+
+// CSSサニタイザー
+export { CssSanitizer } from './CssSanitizer.js';
+
+// WCAGコントラストチェッカー
+export { WcagChecker } from './WcagChecker.js';
