@@ -1,0 +1,523 @@
+/* ============================================
+   カスタムCSS設定モーダル
+   settings.css のデザインルールに準拠
+   ============================================ */
+
+/* モーダルラッパー */
+.custom-css-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 3000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.custom-css-modal.hidden {
+    display: none !important;
+}
+
+/* オーバーレイ */
+.custom-css-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(2px);
+}
+
+/* メインコンテナ */
+.custom-css-container {
+    position: relative;
+    background-color: var(--surface-color);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+    width: 800px;
+    max-width: 95vw;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    z-index: 1;
+}
+
+/* ============================================
+   ヘッダー
+   ============================================ */
+.custom-css-header {
+    display: flex;
+    align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border-color);
+    gap: 16px;
+    flex-shrink: 0;
+}
+
+.custom-css-title {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-color);
+    flex: 1;
+}
+
+.custom-css-close-btn {
+    margin-left: auto;
+    width: 32px;
+    height: 32px;
+    border: none;
+    background: none;
+    border-radius: 6px;
+    font-size: 20px;
+    color: #9ca3af;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s;
+    flex-shrink: 0;
+}
+
+.custom-css-close-btn:hover {
+    color: #ef4444;
+    background-color: #fee2e2;
+}
+
+/* ============================================
+   ボディ（サイドバー + メイン）
+   ============================================ */
+.custom-css-body {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+    min-height: 0;
+}
+
+/* --- サイドバー --- */
+.custom-css-sidebar {
+    width: 170px;
+    flex-shrink: 0;
+    border-right: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    padding: 8px;
+    overflow-y: auto;
+}
+
+.custom-css-sidebar-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 4px 8px;
+    margin-bottom: 4px;
+}
+
+.custom-css-element-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+}
+
+.custom-css-element-item {
+    padding: 6px 12px;
+    border: none;
+    background: none;
+    border-radius: 6px;
+    font-size: 13px;
+    color: var(--text-color);
+    cursor: pointer;
+    text-align: left;
+    transition: background-color 0.1s;
+}
+
+.custom-css-element-item:hover {
+    background-color: var(--border-color);
+}
+
+.custom-css-element-item.active {
+    background-color: color-mix(in srgb, var(--primary-color) 15%, transparent);
+    color: var(--primary-color);
+    font-weight: 500;
+}
+
+/* I/Oセクション */
+.custom-css-io-section {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding-top: 8px;
+    margin-top: 8px;
+    border-top: 1px solid var(--border-color);
+}
+
+.custom-css-io-btn {
+    padding: 6px 10px;
+    border: 1px solid var(--border-color);
+    background-color: var(--surface-color);
+    border-radius: 6px;
+    font-size: 12px;
+    color: var(--text-color);
+    cursor: pointer;
+    text-align: left;
+    transition: background-color 0.15s;
+}
+
+.custom-css-io-btn:hover {
+    background-color: var(--border-color);
+}
+
+/* --- メインエリア --- */
+.custom-css-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-width: 0;
+}
+
+/* ============================================
+   疑似要素タブ
+   ============================================ */
+.custom-css-pseudo-tabs-container {
+    display: flex;
+    gap: 4px;
+    padding: 10px 20px 0;
+}
+
+.custom-css-pseudo-tabs-container.hidden {
+    display: none;
+}
+
+.custom-css-pseudo-tab {
+    padding: 4px 12px;
+    border: 1px solid var(--border-color);
+    background: none;
+    border-radius: 14px;
+    font-size: 12px;
+    color: var(--text-color);
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.custom-css-pseudo-tab:hover {
+    background-color: var(--border-color);
+}
+
+.custom-css-pseudo-tab.active {
+    background-color: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+}
+
+/* ============================================
+   セレクタ表示
+   ============================================ */
+.custom-css-selector-display {
+    padding: 8px 20px 4px;
+    font-family: 'Fira Code', 'Consolas', monospace;
+    font-size: 12px;
+    color: #64748b;
+    user-select: none;
+}
+
+/* ============================================
+   コードエリア
+   ============================================ */
+.custom-css-code-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 4px 12px 12px;
+    gap: 8px;
+    min-height: 0;
+}
+
+.custom-css-code-textarea {
+    flex: 1;
+    min-height: 160px;
+    padding: 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background-color: var(--surface-color);
+    color: var(--text-color);
+    font-family: 'Fira Code', 'Consolas', monospace;
+    font-size: 13px;
+    line-height: 1.6;
+    resize: none;
+    tab-size: 2;
+}
+
+.custom-css-code-textarea:focus {
+    outline: 2px solid color-mix(in srgb, var(--primary-color) 40%, transparent);
+    border-color: var(--primary-color);
+}
+
+.custom-css-code-errors {
+    max-height: 60px;
+    overflow-y: auto;
+    font-size: 12px;
+}
+
+.custom-css-code-errors.has-errors {
+    padding: 8px;
+    background-color: #fef2f2;
+    border: 1px solid #fecaca;
+    border-radius: 6px;
+}
+
+.custom-css-error-item {
+    color: #dc2626;
+    margin-bottom: 2px;
+}
+
+/* ============================================
+   WCAGインジケーター
+   ============================================ */
+.custom-css-wcag-indicator {
+    padding: 0 20px;
+}
+
+.custom-css-wcag-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+}
+
+.custom-css-wcag-swatch {
+    margin-bottom: 4px;
+}
+
+.custom-css-wcag-sample {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 14px;
+    border: 1px solid var(--border-color);
+}
+
+.custom-css-wcag-result {
+    font-size: 12px;
+    font-weight: 500;
+    padding: 2px 8px;
+    border-radius: 4px;
+    display: inline-block;
+}
+
+.custom-css-wcag-result.aaa {
+    color: #15803d;
+    background-color: #dcfce7;
+}
+
+.custom-css-wcag-result.aa {
+    color: #854d0e;
+    background-color: #fef9c3;
+}
+
+.custom-css-wcag-result.fail {
+    color: #dc2626;
+    background-color: #fee2e2;
+}
+
+/* ============================================
+   プレビュー
+   ============================================ */
+.custom-css-preview-section {
+    border-top: 1px solid var(--border-color);
+    flex-shrink: 0;
+}
+
+.custom-css-preview-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 8px 20px 4px;
+}
+
+.custom-css-preview {
+    padding: 8px 20px 12px;
+    max-height: 120px;
+    overflow-y: auto;
+    font-size: 14px;
+    color: var(--text-color);
+}
+
+.custom-css-preview h1,
+.custom-css-preview h2,
+.custom-css-preview h3,
+.custom-css-preview h4 {
+    margin: 0.3em 0;
+}
+
+.custom-css-preview p {
+    margin: 0.3em 0;
+}
+
+.custom-css-preview blockquote {
+    margin: 0.3em 1em;
+    padding: 0 1em;
+    border-left: 2px solid var(--primary-color);
+}
+
+.custom-css-preview pre {
+    margin: 0.3em 0;
+    padding: 0.5em;
+    background-color: rgba(200, 200, 200, 0.2);
+    border-radius: 4px;
+    font-size: 13px;
+}
+
+.custom-css-preview hr {
+    border: none;
+    border-top: 1px dashed var(--border-color);
+    margin: 0.5em 0;
+}
+
+.custom-css-preview .box-container {
+    border: 2px solid #cbd5e1;
+    border-radius: 8px;
+    padding: 8px 12px;
+    margin: 0.3em 0;
+}
+
+.custom-css-preview .box-title {
+    background-color: #cbd5e1;
+    padding: 2px 8px;
+    display: inline-block;
+    border-radius: 4px;
+    font-size: 0.9em;
+    margin-bottom: 4px;
+}
+
+/* ============================================
+   フッター
+   ============================================ */
+.custom-css-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 20px;
+    border-top: 1px solid var(--border-color);
+    flex-shrink: 0;
+    gap: 8px;
+}
+
+.custom-css-footer-left,
+.custom-css-footer-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.custom-css-btn {
+    padding: 6px 14px;
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.custom-css-btn-primary {
+    background-color: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+}
+
+.custom-css-btn-primary:hover {
+    opacity: 0.9;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+.custom-css-btn-secondary {
+    background-color: var(--surface-color);
+    color: var(--text-color);
+}
+
+.custom-css-btn-secondary:hover {
+    background-color: var(--border-color);
+}
+
+.custom-css-btn-danger {
+    background-color: #fef2f2;
+    color: #dc2626;
+    border-color: #fecaca;
+}
+
+.custom-css-btn-danger:hover {
+    background-color: #fee2e2;
+}
+
+/* ============================================
+   設定モーダル内のカスタムCSSボタン
+   ============================================ */
+.custom-css-open-btn {
+    width: 100%;
+    padding: 8px 14px;
+    border: 1px solid var(--border-color);
+    background-color: var(--surface-color);
+    border-radius: 6px;
+    font-size: 13px;
+    color: var(--text-color);
+    cursor: pointer;
+    transition: all 0.15s;
+    text-align: left;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.custom-css-open-btn:hover {
+    background-color: var(--border-color);
+}
+
+.custom-css-open-btn .icon {
+    font-size: 16px;
+}
+
+/* ============================================
+   レスポンシブ
+   ============================================ */
+@media (max-width: 768px) {
+    .custom-css-container {
+        width: 100%;
+        max-width: 100vw;
+        max-height: 100vh;
+        border-radius: 0;
+    }
+
+    .custom-css-body {
+        flex-direction: column;
+    }
+
+    .custom-css-sidebar {
+        width: 100%;
+        border-right: none;
+        border-bottom: 1px solid var(--border-color);
+        max-height: 100px;
+    }
+
+    .custom-css-element-list {
+        flex-direction: row;
+        flex-wrap: wrap;
+        gap: 4px;
+    }
+
+    .custom-css-footer {
+        flex-direction: column;
+    }
+}

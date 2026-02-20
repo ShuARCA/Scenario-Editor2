@@ -34,7 +34,7 @@ import { ShortcutManager } from './managers/ShortcutManager.js';
 import { FlowchartApp } from './flowchart/index.js'; // FlowchartAppはindexからエクスポート済み
 
 // UI・ストレージ・検索マネージャー
-import { UIManager, SearchManager, SettingsManager } from './ui/index.js';
+import { UIManager, SearchManager, SettingsManager, CustomCssManager, CustomCssEditor } from './ui/index.js';
 import { StorageManager } from './storage/index.js';
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -48,6 +48,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 2.5 ロックマネージャーの初期化
     const lockManager = new LockManager(eventBus);
+
+    // 2.6 カスタムCSSマネージャーの初期化
+    const customCssManager = new CustomCssManager();
+    customCssManager.loadFromStorage();
+    customCssManager.applyCustomStyles();
+
+    const customCssEditor = new CustomCssEditor(customCssManager);
+    customCssEditor.init();
+
+    // SettingsManagerとの連携: カスタムCSS設定ボタン押下時にモーダルを開く
+    settingsManager._onOpenCustomCss = () => {
+        settingsManager.close();
+        customCssEditor.open();
+    };
 
     // 3. エディタ機能マネージャーの初期化
     // 各マネージャーの作成（依存関係注入）
@@ -98,6 +112,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Managerへの直接アクセス
             if (prop === 'colorPickerManager') return editorManagers.colorPicker;
             if (prop === 'toolbarManager') return editorManagers.toolbar;
+            if (prop === 'customCssManager') return customCssManager;
             // 後方互換プロパティ
             if (prop === 'editorContainer') return target.editorContainer;
 
@@ -204,6 +219,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // StorageManagerには依存関係をフルセットで渡す
     const storageManager = new StorageManager(editorCore, editorManagers.colorPicker, flowchartApp, settingsManager, lockManager);
+    storageManager.setViewerExporterDeps({
+        customCssManager,
+        outlineManager: editorManagers.outline,
+    });
 
     // 9. 初期同期
     editorManagers.outline.updateOutline();

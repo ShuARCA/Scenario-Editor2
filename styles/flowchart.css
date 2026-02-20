@@ -159,12 +159,9 @@
    キャンバス
    ============================================ */
 #flowchart-canvas {
-    flex-grow: 1;
     overflow: auto;
     position: relative;
     cursor: grab;
-    background-image: radial-gradient(var(--flowchart-grid-color) 1px, transparent 1px);
-    background-size: var(--grid-size) var(--grid-size);
 }
 
 #flowchart-canvas.panning {

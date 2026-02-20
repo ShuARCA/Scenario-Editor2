@@ -11,6 +11,9 @@
 import { Sanitizer } from '../utils/Sanitizer.js';
 import { ZipHandler } from './ZipHandler.js';
 import { ImageProcessor } from './ImageProcessor.js';
+import { GoogleDriveProvider } from './GoogleDriveProvider.js';
+import { ViewerExporter } from './ViewerExporter.js';
+import { PdfImporter } from './PdfImporter.js';
 
 export class StorageManager {
     // ========================================
@@ -36,6 +39,11 @@ export class StorageManager {
         this.zipHandler = new ZipHandler();
         this.imageProcessor = new ImageProcessor();
 
+        // Google Drive プロバイダー
+        this.googleDriveProvider = new GoogleDriveProvider();
+        /** @type {string|null} Google Drive上のファイルID（上書き保存用） */
+        this.currentDriveFileId = null;
+
         this.title = '無題のドキュメント';
         this.filename = 'document.zip';
 
@@ -43,6 +51,27 @@ export class StorageManager {
         this.supportsFileSystemAccess = 'showSaveFilePicker' in window;
 
         this._init();
+
+        // ViewerExporter（HTMLエクスポート）は外部から注入される依存を待つため遅延初期化
+        this.viewerExporter = null;
+
+        // PDFインポーター
+        this.pdfImporter = new PdfImporter();
+    }
+
+    /**
+     * ViewerExporter に必要な追加の依存を設定します。
+     * main.js から呼び出されます。
+     * @param {Object} deps - { customCssManager, outlineManager }
+     */
+    setViewerExporterDeps(deps) {
+        this.viewerExporter = new ViewerExporter({
+            editorCore: this.editorCore,
+            flowchartApp: this.flowchartApp,
+            settingsManager: this.settingsManager,
+            customCssManager: deps.customCssManager,
+            outlineManager: deps.outlineManager,
+        });
     }
 
     /**
@@ -50,9 +79,8 @@ export class StorageManager {
      * @private
      */
     _init() {
-        // 保存・読み込みボタン
-        this._addEventListenerIfExists('saveBtn', 'click', () => this.save());
-        this._addEventListenerIfExists('loadBtn', 'click', () => this.triggerLoad());
+        // ドロップダウンメニューの初期化（保存・読み込み）
+        this._initStorageDropdowns();
 
         // 非表示のファイル入力を作成（フォールバック用）
         this._createHiddenFileInput();
@@ -70,6 +98,79 @@ export class StorageManager {
 
         // 前回のファイル名を復元
         this._restoreLastFilename();
+    }
+
+    /**
+     * ストレージ選択ドロップダウンメニューを初期化します。
+     * @private
+     */
+    _initStorageDropdowns() {
+        // 保存メニュー
+        this._setupDropdown('saveBtn', 'save-menu', {
+            local: () => this.save(),
+            gdrive: () => this.saveToGoogleDrive(),
+            export: () => this.exportAsHtml(),
+        });
+
+        // 読み込みメニュー
+        this._setupDropdown('loadBtn', 'load-menu', {
+            local: () => this.triggerLoad(),
+            gdrive: () => this.loadFromGoogleDrive(),
+            pdf: () => this.importPdf(),
+        });
+    }
+
+    /**
+     * エディタの内容をスタンドアロンHTMLビューワーとしてエクスポートします。
+     */
+    async exportAsHtml() {
+        if (!this.viewerExporter) {
+            alert('HTMLエクスポート機能が初期化されていません。');
+            return;
+        }
+        const titleText = this.title || '無題のドキュメント';
+        const baseFilename = this.filename.replace(/\.zip$/i, '');
+        await this.viewerExporter.export(titleText, baseFilename);
+    }
+
+    /**
+     * 汎用ドロップダウンを設定します。
+     * @private
+     * @param {string} triggerBtnId - トリガーとなるボタンのID
+     * @param {string} menuId - ドロップダウンメニューのID
+     * @param {Object<string, Function>} actions - data-target値とコールバックのマップ
+     */
+    _setupDropdown(triggerBtnId, menuId, actions) {
+        const triggerBtn = document.getElementById(triggerBtnId);
+        const menu = document.getElementById(menuId);
+        if (!triggerBtn || !menu) return;
+
+        // ボタンクリックでメニュー表示/非表示
+        triggerBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            // 他のメニューを閉じる
+            document.querySelectorAll('.storage-dropdown-menu').forEach(m => {
+                if (m !== menu) m.classList.add('hidden');
+            });
+            menu.classList.toggle('hidden');
+        });
+
+        // メニューアイテムのクリック
+        menu.querySelectorAll('.storage-menu-item').forEach(item => {
+            item.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const target = item.dataset.target;
+                menu.classList.add('hidden');
+                if (actions[target]) {
+                    actions[target]();
+                }
+            });
+        });
+
+        // メニュー外クリックで閉じる
+        document.addEventListener('click', () => {
+            menu.classList.add('hidden');
+        });
     }
 
     /**
@@ -238,7 +339,7 @@ export class StorageManager {
     }
 
     // ========================================
-    // 保存機能
+    // ローカル保存機能
     // ========================================
 
     /**
@@ -375,7 +476,7 @@ export class StorageManager {
     }
 
     // ========================================
-    // 読み込み機能
+    // ローカル読み込み機能
     // ========================================
 
     /**
@@ -600,6 +701,181 @@ export class StorageManager {
     _restoreLockState(data) {
         if (this.lockManager && data.locked !== undefined) {
             this.lockManager.setLocked(data.locked);
+        }
+    }
+
+    // ========================================
+    // PDFインポート機能
+    // ========================================
+
+    /**
+     * PDFファイルを選択し、エディタにインポートします。
+     */
+    async importPdf() {
+        try {
+            let file;
+
+            if (this.supportsFileSystemAccess) {
+                // File System Access API でファイル選択
+                const [handle] = await window.showOpenFilePicker({
+                    types: [{
+                        description: 'PDFファイル',
+                        accept: { 'application/pdf': ['.pdf'] }
+                    }],
+                    multiple: false
+                });
+                file = await handle.getFile();
+            } else {
+                // フォールバック: input[type=file] を使用
+                file = await this._selectFileViaInput('.pdf', 'application/pdf');
+                if (!file) return;
+            }
+
+            // インポート中の表示
+            const titleEl = document.getElementById('filename');
+            const originalTitle = titleEl ? titleEl.textContent : '';
+            if (titleEl) titleEl.textContent = 'PDFをインポート中...';
+
+            try {
+                const html = await this.pdfImporter.importFromFile(file);
+                this.editorCore.setContent(html);
+
+                // タイトルをPDFファイル名から設定
+                const pdfTitle = file.name.replace(/\.pdf$/i, '');
+                this.setTitle(pdfTitle);
+
+                alert('PDFのインポートが完了しました。');
+            } catch (importError) {
+                console.error('PDFインポートエラー:', importError);
+                alert('PDFのインポートに失敗しました: ' + importError.message);
+                // タイトルを元に戻す
+                if (titleEl) titleEl.textContent = originalTitle;
+            }
+
+        } catch (error) {
+            if (error.name === 'AbortError') {
+                // ユーザーがキャンセルした場合は何もしない
+                return;
+            }
+            console.error('PDFファイル選択エラー:', error);
+            alert('PDFファイルの選択に失敗しました: ' + error.message);
+        }
+    }
+
+    /**
+     * input[type=file] を使用してファイルを選択します。
+     * File System Access API が利用できない環境用のフォールバック。
+     * @private
+     * @param {string} accept - 受け入れるファイル拡張子
+     * @param {string} mimeType - MIMEタイプ
+     * @returns {Promise<File|null>}
+     */
+    _selectFileViaInput(accept, mimeType) {
+        return new Promise((resolve) => {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = accept;
+            input.style.display = 'none';
+            document.body.appendChild(input);
+
+            input.addEventListener('change', () => {
+                const file = input.files[0] || null;
+                document.body.removeChild(input);
+                resolve(file);
+            });
+
+            // キャンセル時
+            input.addEventListener('cancel', () => {
+                document.body.removeChild(input);
+                resolve(null);
+            });
+
+            input.click();
+        });
+    }
+
+    // ========================================
+    // Google Drive 保存機能
+    // ========================================
+
+    /**
+     * プロジェクトを Google Drive に保存します。
+     * 既にDriveファイルIDがある場合は上書き保存します。
+     */
+    async saveToGoogleDrive() {
+        try {
+            this.zipHandler.initNew();
+
+            // 既存のパイプラインでZIP Blobを生成
+            const editorContent = await this._processEditorContentForSave();
+            const settings = await this._processSettingsForSave();
+            const metadata = this._createMetadata(settings);
+
+            this.zipHandler.addFile('editor.html', editorContent);
+            this.zipHandler.addFile('content.md', this._getEditorPlainText());
+            this.zipHandler.addFile('metadata.json', JSON.stringify(metadata, null, 2));
+
+            const blob = await this.zipHandler.generateBlob();
+
+            // Google Drive に保存
+            const result = await this.googleDriveProvider.saveFile(
+                blob,
+                this.filename,
+                this.currentDriveFileId
+            );
+
+            // ファイルIDを記憶（次回上書き保存用）
+            this.currentDriveFileId = result.id;
+
+            console.log('Google Drive に保存しました:', result.name, '(ID:', result.id, ')');
+            alert('Google Drive に保存しました: ' + result.name);
+
+        } catch (error) {
+            if (error.name === 'AbortError') {
+                // ユーザーがキャンセルした場合は何もしない
+                return;
+            }
+            console.error('Google Drive 保存エラー:', error);
+            alert('Google Drive への保存に失敗しました: ' + error.message);
+        }
+    }
+
+    // ========================================
+    // Google Drive 読み込み機能
+    // ========================================
+
+    /**
+     * Google Drive からファイルを選択して読み込みます。
+     */
+    async loadFromGoogleDrive() {
+        try {
+            // Google Picker でファイルを選択
+            const picked = await this.googleDriveProvider.pickFile();
+            if (!picked) {
+                // ユーザーがキャンセルした場合
+                return;
+            }
+
+            // ファイルをダウンロード
+            const { blob, name } = await this.googleDriveProvider.loadFile(picked.id);
+
+            // ファイル名を更新
+            this.filename = name;
+            this.currentDriveFileId = picked.id;
+
+            // Blob を File オブジェクトに変換して既存のパイプラインで処理
+            const file = new File([blob], name, { type: 'application/zip' });
+            await this._processLoadedFile(file);
+
+            // ファイル名を localStorage に保存
+            localStorage.setItem('ieditweb-last-filename', name);
+
+        } catch (error) {
+            if (error.name === 'AbortError') {
+                return;
+            }
+            console.error('Google Drive 読み込みエラー:', error);
+            alert('Google Drive からの読み込みに失敗しました: ' + error.message);
         }
     }
 }

@@ -24,6 +24,7 @@
     <link rel="stylesheet" href="styles/search.css">
     <link rel="stylesheet" href="styles/settings.css">
     <link rel="stylesheet" href="styles/color-picker.css">
+    <link rel="stylesheet" href="styles/custom-css.css">
     <script>
         /**
          * Service Worker登録
@@ -58,12 +59,16 @@
     <script type="importmap">
         {
             "imports": {
-                "tiptap": "./assets/vendor/tiptap.bundle.js"
+                "tiptap": "./assets/vendor/tiptap.bundle.js",
+                "pdfjs": "./assets/lib/pdf.min.mjs"
             }
         }
     </script>
     <script src="assets/lib/jszip.min.js"></script>
     <script src="assets/lib/FileSaver.min.js"></script>
+    <!-- Google Identity Services / Google API -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="https://apis.google.com/js/api.js" async defer></script>
 </head>
 
 <body>
@@ -92,17 +97,70 @@
                         d="M12,15.5A3.5,3.5 0 0,1 8.5,12A3.5,3.5 0 0,1 12,8.5A3.5,3.5 0 0,1 15.5,12A3.5,3.5 0 0,1 12,15.5M19.43,12.97C19.47,12.65 19.5,12.33 19.5,12C19.5,11.67 19.47,11.35 19.43,11.03L21.54,9.37C21.73,9.22 21.78,8.95 21.66,8.73L19.66,5.27C19.54,5.05 19.27,4.96 19.05,5.05L16.56,6.05C16.04,5.66 15.5,5.32 14.87,5.07L14.5,2.42C14.46,2.18 14.25,2 14,2H10C9.75,2 9.54,2.18 9.5,2.42L9.13,5.07C8.5,5.32 7.96,5.66 7.44,6.05L4.95,5.05C4.73,4.96 4.46,5.05 4.34,5.27L2.34,8.73C2.21,8.95 2.27,9.22 2.46,9.37L4.57,11.03C4.53,11.35 4.5,11.67 4.5,12C4.5,12.33 4.53,12.65 4.57,12.97L2.46,14.63C2.27,14.78 2.21,15.05 2.34,15.27L4.34,18.73C4.46,18.95 4.73,19.04 4.95,18.95L7.44,17.95C7.96,18.34 8.5,18.68 9.13,18.93L9.5,21.58C9.54,21.82 9.75,22 10,22H14C14.25,22 14.46,21.82 14.5,21.58L14.87,18.93C15.5,18.68 16.04,18.34 16.56,17.95L19.05,18.95C19.27,19.04 19.54,18.95 19.66,18.73L21.66,15.27C21.78,15.05 21.73,14.78 21.54,14.63L19.43,12.97Z" />
                 </svg>
             </button>
-            <button id="saveBtn" title="保存 (Ctrl+S)">
-                <svg class="icon" viewBox="0 0 24 24">
-                    <path
-                        d="M15,9H5V5H15M12,19A3,3 0 0,1 9,16A3,3 0 0,1 12,13A3,3 0 0,1 15,16A3,3 0 0,1 12,19M17,3H5C3.89,3 3,3.9 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V7L17,3Z" />
-                </svg>
-            </button>
-            <button id="loadBtn" title="読み込み">
-                <svg class="icon" viewBox="0 0 24 24">
-                    <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z" />
-                </svg>
-            </button>
+            <div class="storage-dropdown" id="save-dropdown">
+                <button id="saveBtn" title="保存 (Ctrl+S)">
+                    <svg class="icon" viewBox="0 0 24 24">
+                        <path
+                            d="M15,9H5V5H15M12,19A3,3 0 0,1 9,16A3,3 0 0,1 12,13A3,3 0 0,1 15,16A3,3 0 0,1 12,19M17,3H5C3.89,3 3,3.9 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V7L17,3Z" />
+                    </svg>
+                </button>
+                <div class="storage-dropdown-menu hidden" id="save-menu">
+                    <button class="storage-menu-item" data-target="local">
+                        <svg class="icon" viewBox="0 0 24 24">
+                            <path
+                                d="M10,4H4C2.89,4 2,4.89 2,6V18A2,2 0 0,0 4,20H20A2,2 0 0,0 22,18V8C22,6.89 21.1,6 20,6H12L10,4Z" />
+                        </svg>
+                        <span>ローカルに保存</span>
+                    </button>
+                    <button class="storage-menu-item" data-target="gdrive">
+                        <svg class="icon" viewBox="0 0 24 24">
+                            <path
+                                d="M7.71,3.5L1.15,15L4.58,21L11.13,9.5M9.73,15L6.3,21H19.42L22.85,15M22.28,14L15.42,2H8.58L8.57,2L15.43,14" />
+                        </svg>
+                        <span>Google Driveに保存</span>
+                    </button>
+                    <div class="storage-menu-divider"></div>
+                    <button class="storage-menu-item" data-target="export">
+                        <svg class="icon" viewBox="0 -960 960 960">
+                            <path
+                                d="M480-320 280-520l56-58 104 104v-326h80v326l104-104 56 58-200 200ZM240-160q-33 0-56.5-23.5T160-240v-120h80v120h480v-120h80v120q0 33-23.5 56.5T720-160H240Z" />
+                        </svg>
+                        <span>HTMLエクスポート</span>
+                    </button>
+                </div>
+            </div>
+            <div class="storage-dropdown" id="load-dropdown">
+                <button id="loadBtn" title="読み込み">
+                    <svg class="icon" viewBox="0 0 24 24">
+                        <path
+                            d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z" />
+                    </svg>
+                </button>
+                <div class="storage-dropdown-menu hidden" id="load-menu">
+                    <button class="storage-menu-item" data-target="local">
+                        <svg class="icon" viewBox="0 0 24 24">
+                            <path
+                                d="M10,4H4C2.89,4 2,4.89 2,6V18A2,2 0 0,0 4,20H20A2,2 0 0,0 22,18V8C22,6.89 21.1,6 20,6H12L10,4Z" />
+                        </svg>
+                        <span>ローカルから読み込み</span>
+                    </button>
+                    <button class="storage-menu-item" data-target="gdrive">
+                        <svg class="icon" viewBox="0 0 24 24">
+                            <path
+                                d="M7.71,3.5L1.15,15L4.58,21L11.13,9.5M9.73,15L6.3,21H19.42L22.85,15M22.28,14L15.42,2H8.58L8.57,2L15.43,14" />
+                        </svg>
+                        <span>Google Driveから読み込み</span>
+                    </button>
+                    <div class="storage-menu-divider"></div>
+                    <button class="storage-menu-item" data-target="pdf">
+                        <svg class="icon" viewBox="0 0 24 24">
+                            <path
+                                d="M19,3H5C3.9,3 3,3.9 3,5V19C3,20.1 3.9,21 5,21H19C20.1,21 21,20.1 21,19V5C21,3.9 20.1,3 19,3M9.5,11.5C9.5,12.3 8.8,13 8,13H7V15H5.5V9H8C8.8,9 9.5,9.7 9.5,10.5V11.5M14.5,13.5C14.5,14.3 13.8,15 13,15H10.5V9H13C13.8,9 14.5,9.7 14.5,10.5V13.5M18.5,10.5H17V11.5H18.5V13H17V15H15.5V9H18.5V10.5M7,10.5H8V12H7V10.5M12,10.5H13V13.5H12V10.5Z" />
+                        </svg>
+                        <span>PDFから読み込み</span>
+                    </button>
+                </div>
+            </div>
         </div>
     </header>
 
@@ -618,11 +676,22 @@
                         <option value="hover">マウスオーバー時のみ</option>
                     </select>
                 </div>
+                <div class="setting-item">
+                    <button id="open-custom-css-btn" class="custom-css-open-btn">
+                        <span class="icon">🎨</span>
+                        <span>カスタムCSS設定</span>
+                    </button>
+                </div>
                 <div class="settings-footer">
                     <button id="save-settings-btn" class="primary-btn">保存して適用</button>
                 </div>
             </div>
         </div>
+    </div>
+
+    <!-- Custom CSS Modal -->
+    <div id="custom-css-modal" class="custom-css-modal hidden">
+        <!-- コンテンツはCustomCssEditor.jsが動的に構築 -->
     </div>
 
     <!-- Flowchart Context Menu -->

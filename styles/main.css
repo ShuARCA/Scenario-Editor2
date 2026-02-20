@@ -110,6 +110,63 @@ body {
   color: var(--primary-color);
 }
 
+/* ============================================
+   ストレージ選択ドロップダウン
+   ============================================ */
+.storage-dropdown {
+  position: relative;
+}
+
+.storage-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  min-width: 200px;
+  background-color: var(--surface-color);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 1100;
+}
+
+.storage-dropdown-menu.hidden {
+  display: none;
+}
+
+.storage-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  cursor: pointer;
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--text-color);
+  transition: background-color 0.1s;
+  white-space: nowrap;
+}
+
+.storage-menu-item:hover {
+  background-color: var(--border-color);
+}
+
+.storage-menu-item .icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.storage-menu-divider {
+  height: 1px;
+  background-color: var(--border-color);
+  margin: 4px 0;
+}
+
 /* レイアウト */
 #container {
   display: flex;
@@ -173,7 +230,6 @@ body {
   border-radius: 4px;
   margin-bottom: 4px;
   cursor: pointer;
-  color: #4b5563;
   text-decoration: none;
   transition: background-color 0.1s;
 }
