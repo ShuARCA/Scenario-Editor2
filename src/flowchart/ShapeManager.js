@@ -270,6 +270,10 @@ export class ShapeManager {
         this.hasMoved = false;
 
         const shape = this.app.shapes.get(shapeEl.id);
+        if (!shape) {
+            console.warn(`Shape data not found for id: ${shapeEl.id}`);
+            return;
+        }
         const canvasRect = this.app.canvas.getBoundingClientRect();
         const zoomLevel = this.app.zoomPanManager?.getZoom() || 1;
 
@@ -392,7 +396,12 @@ export class ShapeManager {
         if (!shapeEl) return;
 
         this.isResizing = true;
-        this.resizeTarget = this.app.shapes.get(shapeEl.id);
+        const shape = this.app.shapes.get(shapeEl.id);
+        if (!shape) {
+            console.warn(`Shape data not found for id: ${shapeEl.id}`);
+            return;
+        }
+        this.resizeTarget = shape;
         this.resizeHandlePos = handle.dataset.pos;
         this.resizeStart = { x: e.clientX, y: e.clientY };
         this.resizeStartDims = {

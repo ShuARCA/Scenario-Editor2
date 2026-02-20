@@ -395,6 +395,8 @@ export class FlowchartApp {
         // リサイズハンドル（ロック中はブロック）
         if (target.classList.contains('resize-handle')) {
             if (this._locked) return;
+            // 接続モード中はリサイズ不可
+            if (this.mode === 'connect') return;
             this.shapeManager.startResize(e, target);
             return;
         }
@@ -687,12 +689,30 @@ export class FlowchartApp {
      * @param {Object} data
      */
     setData(data) {
+        // 既存のシェイプDOMをクリア
+        if (this.shapesLayer) {
+            this.shapesLayer.innerHTML = '';
+        }
+
         this.core.setData(data);
 
         // DOM要素を再作成
         this.shapes.forEach(shape => {
             this.createShapeElement(shape);
         });
+
+        // グループの状態を復元
+        if (this.groupManager) {
+            this.shapes.forEach(shape => {
+                // スタイルとボタンの復元（group-parentクラスの付与、+/-ボタンの生成）
+                this.groupManager.updateShapeStyle(shape);
+
+                // 折りたたみ状態の適用（子要素の非表示など）
+                if (shape.collapsed) {
+                    this.groupManager.setChildrenVisibility(shape, false);
+                }
+            });
+        }
 
         this.drawConnections();
         this.updateCanvasSize();

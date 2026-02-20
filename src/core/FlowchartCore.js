@@ -280,9 +280,19 @@ export class FlowchartCore {
 
         // シェイプを復元
         if (data.shapes) {
-            Object.entries(data.shapes).forEach(([id, shapeData]) => {
-                this.shapes.set(id, { ...shapeData, id, element: null });
-            });
+            if (Array.isArray(data.shapes)) {
+                // 配列形式（Map.entries() からの保存）の場合
+                data.shapes.forEach(([id, shapeData]) => {
+                    if (id && shapeData) {
+                        this.shapes.set(id, { ...shapeData, id, element: null });
+                    }
+                });
+            } else {
+                // オブジェクト形式の場合
+                Object.entries(data.shapes).forEach(([id, shapeData]) => {
+                    this.shapes.set(id, { ...shapeData, id, element: null });
+                });
+            }
         }
 
         // 接続線を復元

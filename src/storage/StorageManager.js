@@ -431,7 +431,11 @@ export class StorageManager {
         if (editorHtml) {
             // 画像復元はImageProcessorに移譲
             const restoredHtml = await this.imageProcessor.restoreImages(editorHtml, this.zipHandler);
-            this.editorCore.setContent(restoredHtml);
+
+            // HTML正規化 (Tiptapの内部構造向けに調整)
+            const normalizedHtml = this._normalizeHtml(restoredHtml);
+
+            this.editorCore.setContent(normalizedHtml);
 
         } else {
             // フォールバック: プレーンテキスト
@@ -440,6 +444,45 @@ export class StorageManager {
                 this.editorCore.setContent(`<p>${text}</p>`);
             }
         }
+    }
+
+    /**
+     * HTMLを正規化し、Tiptapが読み込める形式に変換します。
+     * 特に TaskList (TaskItem) の構造を修正します。
+     * @private
+     * @param {string} html - 正規化対象のHTML
+     * @returns {string} 正規化後のHTML
+     */
+    _normalizeHtml(html) {
+        if (!html) return '';
+
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+
+        // TaskItem (li[data-type="taskItem"]) の構造を修正
+        // Tiptapは <li><p>...</p></li> のような構造を期待するが、
+        // 保存されたHTMLには <li><label><input/></label><div><p>...</p></div></li> が含まれている場合がある
+        const taskItems = doc.querySelectorAll('li[data-type="taskItem"]');
+
+        taskItems.forEach(li => {
+            // 1. label (checkbox wrapper) を削除
+            const label = li.querySelector('label');
+            if (label) {
+                li.removeChild(label);
+            }
+
+            // 2. div (content wrapper) をアンラップ
+            // li > div > p  -->  li > p
+            const div = li.querySelector('div');
+            if (div) {
+                while (div.firstChild) {
+                    li.insertBefore(div.firstChild, div);
+                }
+                li.removeChild(div);
+            }
+        });
+
+        return doc.body.innerHTML;
     }
 
     /**

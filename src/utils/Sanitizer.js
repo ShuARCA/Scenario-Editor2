@@ -55,7 +55,11 @@ export class Sanitizer {
             'data-outline-icon', 'data-color',
             // コメント・リンクのカスタム属性
             'data-comment-id', 'data-comment-text',
-            'data-link-id', 'data-heading-id'
+            'data-link-id', 'data-heading-id',
+            // タスクリスト用
+            'data-type', 'data-checked',
+            // ボックス用
+            'data-title-style', 'data-border-color', 'data-background-color'
         ];
 
         // =====================================================
