@@ -81,7 +81,7 @@
 .flowchart-toolbar {
     position: absolute;
     background-color: transparent;
-    padding: 8px 12px;
+    padding: 8px 12px 8px 48px;
     display: flex;
     gap: 8px;
     z-index: 50;
@@ -91,12 +91,12 @@
 
 /* フローチャートトグルボタン（独立） */
 .flowchart-toggle-btn {
-    position: relative;
-    top: 10px;
-    left: 10px;
+    position: absolute;
+    top: 8px;
+    left: 12px;
     z-index: 200;
-    width: 32px;
-    height: 32px;
+    width: 26px;
+    height: 26px;
     background-color: var(--surface-color);
     border: 1px solid var(--border-color);
     border-radius: 4px;
@@ -114,8 +114,8 @@
 }
 
 .flowchart-toggle-btn svg {
-    width: 20px;
-    height: 20px;
+    width: 24px;
+    height: 24px;
     fill: currentColor;
     color: var(--flowchart-muted-color);
 }

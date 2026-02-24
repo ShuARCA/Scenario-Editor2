@@ -37,6 +37,9 @@ import { FlowchartApp } from './flowchart/index.js'; // FlowchartAppはindexか�
 import { UIManager, SearchManager, SettingsManager, CustomCssManager, CustomCssEditor } from './ui/index.js';
 import { StorageManager } from './storage/index.js';
 
+// PDFエクスポートモーダル (ui/index.js経由の想定だが直接でも可)
+import { PdfExportModal } from './ui/PdfExportModal.js';
+
 document.addEventListener('DOMContentLoaded', () => {
     // 1. コアモジュールの初期化
     const eventBus = new EventBus();
@@ -223,6 +226,15 @@ document.addEventListener('DOMContentLoaded', () => {
         customCssManager,
         outlineManager: editorManagers.outline,
     });
+
+    // PdfExportModal(PDFエクスポート設定UI) の初期化と依存注入
+    const pdfExportModal = new PdfExportModal(
+        editorCore,
+        settingsManager,
+        editorManagers.comment,
+        editorManagers.outline
+    );
+    storageManager.setPdfExportModal(pdfExportModal);
 
     // 9. 初期同期
     editorManagers.outline.updateOutline();

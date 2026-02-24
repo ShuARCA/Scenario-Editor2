@@ -5,15 +5,15 @@
     --cp-border: #e6eef8;
     --cp-radius: 8px;
     --cp-checker: 8px;
-    --cp-bg: #fff;
-    --cp-text: #0f172a;
+    --cp-bg: var(--surface-color, #fff);
+    --cp-text: var(--text-color, #0f172a);
 }
 
 .cp-picker {
     width: var(--cp-w);
     background: var(--cp-bg);
-    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-    border: 1px solid rgba(0, 0, 0, 0.05);
+    box-shadow: 0 10px 15px -3px var(--shadow-heavy), 0 4px 6px -2px var(--shadow-color);
+    border: 1px solid var(--border-color, rgba(0, 0, 0, 0.05));
     border-radius: var(--cp-radius);
     overflow: hidden;
     font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
@@ -39,8 +39,8 @@
     height: 14px;
     border-radius: 50%;
     transform: translate(-50%, -50%);
-    border: 2px solid #fff;
-    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.2), 0 2px 4px rgba(0, 0, 0, 0.2);
+    border: 2px solid var(--surface-color, #fff);
+    box-shadow: 0 0 0 1px var(--shadow-color), 0 2px 4px var(--shadow-heavy);
     pointer-events: none;
 }
 
@@ -104,7 +104,7 @@
     padding: 6px;
     border-radius: 6px;
     border: 1px solid var(--cp-border);
-    background: #fff;
+    background: var(--surface-color, #fff);
     cursor: pointer;
     display: inline-flex;
     align-items: center;
@@ -113,7 +113,7 @@
 }
 
 .cp-btn:hover {
-    background: #f8fafc;
+    background: var(--surface-hover, #f8fafc);
 }
 
 .cp-bar {
@@ -132,8 +132,8 @@
     width: 12px;
     height: 12px;
     border-radius: 50%;
-    border: 2px solid #fff;
-    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.2);
+    border: 2px solid var(--surface-color, #fff);
+    box-shadow: 0 0 0 1px var(--shadow-color);
     pointer-events: none;
     z-index: 3;
 }
@@ -185,7 +185,7 @@
     width: 100%;
     border-radius: 6px;
     border: 1px solid var(--cp-border);
-    background: #fff;
+    background: var(--surface-color, #fff);
     overflow: hidden;
 }
 
@@ -223,7 +223,7 @@
 }
 
 .cp-toggle:hover {
-    background: #f1f5f9;
+    background: var(--surface-hover, #f1f5f9);
 }
 
 #global-color-picker-container {

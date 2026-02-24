@@ -25,6 +25,7 @@
     <link rel="stylesheet" href="styles/settings.css">
     <link rel="stylesheet" href="styles/color-picker.css">
     <link rel="stylesheet" href="styles/custom-css.css">
+    <link rel="stylesheet" href="styles/pdf-export.css">
     <script>
         /**
          * Service Worker登録
@@ -56,6 +57,7 @@
         }
     </script>
     <!-- Tiptap import map for offline bundle -->
+    <!-- PDF Export Libraries (Not used in iframe approach, removed jsPDF/html2canvas) -->
     <script type="importmap">
         {
             "imports": {
@@ -126,6 +128,13 @@
                                 d="M480-320 280-520l56-58 104 104v-326h80v326l104-104 56 58-200 200ZM240-160q-33 0-56.5-23.5T160-240v-120h80v120h480v-120h80v120q0 33-23.5 56.5T720-160H240Z" />
                         </svg>
                         <span>HTMLエクスポート</span>
+                    </button>
+                    <button class="storage-menu-item" data-target="pdfexport">
+                        <svg class="icon" viewBox="0 -960 960 960">
+                            <path
+                                d="M320-240h320v-80H320v80Zm0-160h320v-80H320v80ZM240-80q-33 0-56.5-23.5T160-160v-640q0-33 23.5-56.5T240-880h320l240 240v480q0 33-23.5 56.5T720-80H240Zm280-520v-200H240v640h480v-440H520ZM240-800v200-200 640-640Z" />
+                        </svg>
+                        <span>PDFエクスポート</span>
                     </button>
                 </div>
             </div>
@@ -216,6 +225,13 @@
 
         <!-- Main Content -->
         <main id="main-content">
+            <!-- Flowchart Toggle Button -->
+            <button id="flowchart-toggle-btn" class="flowchart-toggle-btn" title="折りたたみ">
+                <svg class="icon" viewBox="0 -960 960 960">
+                    <path
+                        d="m296-224-56-56 240-240 240 240-56 56-184-183-184 183Zm0-240-56-56 240-240 240 240-56 56-184-183-184 183Z" />
+                </svg>
+            </button>
             <!-- Flowchart Area -->
             <div id="flowchart-container">
                 <div class="flowchart-toolbar">
@@ -283,15 +299,6 @@
 
             <!-- Editor Area Wrapper (エディタとコメントサイドバー) -->
             <div id="editor-area">
-
-                <!-- Flowchart Toggle Button -->
-                <button id="flowchart-toggle-btn" class="flowchart-toggle-btn" title="折りたたみ">
-                    <svg class="icon" viewBox="0 -960 960 960">
-                        <path
-                            d="m296-224-56-56 240-240 240 240-56 56-184-183-184 183Zm0-240-56-56 240-240 240 240-56 56-184-183-184 183Z" />
-                    </svg>
-                </button>
-
                 <div id="editor-container">
                     <div id="editor" contenteditable="true" spellcheck="false">
                         <h1>ここにタイトルを入力...</h1>
@@ -646,8 +653,8 @@
                     </select>
                 </div>
                 <div class="setting-item">
-                    <label>フォントサイズ (px)</label>
-                    <input type="number" id="font-size-input" value="16" min="10" max="32">
+                    <label>フォントサイズ (pt)</label>
+                    <input type="number" id="font-size-input" value="12" min="10" max="32">
                 </div>
                 <div class="setting-item">
                     <label>エディタ背景色</label>
@@ -760,6 +767,84 @@
     </div>
 
     <div id="global-color-picker-container" style="position: absolute; display: none; z-index: 10000;"></div>
+
+    <!-- PDF Export Modal -->
+    <div id="pdf-export-modal" class="hidden">
+        <div class="pdf-export-content">
+            <div class="pdf-export-header">
+                <h2>PDFエクスポート設定</h2>
+                <button id="close-pdf-export-btn" class="close-btn">×</button>
+            </div>
+            <div class="pdf-export-body">
+                <div class="pdf-setting-group">
+                    <div class="setting-item">
+                        <label>用紙サイズ</label>
+                        <select id="pdf-page-size">
+                            <option value="a4">A4 (210 × 297 mm)</option>
+                            <option value="b5">B5 (182 × 257 mm)</option>
+                            <option value="letter">Letter (8.5 × 11 in)</option>
+                        </select>
+                    </div>
+                    <div class="setting-item">
+                        <label>カラーモード</label>
+                        <select id="pdf-color-mode">
+                            <option value="color">カラー</option>
+                            <option value="monochrome">モノクロ</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="pdf-setting-group">
+                    <div class="setting-item">
+                        <label>コメントの表示</label>
+                        <select id="pdf-comment-display">
+                            <option value="hide">非表示</option>
+                            <option value="show">表示する（サイドバー形式）</option>
+                        </select>
+                    </div>
+                    <div class="setting-item">
+                        <label>ページ番号（フッター）</label>
+                        <select id="pdf-page-number">
+                            <option value="show">表示する</option>
+                            <option value="hide">非表示</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <label>ページの区切り</label>
+                    <select id="pdf-page-break">
+                        <option value="continuous">連続（用紙いっぱいまで）</option>
+                        <option value="h1">見出し1で区切る</option>
+                        <option value="h2">見出し2で区切る</option>
+                        <option value="h3">見出し3で区切る</option>
+                        <option value="h4">見出し4で区切る</option>
+                    </select>
+                </div>
+
+                <div class="setting-item pdf-bg-setting">
+                    <label>背景設定</label>
+                    <div class="pdf-bg-info">
+                        エディタで設定されている背景画像、またはエディタ背景色が使用されます。
+                    </div>
+                    <div id="pdf-bg-crop-container" class="pdf-bg-crop-container hidden">
+                        <!-- ここで背景画像のトリミング位置を調整 -->
+                        <div id="pdf-crop-area" class="pdf-crop-area">
+                            <div id="pdf-crop-image" class="pdf-crop-image"></div>
+                        </div>
+                        <div class="pdf-crop-instructions">
+                            ドラッグして位置を調整し、ホイール（またはピンチ）で拡大・縮小します。<br>
+                            ※出力時、用紙サイズ全体にこの枠内の領域が適用されます。
+                        </div>
+                        <button id="pdf-reset-crop-btn" class="secondary-btn btn-small">初期化</button>
+                    </div>
+                </div>
+            </div>
+            <div class="pdf-export-footer">
+                <button id="exec-pdf-export-btn" class="primary-btn">エクスポート実行</button>
+            </div>
+        </div>
+    </div>
 
     <script type="module" src="src/main.js?v=2"></script>
 </body>
