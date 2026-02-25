@@ -21,7 +21,7 @@
 const CLIENT_ID = '702245562904-32p57rnr2t8pk270lvpo3d57ojp386mj.apps.googleusercontent.com';
 
 /** Google Cloud Console で取得した API キー */
-const API_KEY = 'AIzaSyDxjpNKu29RFrshEbx_U0cw-WHkdcjaSSs';
+const API_KEY = '';
 
 /** Google Drive API で要求するスコープ */
 const SCOPES = 'https://www.googleapis.com/auth/drive.file';
@@ -413,3 +413,4 @@ export class GoogleDriveProvider {
         });
     }
 }
+
