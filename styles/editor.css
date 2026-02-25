@@ -8,10 +8,11 @@
     --editor-padding: 16px 24px;
     --editor-border-radius: 8px;
     --editor-line-height: 1.5;
-    --editor-font-size: 16px;
-    --heading-border-color: #eee;
-    --toolbar-button-color: #4b5563;
-    --toolbar-button-hover-bg: #f3f4f6;
+    --editor-font-size: 12pt;
+    --heading-border-color: var(--border-color);
+    --toolbar-button-color: var(--text-muted);
+    --toolbar-button-hover-bg: var(--border-hover);
+    /* f3f4f6 is roughly surface-active or border-color */
     --toolbar-active-bg: color-mix(in srgb, var(--primary-color) 15%, transparent);
     --toolbar-active-color: var(--primary-color);
 }
@@ -88,12 +89,14 @@
 }
 
 #editor p {
+    font-size: 1em;
     margin-top: 0.4em;
     margin-bottom: 0.4em;
 }
 
 #editor ul,
 #editor ol {
+    font-size: 1em;
     margin-top: 0.4em;
     margin-bottom: 0.4em;
     padding-inline-start: 2em;
@@ -125,7 +128,7 @@
 
 #editor ul[data-type="taskList"] li[data-checked="true"]>div {
     text-decoration: line-through;
-    color: #888;
+    color: var(--text-muted);
     text-decoration-thickness: 1px;
 }
 
@@ -305,7 +308,7 @@
     background-color: var(--surface-color);
     border: 1px solid var(--border-color);
     border-radius: 12px;
-    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    box-shadow: 0 10px 15px -3px var(--shadow-heavy), 0 4px 6px -2px var(--shadow-color);
     padding: 4px 12px;
     display: flex;
     gap: 8px;
@@ -344,8 +347,8 @@
 }
 
 #image-toolbar button.delete-btn:hover {
-    background-color: #fef2f2;
-    color: #dc2626;
+    background-color: var(--danger-bg);
+    color: var(--danger-color);
 }
 
 #image-toolbar .separator {
@@ -363,7 +366,7 @@
     background-color: var(--surface-color);
     border: 1px solid var(--border-color);
     border-radius: 12px;
-    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    box-shadow: 0 10px 15px -3px var(--shadow-heavy), 0 4px 6px -2px var(--shadow-color);
     padding: 4px 12px;
     display: flex;
     gap: 8px;
@@ -385,20 +388,20 @@
     border-radius: 4px;
     padding: 2px;
     cursor: pointer;
-    color: var(--toolbar-button-color);
+    color: var(--text-color);
     display: flex;
     align-items: center;
     justify-content: center;
 }
 
 #float-toolbar button:hover {
-    background-color: var(--toolbar-button-hover-bg);
+    background-color: var(--surface-hover);
     color: var(--text-color);
 }
 
 #float-toolbar button.active {
-    background-color: var(--toolbar-active-bg);
-    color: var(--toolbar-active-color);
+    background-color: var(--primary-hover);
+    color: var(--primary-color);
 }
 
 /* コメントボタン - 既存コメントがある場合はプライマリーカラー */
@@ -425,7 +428,7 @@
     padding: 4px 8px;
     font-size: 14px;
     color: var(--text-color);
-    background-color: var(--surface-color);
+    background-color: var(--surface-hover);
     outline: none;
 }
 
@@ -438,7 +441,7 @@
     border: 1px solid var(--border-color);
     border-radius: 8px;
     padding: 8px;
-    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 10px 15px -3px var(--shadow-color);
     z-index: 1001;
     display: grid;
     grid-template-columns: repeat(5, 1fr);
@@ -455,14 +458,14 @@
     height: 24px;
     border-radius: 4px;
     cursor: pointer;
-    border: 1px solid rgba(0, 0, 0, 0.1);
+    border: 1px solid color-mix(in srgb, var(--border-color) 50%, transparent);
     border-radius: 50%;
     transition: transform 0.1s;
 }
 
 .color-option:hover {
     transform: scale(1.1);
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 2px 4px var(--shadow-color);
 }
 
 /* デフォルト/クリアオプション用スタイル */
@@ -482,7 +485,7 @@
 .color-option.default-option.highlight-clear {
     background: transparent;
     font-size: 14px;
-    color: #999;
+    color: var(--text-muted);
 }
 
 /* セパレーター */
@@ -501,13 +504,13 @@
     align-items: center;
     justify-content: center;
     font-size: 14px;
-    color: #999;
+    color: var(--text-muted);
 }
 
 .color-option.add-custom:hover {
-    background: #f5f5f5;
-    border-color: #999;
-    color: #666;
+    background: var(--surface-hover);
+    border-color: var(--text-muted);
+    color: var(--text-color);
 }
 
 
@@ -519,7 +522,7 @@
     background-color: var(--surface-color);
     border: 1px solid var(--border-color);
     border-radius: 8px;
-    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    box-shadow: 0 10px 15px -3px var(--shadow-heavy), 0 4px 6px -2px var(--shadow-color);
     padding: 12px;
     z-index: 1002;
     min-width: 200px;
@@ -547,7 +550,7 @@
 
 #ruby-input:focus {
     border-color: var(--primary-color);
-    box-shadow: 0 0 0 2px rgba(13, 148, 136, 0.2);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary-color) 20%, transparent);
 }
 
 .ruby-panel-buttons {
@@ -579,16 +582,16 @@
 }
 
 .ruby-btn.primary:hover {
-    background-color: var(--primary-hover-color, #0f766e);
+    background-color: var(--primary-hover);
 }
 
 .ruby-btn.danger {
-    background-color: #ef4444;
+    background-color: var(--danger-color);
     color: white;
 }
 
 .ruby-btn.danger:hover {
-    background-color: #dc2626;
+    background-color: color-mix(in srgb, var(--danger-color) 80%, black);
 }
 
 /* ============================================
@@ -687,7 +690,7 @@
     background-color: var(--surface-color);
     border: 1px solid var(--border-color);
     border-radius: 8px;
-    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    box-shadow: 0 10px 15px -3px var(--shadow-heavy), 0 4px 6px -2px var(--shadow-color);
     padding: 12px;
     z-index: 1002;
     min-width: 250px;
@@ -719,7 +722,7 @@
 
 #comment-input:focus {
     border-color: var(--primary-color);
-    box-shadow: 0 0 0 2px rgba(13, 148, 136, 0.2);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary-color) 20%, transparent);
 }
 
 .comment-panel-buttons {
@@ -751,16 +754,16 @@
 }
 
 .comment-btn.primary:hover {
-    background-color: var(--primary-hover-color, #0f766e);
+    background-color: var(--primary-hover);
 }
 
 .comment-btn.danger {
-    background-color: #ef4444;
+    background-color: var(--danger-color);
     color: white;
 }
 
 .comment-btn.danger:hover {
-    background-color: #dc2626;
+    background-color: color-mix(in srgb, var(--danger-color) 80%, black);
 }
 
 /* ============================================
@@ -795,7 +798,7 @@
     cursor: pointer;
     transition: background-color 0.2s, box-shadow 0.2s;
     border-left: 3px solid var(--primary-color);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 1px 3px var(--shadow-color);
     width: calc(100% - 16px);
     box-sizing: border-box;
 }
@@ -865,7 +868,7 @@
     background-color: var(--surface-color);
     border: 1px solid var(--border-color);
     border-radius: 8px;
-    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    box-shadow: 0 10px 15px -3px var(--shadow-heavy), 0 4px 6px -2px var(--shadow-color);
     padding: 10px 14px;
     z-index: 1003;
     max-width: 300px;
@@ -989,7 +992,7 @@
     background-color: var(--surface-color);
     border: 1px solid var(--border-color);
     border-radius: 8px;
-    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    box-shadow: 0 10px 15px -3px var(--shadow-heavy), 0 4px 6px -2px var(--shadow-color);
     padding: 12px;
     z-index: 1002;
     min-width: 280px;
@@ -1032,7 +1035,7 @@
 #link-input:focus,
 #link-title-input:focus {
     border-color: var(--primary-color);
-    box-shadow: 0 0 0 2px rgba(13, 148, 136, 0.2);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary-color) 20%, transparent);
 }
 
 /* 見出し候補リスト */
@@ -1112,16 +1115,16 @@
 }
 
 .link-btn.primary:hover {
-    background-color: var(--primary-hover-color, #0f766e);
+    background-color: var(--primary-hover);
 }
 
 .link-btn.danger {
-    background-color: #ef4444;
+    background-color: var(--danger-color);
     color: white;
 }
 
 .link-btn.danger:hover {
-    background-color: #dc2626;
+    background-color: color-mix(in srgb, var(--danger-color) 80%, black);
 }
 
 /* リンクポップアップ（マウスオーバー時表示） */
@@ -1130,7 +1133,7 @@
     background-color: var(--surface-color);
     border: 1px solid var(--border-color);
     border-radius: 6px;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 4px 8px var(--shadow-heavy);
     padding: 8px 12px;
     z-index: 1003;
     max-width: 300px;
@@ -1259,7 +1262,7 @@
    カスタムボックス (Box) コンポーネント
    ============================================ */
 .box-container {
-    border: 2px solid var(--box-border-color, #cbd5e1);
+    border: 2px solid var(--box-border-color, var(--border-color));
     border-radius: 8px;
     margin: 2em 0;
     padding: 12px 0 6px 0;
@@ -1267,12 +1270,12 @@
     position: relative;
     transition: border-color 0.2s;
     /* デフォルトのボーダー色変数 */
-    --box-border-color: #cbd5e1;
+    --box-border-color: var(--border-color);
 }
 
 /* タイトルスタイル: ボックス内 (inside) - デフォルト */
 .box-container[data-title-style="inside"] .box-title {
-    background-color: var(--box-border-color, #cbd5e1);
+    background-color: var(--box-border-color, var(--border-color));
     padding: 2px 12px;
     display: inline-block;
     border-radius: 4px;
@@ -1287,7 +1290,7 @@
     position: absolute;
     top: -16px;
     left: 24px;
-    background-color: var(--box-border-color, #cbd5e1);
+    background-color: var(--box-border-color, var(--border-color));
     padding: 2px 12px;
     border-radius: 4px;
     line-height: 1.4;
@@ -1313,7 +1316,7 @@
     background-color: transparent !important;
     font-size: 0.9em;
     line-height: 1.6;
-    color: #334155;
+    color: var(--text-color);
 }
 
 /* ボックス内のリストスタイル */
@@ -1344,7 +1347,7 @@
     border: none;
     border-radius: 4px;
     cursor: pointer;
-    color: #64748b;
+    color: var(--text-muted);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1359,8 +1362,8 @@
 }
 
 .box-control-btn:hover {
-    background-color: #e2e8f0;
-    color: #475569;
+    background-color: var(--border-color);
+    color: var(--text-color);
 }
 
 /* ロック中はボックス設定ボタンを非表示（コピーボタンは維持） */
@@ -1374,7 +1377,7 @@ body.locked .box-settings-btn {
     background-color: var(--surface-color);
     border: 1px solid var(--border-color);
     border-radius: 8px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 4px 12px var(--shadow-heavy);
     z-index: 1100;
     min-width: 180px;
     padding: 4px 0;
@@ -1399,7 +1402,7 @@ body.locked .box-settings-btn {
 .box-settings-title {
     font-size: 11px;
     font-weight: 600;
-    color: var(--flowchart-muted-color, #64748b);
+    color: var(--text-muted);
     /* フォールバック色指定 */
     text-transform: uppercase;
     letter-spacing: 0.5px;
@@ -1456,7 +1459,7 @@ body.locked .box-settings-btn {
     inset: 0;
     background-color: var(--swatch-color, transparent);
     border-radius: 3px;
-    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.1);
+    box-shadow: inset 0 0 0 1px var(--shadow-color);
 }
 
 .box-settings-color-swatch:hover {
@@ -1492,7 +1495,7 @@ body.locked .box-settings-btn {
     background-color: var(--surface-color);
     border: 1px solid var(--border-color);
     border-radius: 8px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 4px 12px var(--shadow-heavy);
 }
 
 .dropdown-menu.show {
@@ -1516,7 +1519,7 @@ body.locked .box-settings-btn {
 }
 
 .dropdown-item:hover {
-    background-color: var(--border-color);
+    background-color: var(--surface-hover);
 }
 
 .dropdown-item.active {
@@ -1551,7 +1554,7 @@ body.locked .box-settings-btn {
 }
 
 #formatBlockDropdown .dropdown-trigger:hover {
-    background-color: var(--toolbar-button-hover-bg);
+    background-color: var(--surface-hover);
 }
 
 #formatBlockDropdown .dropdown-trigger .icon {

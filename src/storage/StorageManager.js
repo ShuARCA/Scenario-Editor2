@@ -55,6 +55,9 @@ export class StorageManager {
         // ViewerExporter（HTMLエクスポート）は外部から注入される依存を待つため遅延初期化
         this.viewerExporter = null;
 
+        // PDFエクスポート機能 (UIを含む) は外部から注入される依存を待つため遅延初期化
+        this.pdfExportModal = null;
+
         // PDFインポーター
         this.pdfImporter = new PdfImporter();
     }
@@ -72,6 +75,15 @@ export class StorageManager {
             customCssManager: deps.customCssManager,
             outlineManager: deps.outlineManager,
         });
+    }
+
+    /**
+     * PdfExportModal (PDF出力機能) のインスタンスを受け取ります。
+     * main.js から呼び出されます。
+     * @param {import('../ui/PdfExportModal.js').PdfExportModal} pdfExportModal 
+     */
+    setPdfExportModal(pdfExportModal) {
+        this.pdfExportModal = pdfExportModal;
     }
 
     /**
@@ -110,6 +122,7 @@ export class StorageManager {
             local: () => this.save(),
             gdrive: () => this.saveToGoogleDrive(),
             export: () => this.exportAsHtml(),
+            pdfexport: () => this.openPdfExportModal(),
         });
 
         // 読み込みメニュー
@@ -131,6 +144,18 @@ export class StorageManager {
         const titleText = this.title || '無題のドキュメント';
         const baseFilename = this.filename.replace(/\.zip$/i, '');
         await this.viewerExporter.export(titleText, baseFilename);
+    }
+
+    /**
+     * PDFエクスポート用モーダルを開きます。
+     */
+    openPdfExportModal() {
+        if (!this.pdfExportModal) {
+            alert('PDFエクスポート機能が初期化されていません。');
+            return;
+        }
+        const titleText = this.title || '無題のドキュメント';
+        this.pdfExportModal.show(titleText);
     }
 
     /**

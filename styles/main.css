@@ -1,11 +1,27 @@
 /* リセット & 基本 */
 :root {
   --bg-color: #f3f4f6;
+  /* SettingsManager.js で上書きされる */
   --surface-color: #ffffff;
+  /* SettingsManager.js で上書きされる */
   --text-color: #1f2937;
+  /* SettingsManager.js で上書きされる */
   --border-color: #e5e7eb;
+  /* SettingsManager.js で上書きされる */
+
   --primary-color: #0d9488;
+  /* SettingsManager.js で上書きされる */
   --primary-hover: #0f766e;
+  /* SettingsManager.js で上書きされる */
+
+  /* フォールバック用に追加定義 */
+  --surface-hover: #f1f5f9;
+  --surface-active: #f3f4f6;
+  --text-muted: #64748b;
+  --border-hover: #cbd5e1;
+  --shadow-color: rgba(0, 0, 0, 0.1);
+  --shadow-heavy: rgba(0, 0, 0, 0.15);
+
   --header-height: 40px;
   --sidebar-width: 250px;
 }
@@ -34,7 +50,7 @@ body {
   align-items: center;
   padding: 0 16px;
   gap: 8px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 1px 2px var(--shadow-color);
   z-index: 100;
 }
 
@@ -42,13 +58,14 @@ body {
   cursor: pointer;
   padding: 4px;
   border-radius: 4px;
+  color: var(--text-color);
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
 #toggleSidebar:hover {
-  background-color: var(--bg-color);
+  background-color: var(--surface-hover);
 }
 
 #filename {
@@ -64,7 +81,7 @@ body {
 }
 
 #filename:hover {
-  background-color: var(--border-color);
+  background-color: var(--surface-hover);
 }
 
 /* タイトル編集入力フィールド */
@@ -93,14 +110,14 @@ body {
   cursor: pointer;
   padding: 6px;
   border-radius: 4px;
-  color: #555;
+  color: var(--text-color);
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
 .header-controls button:hover {
-  background-color: var(--border-color);
+  background-color: var(--surface-hover);
   color: var(--primary-color);
 }
 
@@ -126,7 +143,7 @@ body {
   border: 1px solid var(--border-color);
   border-radius: 8px;
   padding: 4px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 12px var(--shadow-heavy);
   z-index: 1100;
 }
 
@@ -152,7 +169,7 @@ body {
 }
 
 .storage-menu-item:hover {
-  background-color: var(--border-color);
+  background-color: var(--surface-hover);
 }
 
 .storage-menu-item .icon {
@@ -202,7 +219,7 @@ body {
 .sidebar-section h3 {
   font-size: 12px;
   text-transform: uppercase;
-  color: #9ca3af;
+  color: var(--text-muted);
   margin: 8px 8px;
   letter-spacing: 0.05em;
 }
@@ -235,7 +252,7 @@ body {
 }
 
 .outline-item:hover {
-  background-color: var(--border-color);
+  background-color: var(--surface-hover);
   color: var(--text-color);
 }
 
@@ -275,7 +292,7 @@ body {
 }
 
 .outline-icon:hover {
-  background-color: var(--border-color);
+  background-color: var(--surface-hover);
 }
 
 .outline-icon svg {
@@ -311,7 +328,7 @@ body {
 
 .outline-toggle:hover {
   opacity: 1;
-  background-color: var(--bg-color);
+  background-color: var(--surface-hover);
 }
 
 .outline-toggle svg {
@@ -347,7 +364,7 @@ body {
   border: 1px solid var(--border-color);
   border-radius: 8px;
   padding: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 12px var(--shadow-heavy);
   z-index: 1000;
   display: grid;
   grid-template-columns: repeat(5, 1fr);
@@ -371,7 +388,7 @@ body {
 }
 
 .icon-picker-item:hover {
-  background-color: var(--bg-color);
+  background-color: var(--surface-hover);
 }
 
 .icon-picker-item svg {
@@ -410,7 +427,7 @@ body {
 
 .outline-menu-btn:hover {
   opacity: 1;
-  background-color: var(--border-color);
+  background-color: var(--surface-hover);
 }
 
 .outline-menu-btn svg {
@@ -438,7 +455,7 @@ body.locked .outline-icon {
   border: 1px solid var(--border-color);
   border-radius: 8px;
   padding: 4px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 12px var(--shadow-heavy);
   z-index: 1100;
   min-width: 160px;
   /* CSS Anchor Positioning (ボタンクリック時用) */
@@ -469,7 +486,7 @@ body.locked .outline-icon {
 }
 
 .outline-context-menu-item:hover {
-  background-color: var(--border-color);
+  background-color: var(--surface-hover);
 }
 
 .outline-context-menu-item.disabled {
@@ -553,4 +570,17 @@ body.locked .outline-icon {
 
 ::-webkit-scrollbar-thumb:hover {
   background: #9ca3af;
+}
+
+/* ============================================
+   印刷用スタイル (PDFエクスポート等に適用)
+   ============================================ */
+@media print {
+
+  html,
+  body {
+    height: auto !important;
+    overflow: visible !important;
+    background-color: transparent !important;
+  }
 }

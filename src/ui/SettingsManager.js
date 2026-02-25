@@ -12,7 +12,7 @@ const DEFAULT_SETTINGS = {
     theme: 'light',
     primaryColor: '#0d9488',
     fontFamily: 'sans-serif',
-    fontSize: '16px',
+    fontSize: '12pt',
     editorBgColor: '#feffffff',
     editorTextColor: '#2c2c2c',
     backgroundImage: null,
@@ -28,17 +28,35 @@ const THEMES = {
 /** テーマ別のカラーパレット */
 const THEME_COLORS = {
     [THEMES.LIGHT]: {
-        surface: '#fafafb',
-        text: '#2c2c2c',
-        border: '#dedfde',
-        background: '#feffffff'
+        surface: '#ffffff', // 元は #fafafb だったが main.css 等に合わせる
+        surfaceHover: '#f1f5f9', // settings.css, sidebar.css などで多用されているホバー色
+        surfaceActive: '#f3f4f6', // float-toolbar, toolbar などアクティブ時
+        text: '#1f2937', // 元は #2c2c2c だったが、main.css に合わせる。
+        textMuted: '#64748b', // アイコン色や副次テキスト (settings.css, box-title 等)
+        border: '#e5e7eb', // 元は #dedfde だったが、main.css に合わせる。
+        borderHover: '#cbd5e1', // 少し濃いボーダー
+        background: '#f3f4f6', // 元は #feffffff だが main.css に合わせる
+        shadow: 'rgba(0, 0, 0, 0.1)',
+        shadowHeavy: 'rgba(0, 0, 0, 0.15)',
+        danger: '#ef4444',
+        dangerBg: '#fee2e2',
+        dangerBorder: '#fecaca',
     },
     [THEMES.DARK]: {
-        surface: '#303030',
+        surface: '#1e1e1e', // ダークモード用の標準surface色
+        surfaceHover: '#2a2d31', // ダークモード用ホバー
+        surfaceActive: '#32363b',
         text: '#e7e7e7',
+        textMuted: '#9ca3af',
         border: '#3c3c3d',
-        background: '#282829ff',
-        editorBgFallback: '#303030'
+        borderHover: '#4b4b4b',
+        background: '#121212',
+        editorBgFallback: '#1e1e1e',
+        shadow: 'rgba(0, 0, 0, 0.5)',
+        shadowHeavy: 'rgba(0, 0, 0, 0.7)',
+        danger: '#f87171',
+        dangerBg: '#450a0a',
+        dangerBorder: '#7f1d1d',
     }
 };
 
@@ -307,7 +325,7 @@ export class SettingsManager {
         this.settings.theme = this._getFieldValue(ELEMENT_IDS.themeSelect);
         this.settings.primaryColor = this._getFieldValue(ELEMENT_IDS.primaryColorPicker);
         this.settings.fontFamily = this._getFieldValue(ELEMENT_IDS.fontSelect);
-        this.settings.fontSize = this._getFieldValue(ELEMENT_IDS.fontSizeInput) + 'px';
+        this.settings.fontSize = this._getFieldValue(ELEMENT_IDS.fontSizeInput) + 'pt';
         this.settings.editorBgColor = this._getFieldValue(ELEMENT_IDS.editorBgColor);
         this.settings.editorTextColor = this._getFieldValue(ELEMENT_IDS.editorTextColor);
         this.settings.commentDisplayMode = this._getFieldValue(ELEMENT_IDS.commentDisplaySelect);
@@ -441,7 +459,7 @@ export class SettingsManager {
      * @throws {Error} 無効なフォントサイズが指定された場合
      */
     setFontSize(size) {
-        const sizeStr = typeof size === 'number' ? `${size}px` : size;
+        const sizeStr = typeof size === 'number' ? `${size}pt` : size;
         const numericSize = parseInt(sizeStr, 10);
 
         if (isNaN(numericSize) || numericSize < FONT_SIZE_LIMITS.MIN || numericSize > FONT_SIZE_LIMITS.MAX) {
@@ -621,8 +639,22 @@ export class SettingsManager {
 
         // 共通のテーマカラーを設定
         root.style.setProperty('--surface-color', themeColors.surface);
+        root.style.setProperty('--surface-hover', themeColors.surfaceHover);
+        root.style.setProperty('--surface-active', themeColors.surfaceActive);
+
         root.style.setProperty('--text-color', themeColors.text);
+        root.style.setProperty('--text-muted', themeColors.textMuted);
+
         root.style.setProperty('--border-color', themeColors.border);
+        root.style.setProperty('--border-hover', themeColors.borderHover);
+
+        // 各種状態やコンポーネント用
+        root.style.setProperty('--shadow-color', themeColors.shadow);
+        root.style.setProperty('--shadow-heavy', themeColors.shadowHeavy);
+
+        root.style.setProperty('--danger-color', themeColors.danger);
+        root.style.setProperty('--danger-bg', themeColors.dangerBg);
+        root.style.setProperty('--danger-border', themeColors.dangerBorder);
 
         // 背景色の決定
         let bgColor = this.settings.editorBgColor;
@@ -643,6 +675,10 @@ export class SettingsManager {
         } else {
             // ライトモード
             root.style.setProperty('--bg-color', this.settings.editorBgColor);
+            // エディタ背景がデフォルトなら明示的にセット
+            if (this.settings.editorTextColor === DEFAULT_SETTINGS.editorTextColor) {
+                editor.style.color = themeColors.text;
+            }
         }
 
         return bgColor;

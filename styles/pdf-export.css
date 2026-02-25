@@ -1,0 +1,209 @@
+/* ========================================
+   PDF Export Modal Styles
+   ======================================== */
+
+#pdf-export-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: var(--shadow-heavy);
+    z-index: 10000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+#pdf-export-modal.hidden {
+    display: none !important;
+}
+
+.pdf-export-content {
+    background-color: var(--bg-color, #ffffff);
+    color: var(--text-color, #333333);
+    border-radius: 8px;
+    width: 600px;
+    max-width: 90%;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 4px 20px var(--shadow-heavy);
+}
+
+.pdf-export-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--border-color, var(--border-color));
+}
+
+.pdf-export-header h2 {
+    margin: 0;
+    font-size: 1.25rem;
+    font-weight: 600;
+}
+
+.pdf-export-body {
+    padding: 1.5rem;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.pdf-setting-group {
+    display: flex;
+    gap: 1.5rem;
+}
+
+.pdf-setting-group .setting-item {
+    flex: 1;
+}
+
+.pdf-export-body .setting-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.pdf-export-body label {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--text-secondary, var(--text-muted));
+}
+
+.pdf-export-body select {
+    padding: 0.5rem;
+    border: 1px solid var(--border-color, var(--border-color));
+    border-radius: 4px;
+    background-color: var(--input-bg, #ffffff);
+    color: var(--text-color, #333);
+    font-size: 0.9rem;
+}
+
+/* Background Cropping Area */
+.pdf-bg-info {
+    font-size: 0.85rem;
+    color: var(--text-secondary, var(--text-muted));
+    line-height: 1.4;
+    margin-bottom: 0.5rem;
+}
+
+.pdf-bg-crop-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.75rem;
+    margin-top: 0.5rem;
+    background-color: var(--surface-hover, #f8fafc);
+    padding: 1rem;
+    border-radius: 6px;
+    border: 1px solid var(--border-color, var(--border-color));
+}
+
+.pdf-bg-crop-container.hidden {
+    display: none;
+}
+
+/* 用紙アスペクト比を維持するためのコンテナ外枠。
+   JS側で用紙サイズに応じて縦横比を動的に変えます。 */
+.pdf-crop-area {
+    position: relative;
+    width: 240px;
+    height: 340px;
+    /* A4のデフォルト比率 1:1.414 相当の初期値 */
+    overflow: hidden;
+    background-color: var(--surface-hover);
+    /* 画像がない/透明の場合の背景 */
+    box-shadow: 0 0 0 2px var(--primary-color, var(--primary-color));
+    /* 切り抜き枠 */
+    border-radius: 2px;
+    cursor: grab;
+}
+
+.pdf-crop-area:active {
+    cursor: grabbing;
+}
+
+.pdf-crop-image {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    /* transformはJSで設定します (translate(-50%, -50%) + scale等) */
+    transform-origin: center center;
+    background-size: cover;
+    background-position: center;
+    /* transition: transform 0.1s ease-out; 不要なら外す */
+    pointer-events: none;
+    /* 要素自体のドラッグを防ぐ */
+}
+
+.pdf-crop-instructions {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    text-align: center;
+}
+
+.pdf-export-footer {
+    display: flex;
+    justify-content: flex-end;
+    padding: 1rem 1.5rem;
+    border-top: 1px solid var(--border-color, var(--border-color));
+}
+
+.pdf-export-footer button {
+    padding: 0.5rem 1.5rem;
+}
+
+/* ========================================
+   Print / Export Canvas Clone Overrides
+   (PDF生成用の一時非表示クローンに適用するスタイル)
+   ======================================== */
+
+.pdf-export-clone {
+    background: transparent !important;
+    color: var(--text-color, #333333) !important;
+}
+
+.pdf-export-clone .ProseMirror {
+    outline: none !important;
+    padding: 0px !important;
+    min-height: auto !important;
+}
+
+/* モノクロモード用のフィルタクラス */
+.pdf-monochrome-mode {
+    filter: grayscale(100%) !important;
+}
+
+/* 見出し改ページ指定時の強制改ページクラス (JSから付与) */
+.pdf-page-break-before {
+    page-break-before: always;
+    break-before: page;
+    margin-top: 0 !important;
+    /* 次ページの先頭用にマージンクリア */
+}
+
+/* コメント用サイドバー形式のレイアウト (クローン専用) */
+.pdf-export-clone-wrapper {
+    display: flex !important;
+    flex-direction: row !important;
+    width: 100% !important;
+    align-items: flex-start !important;
+}
+
+.pdf-export-clone-editor {
+    flex: 1 !important;
+    max-width: 100% !important;
+}
+
+.pdf-export-clone-sidebar {
+    width: 250px !important;
+    /* サイドバーの固定幅 */
+    margin-left: 20px !important;
+    border-left: 1px solid var(--border-color);
+    padding-left: 10px;
+    font-size: 0.85rem !important;
+}
