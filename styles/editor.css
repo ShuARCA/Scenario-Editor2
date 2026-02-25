@@ -388,20 +388,20 @@
     border-radius: 4px;
     padding: 2px;
     cursor: pointer;
-    color: var(--toolbar-button-color);
+    color: var(--text-color);
     display: flex;
     align-items: center;
     justify-content: center;
 }
 
 #float-toolbar button:hover {
-    background-color: var(--toolbar-button-hover-bg);
+    background-color: var(--surface-hover);
     color: var(--text-color);
 }
 
 #float-toolbar button.active {
-    background-color: var(--toolbar-active-bg);
-    color: var(--toolbar-active-color);
+    background-color: var(--primary-hover);
+    color: var(--primary-color);
 }
 
 /* コメントボタン - 既存コメントがある場合はプライマリーカラー */
@@ -428,7 +428,7 @@
     padding: 4px 8px;
     font-size: 14px;
     color: var(--text-color);
-    background-color: var(--surface-color);
+    background-color: var(--surface-hover);
     outline: none;
 }
 
@@ -1554,7 +1554,7 @@ body.locked .box-settings-btn {
 }
 
 #formatBlockDropdown .dropdown-trigger:hover {
-    background-color: var(--toolbar-button-hover-bg);
+    background-color: var(--surface-hover);
 }
 
 #formatBlockDropdown .dropdown-trigger .icon {

@@ -1,12 +1,18 @@
 /* リセット & 基本 */
 :root {
-  --bg-color: #f3f4f6; /* SettingsManager.js で上書きされる */
-  --surface-color: #ffffff; /* SettingsManager.js で上書きされる */
-  --text-color: #1f2937; /* SettingsManager.js で上書きされる */
-  --border-color: #e5e7eb; /* SettingsManager.js で上書きされる */
-  
-  --primary-color: #0d9488; /* SettingsManager.js で上書きされる */
-  --primary-hover: #0f766e; /* SettingsManager.js で上書きされる */
+  --bg-color: #f3f4f6;
+  /* SettingsManager.js で上書きされる */
+  --surface-color: #ffffff;
+  /* SettingsManager.js で上書きされる */
+  --text-color: #1f2937;
+  /* SettingsManager.js で上書きされる */
+  --border-color: #e5e7eb;
+  /* SettingsManager.js で上書きされる */
+
+  --primary-color: #0d9488;
+  /* SettingsManager.js で上書きされる */
+  --primary-hover: #0f766e;
+  /* SettingsManager.js で上書きされる */
 
   /* フォールバック用に追加定義 */
   --surface-hover: #f1f5f9;
@@ -52,6 +58,7 @@ body {
   cursor: pointer;
   padding: 4px;
   border-radius: 4px;
+  color: var(--text-color);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -103,7 +110,7 @@ body {
   cursor: pointer;
   padding: 6px;
   border-radius: 4px;
-  color: var(--text-muted);
+  color: var(--text-color);
   display: flex;
   align-items: center;
   justify-content: center;

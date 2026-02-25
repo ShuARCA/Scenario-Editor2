@@ -117,7 +117,7 @@
     width: 24px;
     height: 24px;
     fill: currentColor;
-    color: var(--flowchart-muted-color);
+    color: var(--text-color);
 }
 
 .flowchart-toolbar:hover {
@@ -216,8 +216,8 @@
 
     /* Defaults */
     --shape-bg: var(--surface-color);
-    --shape-border-color: var(--flowchart-grid-color);
-    --shape-text-color: var(--flowchart-text-color);
+    --shape-border-color: var(--border-color);
+    --shape-text-color: var(--text-color);
 
     background-color: var(--shape-bg);
     border: 2px solid var(--shape-border-color);
@@ -481,20 +481,20 @@
     padding: 8px 16px;
     cursor: pointer;
     font-size: 14px;
-    color: var(--flowchart-text-color);
+    color: var(--text-color);
     transition: background-color 0.2s;
 }
 
 .context-menu-item:hover {
-    background-color: var(--flowchart-hover-bg);
+    background-color: var(--surface-hover);
 }
 
 .context-menu-item.delete {
-    color: var(--flowchart-danger-color);
+    color: var(--danger-color);
 }
 
 .context-menu-item.delete:hover {
-    background-color: var(--flowchart-danger-bg);
+    background-color: var(--danger-bg);
 }
 
 .context-menu-separator {
@@ -537,7 +537,7 @@
 
 .context-menu-row label {
     font-size: 13px;
-    color: var(--flowchart-text-color);
+    color: var(--text-color);
     flex-shrink: 0;
 }
 
@@ -558,7 +558,7 @@
     border: 1px solid var(--border-color);
     border-radius: 4px;
     background-color: var(--surface-color);
-    color: var(--flowchart-text-color);
+    color: var(--text-color);
 }
 
 .context-menu-row input[type="text"]::placeholder {
@@ -572,7 +572,7 @@
     border: 1px solid var(--border-color);
     border-radius: 4px;
     background-color: var(--surface-color);
-    color: var(--flowchart-text-color);
+    color: var(--text-color);
     cursor: pointer;
 }
 
