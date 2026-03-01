@@ -3,6 +3,8 @@
  * テーマ、フォント、エディタの色設定、背景画像などを管理します。
  */
 
+import { ColorPicker } from './ColorPicker.js';
+
 // ========================================
 // 定数定義
 // ========================================
@@ -10,10 +12,11 @@
 /** 設定項目のデフォルト値 */
 const DEFAULT_SETTINGS = {
     theme: 'light',
-    primaryColor: '#0d9488',
+    primaryColor: '#578a3d',
     fontFamily: 'sans-serif',
     fontSize: '12pt',
-    editorBgColor: '#feffffff',
+    useFileColors: false,
+    editorBgColor: '#feffff',
     editorTextColor: '#2c2c2c',
     backgroundImage: null,
     commentDisplayMode: 'hover'
@@ -28,35 +31,34 @@ const THEMES = {
 /** テーマ別のカラーパレット */
 const THEME_COLORS = {
     [THEMES.LIGHT]: {
-        surface: '#ffffff', // 元は #fafafb だったが main.css 等に合わせる
-        surfaceHover: '#f1f5f9', // settings.css, sidebar.css などで多用されているホバー色
-        surfaceActive: '#f3f4f6', // float-toolbar, toolbar などアクティブ時
-        text: '#1f2937', // 元は #2c2c2c だったが、main.css に合わせる。
-        textMuted: '#64748b', // アイコン色や副次テキスト (settings.css, box-title 等)
-        border: '#e5e7eb', // 元は #dedfde だったが、main.css に合わせる。
-        borderHover: '#cbd5e1', // 少し濃いボーダー
-        background: '#f3f4f6', // 元は #feffffff だが main.css に合わせる
+        surface: '#f8f8fa',
+        surfaceHover: '#f0f0f2',
+        surfaceActive: '#f0f0f2',
+        text: '#2c2c2c',
+        textMuted: '#54534f',
+        border: '#e5e7eb',
+        borderHover: '#cbd5e1',
+        background: '#feffff',
         shadow: 'rgba(0, 0, 0, 0.1)',
         shadowHeavy: 'rgba(0, 0, 0, 0.15)',
-        danger: '#ef4444',
-        dangerBg: '#fee2e2',
-        dangerBorder: '#fecaca',
+        danger: '#d22d39',
+        dangerBg: '#f6e1e3',
+        dangerBorder: '#d22d39',
     },
     [THEMES.DARK]: {
-        surface: '#1e1e1e', // ダークモード用の標準surface色
-        surfaceHover: '#2a2d31', // ダークモード用ホバー
-        surfaceActive: '#32363b',
+        surface: '#212121',
+        surfaceHover: '#323232',
+        surfaceActive: '#323232',
         text: '#e7e7e7',
-        textMuted: '#9ca3af',
+        textMuted: '#757575',
         border: '#3c3c3d',
         borderHover: '#4b4b4b',
-        background: '#121212',
-        editorBgFallback: '#1e1e1e',
+        background: '#2a2a2b',
         shadow: 'rgba(0, 0, 0, 0.5)',
         shadowHeavy: 'rgba(0, 0, 0, 0.7)',
-        danger: '#f87171',
-        dangerBg: '#450a0a',
-        dangerBorder: '#7f1d1d',
+        danger: '#da3e44',
+        dangerBg: '#2b171a',
+        dangerBorder: '#da3e44',
     }
 };
 
@@ -103,9 +105,6 @@ const FONT_SIZE_LIMITS = {
     MAX: 32
 };
 
-/** 背景画像の透明度（16進数） */
-const BG_IMAGE_OPACITY = 'cc'; // 80%
-
 /** LocalStorageキー */
 const STORAGE_KEY = 'ieditweb-settings';
 
@@ -119,6 +118,8 @@ const ELEMENT_IDS = {
     primaryColorPicker: 'primary-color-picker',
     fontSelect: 'font-select',
     fontSizeInput: 'font-size-input',
+    useFileColorsToggle: 'use-file-colors-toggle',
+    fileColorsGroup: 'file-colors-group',
     editorBgColor: 'editor-bg-color',
     editorTextColor: 'editor-text-color',
     commentDisplaySelect: 'comment-display-select',
@@ -145,12 +146,21 @@ export class SettingsManager {
     constructor(options = {}) {
         // 設定値の初期化（デフォルト値のコピー）
         this.settings = { ...DEFAULT_SETTINGS };
+        this._customCssEditor = null;
 
         // DOM初期化をスキップするオプション（テスト用）
         if (!options.skipDomInit) {
             this._initializeDomElements();
             this.init();
         }
+    }
+
+    /**
+     * カスタムCSSエディタを設定
+     * @param {CustomCssEditor} editor
+     */
+    setCustomCssEditor(editor) {
+        this._customCssEditor = editor;
     }
 
     // ========================================
@@ -172,8 +182,101 @@ export class SettingsManager {
      */
     init() {
         this._setupEventListeners();
+        this._initColorPickers();
         this.loadSettings();
         this.applySettings();
+    }
+
+    /**
+     * ColorPickerのスウォッチクリックイベントをセットアップ
+     * @private
+     */
+    _initColorPickers() {
+        // グローバルコンテナ参照
+        this._globalPickerContainer = document.getElementById('global-color-picker-container');
+        this._activeColorPicker = null;
+        this._activePickerSwatch = null;
+
+        // 外側クリックでピッカーを閉じるハンドラ
+        this._pickerOutsideClickHandler = (e) => {
+            if (this._activeColorPicker && this._globalPickerContainer) {
+                if (this._globalPickerContainer.contains(e.target)) return;
+                this._closeSettingsColorPicker();
+            }
+        };
+
+        // プライマリーカラー（アルファなし）
+        this._setupSwatchPicker(ELEMENT_IDS.primaryColorPicker, false);
+        // 文字色（アルファなし）
+        this._setupSwatchPicker(ELEMENT_IDS.editorTextColor, false);
+        // エディタ背景色（アルファあり）
+        this._setupSwatchPicker(ELEMENT_IDS.editorBgColor, true);
+    }
+
+    /**
+     * スウォッチ要素にクリックでカラーピッカーを開くイベントを設定
+     * @private
+     * @param {string} elementId - スウォッチ要素のID
+     * @param {boolean} hasAlpha - アルファチャンネルを有効にするか
+     */
+    _setupSwatchPicker(elementId, hasAlpha) {
+        const swatch = document.getElementById(elementId);
+        if (!swatch) return;
+
+        swatch.addEventListener('click', () => {
+            const currentColor = swatch.dataset.color || '#000000';
+            this._openSettingsColorPicker(swatch, currentColor, hasAlpha);
+        });
+    }
+
+    /**
+     * スウォッチの隣にカラーピッカーを開く
+     * @private
+     * @param {HTMLElement} swatchEl - スウォッチ要素
+     * @param {string} initialColor - 初期色
+     * @param {boolean} hasAlpha - アルファチャンネル有効フラグ
+     */
+    _openSettingsColorPicker(swatchEl, initialColor, hasAlpha) {
+        this._closeSettingsColorPicker();
+        if (!this._globalPickerContainer) return;
+
+        // アンカー設定
+        swatchEl.style.anchorName = '--color-picker-anchor';
+        this._activePickerSwatch = swatchEl;
+        this._globalPickerContainer.style.display = 'block';
+
+        // ピッカー生成
+        this._activeColorPicker = new ColorPicker(this._globalPickerContainer, {
+            color: initialColor,
+            hasAlpha: hasAlpha,
+            onChange: (hex) => {
+                swatchEl.style.setProperty('--swatch-color', hex);
+                swatchEl.dataset.color = hex;
+            }
+        });
+
+        // 外側クリック監視
+        requestAnimationFrame(() => {
+            document.addEventListener('mousedown', this._pickerOutsideClickHandler, true);
+        });
+    }
+
+    /**
+     * カラーピッカーを閉じる
+     * @private
+     */
+    _closeSettingsColorPicker() {
+        document.removeEventListener('mousedown', this._pickerOutsideClickHandler, true);
+
+        if (this._globalPickerContainer) {
+            this._globalPickerContainer.innerHTML = '';
+            this._globalPickerContainer.style.display = 'none';
+        }
+        if (this._activePickerSwatch) {
+            this._activePickerSwatch.style.anchorName = '';
+            this._activePickerSwatch = null;
+        }
+        this._activeColorPicker = null;
     }
 
     /**
@@ -199,10 +302,48 @@ export class SettingsManager {
             });
         }
 
-        // カスタムCSS設定ボタン
-        this._addEventListener(ELEMENT_IDS.openCustomCssBtn, 'click', () => {
-            if (this._onOpenCustomCss) {
-                this._onOpenCustomCss();
+        // タブ切り替え（ユーザー設定・ファイル設定）
+        const tabBtns = document.querySelectorAll('.settings-tab-btn');
+        tabBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                this.activateTab(btn.getAttribute('data-tab'));
+            });
+        });
+
+        // ファイル設定：背景・文字色指定トグル
+        const toggle = document.getElementById(ELEMENT_IDS.useFileColorsToggle);
+        if (toggle) {
+            toggle.addEventListener('change', (e) => {
+                const group = document.getElementById(ELEMENT_IDS.fileColorsGroup);
+                if (group) {
+                    if (e.target.checked) {
+                        group.classList.remove('hidden');
+                    } else {
+                        group.classList.add('hidden');
+                    }
+                }
+            });
+        }
+    }
+
+    /**
+     * 指定したIDのタブをアクティブにする
+     * @param {string} tabId 
+     */
+    activateTab(tabId) {
+        // 全てのタブボタンの状態をリセット
+        document.querySelectorAll('.settings-tab-btn').forEach(b => b.classList.remove('active'));
+
+        // 対応するボタンがあればアクティブに
+        const targetBtn = document.querySelector(`.settings-tab-btn[data-tab="${tabId}"]`);
+        if (targetBtn) targetBtn.classList.add('active');
+
+        // タブコンテンツの切り替え
+        document.querySelectorAll('.settings-tab-content').forEach(content => {
+            if (content.id === tabId) {
+                content.classList.remove('hidden');
+            } else {
+                content.classList.add('hidden');
             }
         });
     }
@@ -236,48 +377,45 @@ export class SettingsManager {
 
         this.settingsModal.classList.remove('hidden');
         this.updateBgImagePreview();
-        this._positionModal();
         this._populateFormFields();
+        if (this._customCssEditor) this._customCssEditor.open();
     }
 
-    /**
-     * モーダルの位置を調整
-     * @private
-     */
-    _positionModal() {
-        const btn = document.getElementById(ELEMENT_IDS.settingsBtn);
-        if (!btn) return;
-
-        const rect = btn.getBoundingClientRect();
-        const content = this.settingsModal.querySelector('.settings-content');
-        if (!content) return;
-
-        // ボタンの下、右揃え気味に表示
-        content.style.position = 'absolute';
-        content.style.top = `${rect.bottom + 10}px`;
-
-        // 画面幅からはみ出さないように調整
-        const right = window.innerWidth - rect.right;
-        content.style.right = `${Math.max(10, right - 10)}px`;
-
-        // その他のスタイルをリセット
-        content.style.left = 'auto';
-        content.style.bottom = 'auto';
-        content.style.transform = 'none';
-    }
-
-    /**
-     * フォームフィールドに現在の設定値を反映
-     * @private
-     */
     _populateFormFields() {
         this._setFieldValue(ELEMENT_IDS.themeSelect, this.settings.theme);
-        this._setFieldValue(ELEMENT_IDS.primaryColorPicker, this.settings.primaryColor);
         this._setFieldValue(ELEMENT_IDS.fontSelect, this.settings.fontFamily);
         this._setFieldValue(ELEMENT_IDS.fontSizeInput, parseInt(this.settings.fontSize));
-        this._setFieldValue(ELEMENT_IDS.editorBgColor, this.settings.editorBgColor);
-        this._setFieldValue(ELEMENT_IDS.editorTextColor, this.settings.editorTextColor);
         this._setFieldValue(ELEMENT_IDS.commentDisplaySelect, this.settings.commentDisplayMode);
+
+        // スウォッチに値を反映
+        this._updateSwatch(ELEMENT_IDS.primaryColorPicker, this.settings.primaryColor || DEFAULT_SETTINGS.primaryColor);
+
+        // ファイル設定カラー
+        const toggle = document.getElementById(ELEMENT_IDS.useFileColorsToggle);
+        const group = document.getElementById(ELEMENT_IDS.fileColorsGroup);
+        if (toggle && group) {
+            toggle.checked = !!this.settings.useFileColors;
+            if (toggle.checked) {
+                group.classList.remove('hidden');
+            } else {
+                group.classList.add('hidden');
+            }
+        }
+        this._updateSwatch(ELEMENT_IDS.editorTextColor, this.settings.editorTextColor || DEFAULT_SETTINGS.editorTextColor);
+        this._updateSwatch(ELEMENT_IDS.editorBgColor, this.settings.editorBgColor || DEFAULT_SETTINGS.editorBgColor);
+    }
+
+    /**
+     * スウォッチ要素の色を更新
+     * @private
+     * @param {string} elementId - 要素ID
+     * @param {string} color - 色文字列
+     */
+    _updateSwatch(elementId, color) {
+        const el = document.getElementById(elementId);
+        if (!el) return;
+        el.style.setProperty('--swatch-color', color);
+        el.dataset.color = color;
     }
 
     /**
@@ -300,6 +438,8 @@ export class SettingsManager {
         if (this.settingsModal) {
             this.settingsModal.classList.add('hidden');
         }
+        this._closeSettingsColorPicker();
+        if (this._customCssEditor) this._customCssEditor.close();
     }
 
     // ========================================
@@ -311,24 +451,40 @@ export class SettingsManager {
      */
     saveSettings() {
         this._collectFormData();
+        if (this._customCssEditor) this._customCssEditor.save();
         this._saveToLocalStorage();
         this.applySettings();
         this._notifyCommentDisplayModeChange();
         this.close();
     }
 
-    /**
-     * フォームからデータを収集
-     * @private
-     */
     _collectFormData() {
         this.settings.theme = this._getFieldValue(ELEMENT_IDS.themeSelect);
-        this.settings.primaryColor = this._getFieldValue(ELEMENT_IDS.primaryColorPicker);
         this.settings.fontFamily = this._getFieldValue(ELEMENT_IDS.fontSelect);
         this.settings.fontSize = this._getFieldValue(ELEMENT_IDS.fontSizeInput) + 'pt';
-        this.settings.editorBgColor = this._getFieldValue(ELEMENT_IDS.editorBgColor);
-        this.settings.editorTextColor = this._getFieldValue(ELEMENT_IDS.editorTextColor);
         this.settings.commentDisplayMode = this._getFieldValue(ELEMENT_IDS.commentDisplaySelect);
+
+        // スウォッチから値を取得
+        this.settings.primaryColor = this._getSwatchColor(ELEMENT_IDS.primaryColorPicker) || this.settings.primaryColor;
+
+        // ファイル設定カラー
+        const toggle = document.getElementById(ELEMENT_IDS.useFileColorsToggle);
+        if (toggle) {
+            this.settings.useFileColors = toggle.checked;
+        }
+        this.settings.editorTextColor = this._getSwatchColor(ELEMENT_IDS.editorTextColor) || this.settings.editorTextColor;
+        this.settings.editorBgColor = this._getSwatchColor(ELEMENT_IDS.editorBgColor) || this.settings.editorBgColor;
+    }
+
+    /**
+     * スウォッチ要素から色を取得
+     * @private
+     * @param {string} elementId - 要素ID
+     * @returns {string|null} 色文字列
+     */
+    _getSwatchColor(elementId) {
+        const el = document.getElementById(elementId);
+        return el ? (el.dataset.color || null) : null;
     }
 
     /**
@@ -347,9 +503,12 @@ export class SettingsManager {
      * @private
      */
     _saveToLocalStorage() {
-        // 背景画像以外の設定を保存（セキュリティと容量のため）
-        const settingsToSave = { ...this.settings };
-        delete settingsToSave.backgroundImage;
+        // 要求仕様: 「テーマ」「フォントサイズ(pt)」「コメント表示」のみをブラウザに保存する
+        const settingsToSave = {
+            theme: this.settings.theme,
+            fontSize: this.settings.fontSize,
+            commentDisplayMode: this.settings.commentDisplayMode
+        };
 
         try {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(settingsToSave));
@@ -656,32 +815,19 @@ export class SettingsManager {
         root.style.setProperty('--danger-bg', themeColors.dangerBg);
         root.style.setProperty('--danger-border', themeColors.dangerBorder);
 
-        // 背景色の決定
-        let bgColor = this.settings.editorBgColor;
+        // 背景色の決定 (useFileColorsがONの場合のみ、個別の設定を使用する)
+        let targetBg = themeColors.background;
+        let targetText = themeColors.text;
 
-        if (isDark) {
-            // ダークモード時、ユーザー設定がデフォルト（白）のままなら暗い背景にオーバーライド
-            if (this.settings.editorBgColor === DEFAULT_SETTINGS.editorBgColor) {
-                bgColor = themeColors.editorBgFallback;
-                root.style.setProperty('--bg-color', themeColors.background);
-            } else {
-                root.style.setProperty('--bg-color', this.settings.editorBgColor);
-            }
-
-            // テキストカラーもデフォルトのままなら明るい色に変更
-            if (this.settings.editorTextColor === DEFAULT_SETTINGS.editorTextColor) {
-                editor.style.color = themeColors.text;
-            }
-        } else {
-            // ライトモード
-            root.style.setProperty('--bg-color', this.settings.editorBgColor);
-            // エディタ背景がデフォルトなら明示的にセット
-            if (this.settings.editorTextColor === DEFAULT_SETTINGS.editorTextColor) {
-                editor.style.color = themeColors.text;
-            }
+        if (this.settings.useFileColors) {
+            targetBg = this.settings.editorBgColor || themeColors.background;
+            targetText = this.settings.editorTextColor || themeColors.text;
         }
 
-        return bgColor;
+        root.style.setProperty('--bg-color', targetBg);
+        editor.style.color = targetText;
+
+        return targetBg;
     }
 
     /**
@@ -722,9 +868,8 @@ export class SettingsManager {
             editorContainer.style.backgroundColor = 'transparent';
         }
 
-        // エディタ本体を半透過（80%）
-        const finalEditorColor = this._addOpacityToHexColor(targetBgColor);
-        editor.style.backgroundColor = finalEditorColor;
+        // エディタ背景色: アルファ付きの色をそのまま使用
+        editor.style.backgroundColor = targetBgColor;
     }
 
     /**
@@ -749,18 +894,5 @@ export class SettingsManager {
 
         // エディタ背景を不透明色に
         editor.style.backgroundColor = targetBgColor;
-    }
-
-    /**
-     * Hex色コードに透明度を追加
-     * @private
-     * @param {string} hexColor - Hex色コード（#RRGGBB形式）
-     * @returns {string} 透明度付きのHex色コード（#RRGGBBcc形式）
-     */
-    _addOpacityToHexColor(hexColor) {
-        if (hexColor.startsWith('#') && hexColor.length === 7) {
-            return hexColor + BG_IMAGE_OPACITY;
-        }
-        return hexColor;
     }
 }

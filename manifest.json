@@ -1,7 +1,7 @@
 {
-  "name": "iEditWeb - リッチテキストエディタ＆フローチャート",
-  "short_name": "iEditWeb",
-  "description": "Markdownベースのリッチテキスト編集とフローチャート可視化を統合したPWAアプリケーション",
+  "name": "Tsumugi",
+  "short_name": "Tsumugi",
+  "description": "テキスト×フローチャート×アウトラインエディタ",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",

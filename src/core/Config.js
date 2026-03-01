@@ -37,11 +37,11 @@ export const CONFIG = {
 
         /** 色設定 */
         COLORS: {
-            DEFAULT_BG: '#ffffff',                    // デフォルト背景色
-            DEFAULT_BORDER: '#cbd5e1',                // デフォルト枠線色
+            DEFAULT_BG: 'var(--bg-color)',                    // デフォルト背景色
+            DEFAULT_BORDER: 'var(--border-color)',                // デフォルト枠線色
             DEFAULT_TEXT: 'var(--text-color)',        // デフォルト文字色
             SELECTED_BORDER: 'var(--primary-color)', // 選択時枠線色
-            CONNECTION_DEFAULT: '#94a3b8',            // 接続線デフォルト色
+            CONNECTION_DEFAULT: 'var(--border-color)',            // 接続線デフォルト色
             CONNECTION_SELECTED: 'var(--primary-color)' // 接続線選択時色
         }
     },
@@ -102,7 +102,7 @@ export const CONFIG = {
     // アプリケーション共通設定
     // =====================================================
     APP: {
-        NAME: 'iEditWeb',
+        NAME: 'Tsumugi',
         VERSION: '1.0.0'
     },
 

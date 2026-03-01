@@ -9,12 +9,7 @@
     --editor-border-radius: 8px;
     --editor-line-height: 1.5;
     --editor-font-size: 12pt;
-    --heading-border-color: var(--border-color);
-    --toolbar-button-color: var(--text-muted);
-    --toolbar-button-hover-bg: var(--border-hover);
-    /* f3f4f6 is roughly surface-active or border-color */
-    --toolbar-active-bg: color-mix(in srgb, var(--primary-color) 15%, transparent);
-    --toolbar-active-color: var(--primary-color);
+    --editor-primary-hover: color-mix(in srgb, var(--primary-color) 15%, transparent);
 }
 
 /* ============================================
@@ -329,7 +324,7 @@
     border-radius: 4px;
     padding: 4px;
     cursor: pointer;
-    color: var(--toolbar-button-color);
+    color: var(--text-color);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -337,13 +332,13 @@
 }
 
 #image-toolbar button:hover {
-    background-color: var(--toolbar-button-hover-bg);
+    background-color: var(--surface-hover);
     color: var(--text-color);
 }
 
 #image-toolbar button.active {
-    background-color: var(--toolbar-active-bg);
-    color: var(--toolbar-active-color);
+    background-color: var(--editor-primary-hover);
+    color: var(--primary-color);
 }
 
 #image-toolbar button.delete-btn:hover {
@@ -400,7 +395,7 @@
 }
 
 #float-toolbar button.active {
-    background-color: var(--primary-hover);
+    background-color: var(--editor-primary-hover);
     color: var(--primary-color);
 }
 
@@ -582,7 +577,7 @@
 }
 
 .ruby-btn.primary:hover {
-    background-color: var(--primary-hover);
+    background-color: var(--editor-editor-primary-hover);
 }
 
 .ruby-btn.danger {
@@ -754,7 +749,7 @@
 }
 
 .comment-btn.primary:hover {
-    background-color: var(--primary-hover);
+    background-color: var(--editor-editor-primary-hover);
 }
 
 .comment-btn.danger {
@@ -851,7 +846,7 @@
 
 .comment-list-item-edit-btn:hover {
     opacity: 1;
-    background-color: var(--toolbar-button-hover-bg);
+    background-color: var(--surface-hover);
     color: var(--primary-color);
 }
 
@@ -917,7 +912,7 @@
 
 .comment-popup-edit-btn:hover {
     opacity: 1;
-    background-color: var(--toolbar-button-hover-bg);
+    background-color: var(--surface-hover);
     color: var(--primary-color);
 }
 
@@ -1115,7 +1110,7 @@
 }
 
 .link-btn.primary:hover {
-    background-color: var(--primary-hover);
+    background-color: var(--editor-editor-primary-hover);
 }
 
 .link-btn.danger {
@@ -1172,7 +1167,7 @@
 
 .link-popup-edit-btn:hover {
     opacity: 1;
-    background-color: var(--toolbar-button-hover-bg);
+    background-color: var(--surface-hover);
     color: var(--primary-color);
 }
 
@@ -1248,16 +1243,14 @@
 
 /* コピー完了時: チェックアイコンを表示 */
 .block-copy-button.copied .copy-icon {
-    display: none;
+    opacity: 0;
 }
 
-.block-copy-button.copied {
+.block-copy-button.copied .check-icon {
     opacity: 1;
+    color: var(--primary-color);
 }
 
-/* ============================================
-   カスタムコードブロック
-   ============================================ */
 /* ============================================
    カスタムボックス (Box) コンポーネント
    ============================================ */

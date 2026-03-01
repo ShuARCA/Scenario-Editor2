@@ -20,9 +20,9 @@
 }
 
 .pdf-export-content {
-    background-color: var(--bg-color, #ffffff);
-    color: var(--text-color, #333333);
-    border-radius: 8px;
+    background-color: var(--surface-color);
+    color: var(--text-color);
+    border-radius: 12px;
     width: 600px;
     max-width: 90%;
     max-height: 90vh;

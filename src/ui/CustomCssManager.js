@@ -66,7 +66,7 @@ const ELEMENT_REGISTRY = [
         defaults: {
             'font-size': '1.75em',
             'margin-top': '1.4em',
-            'margin-bottom': '0.6em',
+            'margin-bottom': '0.4em',
         },
     },
     {
@@ -86,7 +86,7 @@ const ELEMENT_REGISTRY = [
         defaults: {
             'font-size': '1.5em',
             'margin-top': '1.25em',
-            'margin-bottom': '0.5em',
+            'margin-bottom': '0.4em',
         },
     },
     {
@@ -123,6 +123,7 @@ const ELEMENT_REGISTRY = [
             'letter-spacing', 'line-height',
         ],
         defaults: {
+            'font-size': '1em',
             'margin-top': '0.4em',
             'margin-bottom': '0.4em',
         },
@@ -140,6 +141,9 @@ const ELEMENT_REGISTRY = [
             'line-height',
         ],
         defaults: {
+            'font-size': '1em',
+            'margin-top': '0.4em',
+            'margin-bottom': '0.4em',
             'padding-left': '2em',
         },
     },
@@ -156,6 +160,9 @@ const ELEMENT_REGISTRY = [
             'line-height',
         ],
         defaults: {
+            'font-size': '1em',
+            'margin-top': '0.4em',
+            'margin-bottom': '0.4em',
             'padding-left': '2em',
         },
     },
@@ -190,9 +197,10 @@ const ELEMENT_REGISTRY = [
             'line-height',
         ],
         defaults: {
+            'margin-top': '0.4em',
+            'margin-bottom': '0.4em',
             'background-color': 'rgba(200, 200, 200, 0.2)',
-            'padding': '1em',
-            'border-radius': '4px',
+            'padding': '0.6em 1em',
         },
     },
     {
@@ -206,7 +214,14 @@ const ELEMENT_REGISTRY = [
             'height', 'background-color',
         ],
         defaults: {
+            'margin-top': '1em',
+            'margin-bottom': '1em',
+            'color': 'color-mix(in srgb, var(--text-color) 15%, transparent)',
             'border-style': 'dashed',
+            'border-top-width': '0px',
+            'border-right-width': '0px',
+            'border-bottom-width': '1px',
+            'border-left-width': '0px',
         },
     },
     {
@@ -221,7 +236,7 @@ const ELEMENT_REGISTRY = [
             'background-color',
         ],
         defaults: {
-            'border': '2px solid #cbd5e1',
+            'border': '2px solid var(--border-color)',
             'border-radius': '8px',
             'margin': '2em 0',
             'padding': '12px 0 6px 0',
@@ -603,31 +618,7 @@ export class CustomCssManager {
         }
     }
 
-    /**
-     * localStorageに保存
-     */
-    saveToStorage() {
-        try {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(this._customData));
-        } catch (e) {
-            console.warn('カスタムCSS設定の保存に失敗しました:', e);
-        }
-    }
-
-    /**
-     * localStorageから読み込み
-     */
-    loadFromStorage() {
-        try {
-            const stored = localStorage.getItem(STORAGE_KEY);
-            if (stored) {
-                this._customData = JSON.parse(stored);
-            }
-        } catch (e) {
-            console.warn('カスタมCSS設定の読み込みに失敗しました:', e);
-            this._customData = {};
-        }
-    }
+    // localStorageへの保存・読み込みは廃止（各ファイルのZIPに含める仕様に変更）
 
     /**
      * カスタムデータが存在するか（何かカスタマイズされているか）

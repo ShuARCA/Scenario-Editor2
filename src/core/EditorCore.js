@@ -427,7 +427,12 @@ export class EditorCore {
             return '';
         }
 
-        return slice.content.textBetween(0, slice.content.size, '\n');
+        return slice.content.textBetween(0, slice.content.size, '\n', (node) => {
+            if (node.type.name === 'hardBreak') {
+                return '\n';
+            }
+            return ''; // その他の非テキストリーフノードは空文字列
+        });
     }
 
     /**

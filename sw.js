@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ieditweb-v1';
+const CACHE_NAME = 'Tsumugi-v1';
 const ASSETS = [
     './',
     './index.html',

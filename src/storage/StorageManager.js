@@ -26,13 +26,15 @@ export class StorageManager {
      * @param {import('../flowchart/FlowchartApp.js').FlowchartApp} flowchartApp 
      * @param {import('../ui/SettingsManager.js').SettingsManager} settingsManager
      * @param {import('../managers/LockManager.js').LockManager} [lockManager] - ロックマネージャー
+     * @param {import('../ui/CustomCssManager.js').CustomCssManager} [customCssManager] - カスタムCSSマネージャー
      */
-    constructor(editorCore, colorPickerManager, flowchartApp, settingsManager, lockManager) {
+    constructor(editorCore, colorPickerManager, flowchartApp, settingsManager, lockManager, customCssManager) {
         this.editorCore = editorCore;
         this.colorPickerManager = colorPickerManager;
         this.flowchartApp = flowchartApp;
         this.settingsManager = settingsManager;
         this.lockManager = lockManager || null;
+        this.customCssManager = customCssManager || null;
         this.sanitizer = new Sanitizer();
 
         // ヘルパーインスタンス
@@ -487,7 +489,8 @@ export class StorageManager {
             zoomLevel: this.flowchartApp.zoomLevel || 1.0,
             settings: settings,
             customColors: this.colorPickerManager.getCustomColors(),
-            locked: this.lockManager ? this.lockManager.isLocked() : false
+            locked: this.lockManager ? this.lockManager.isLocked() : false,
+            customCss: this.customCssManager ? JSON.parse(this.customCssManager.exportToJson()) : null
         };
     }
 
@@ -633,6 +636,9 @@ export class StorageManager {
         // 設定を復元
         await this._restoreSettings(data);
 
+        // カスタムCSSを復元
+        this._restoreCustomCss(data);
+
         // カスタムカラーを復元
         this._restoreCustomColors(data);
 
@@ -697,6 +703,21 @@ export class StorageManager {
         }
 
         this.settingsManager.importSettings(settings);
+    }
+
+    /**
+     * カスタムCSSを復元します。
+     * @private
+     */
+    _restoreCustomCss(data) {
+        if (!this.customCssManager) return;
+
+        if (data.customCss) {
+            this.customCssManager.importFromJson(JSON.stringify(data.customCss));
+        } else {
+            this.customCssManager.resetToDefaults();
+        }
+        this.customCssManager.applyCustomStyles();
     }
 
     /**

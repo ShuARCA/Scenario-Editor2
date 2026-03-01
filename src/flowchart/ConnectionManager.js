@@ -198,7 +198,7 @@ export class ConnectionManager {
         path.id = `conn-path-${conn.id}`;
         path.setAttribute('d', pathD);
         path.setAttribute('stroke', actualColor);
-        path.setAttribute('stroke-width', isSelected ? '3' : '2');
+        path.setAttribute('stroke-width', '2');
         path.setAttribute('fill', 'none');
         path.setAttribute('stroke-linejoin', 'round');
         path.setAttribute('stroke-linecap', 'round');
@@ -395,7 +395,7 @@ export class ConnectionManager {
         const preview = document.createElementNS('http://www.w3.org/2000/svg', 'path');
         preview.id = 'connection-preview';
         preview.setAttribute('d', pathD);
-        preview.setAttribute('stroke', '#3b82f6');
+        preview.setAttribute('stroke', 'var(--primary-color)');
         preview.setAttribute('stroke-width', '2');
         preview.setAttribute('stroke-linejoin', 'round');
         preview.setAttribute('stroke-linecap', 'round');

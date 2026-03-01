@@ -1,11 +1,8 @@
 /**
  * カスタムCSSエディタUI
  * 
- * コードのみのシンプルなインターフェース:
- * - 左サイドバーで要素を選択
- * - 疑似要素はGUIタブで切替
- * - テキストエリアに {} 内のCSS宣言を直接入力
- * - 現在適用中のCSS（デフォルト値）が初期表示
+ * 設定モーダルの「カスタムCSS」タブ内で、
+ * 各要素のCSS設定を縦に並べて表示するUIを構築・管理します。
  * 
  * @module ui/CustomCssEditor
  */
@@ -19,8 +16,17 @@ import { createElement } from '../utils/dom.js';
 // 定数
 // =====================================================
 
-const MODAL_ID = 'custom-css-modal';
 const PSEUDO_SELECTORS = ['::before', '::after'];
+
+// Google Material Icons SVG paths
+const SVG_ICONS = {
+    /** refresh (個別リセット / 全リセット) */
+    reset: 'M17.65 6.35A7.958 7.958 0 0 0 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0 1 12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z',
+    /** file_download (インポート) */
+    import: 'M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z',
+    /** file_upload (エクスポート) */
+    export: 'M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z',
+};
 
 // =====================================================
 // CustomCssEditorクラス
@@ -32,240 +38,187 @@ export class CustomCssEditor {
      */
     constructor(manager) {
         this._manager = manager;
-        this._selectedElementKey = 'h1';
-        this._selectedPseudoTab = '';
         this._editBuffer = {};
-        this._modalElement = null;
-        this._isOpen = false;
         this._registry = CustomCssManager.getElementRegistry();
+        this._settingsManager = null;
+        /** @type {Map<string, string>} 各要素で現在選択中の疑似要素タブ */
+        this._pseudoTabs = new Map();
     }
 
     // ========================================
     // パブリック API
     // ========================================
 
-    init() {
-        this._modalElement = document.getElementById(MODAL_ID);
-        if (!this._modalElement) {
-            console.warn(`カスタムCSSモーダル要素 (#${MODAL_ID}) が見つかりません`);
-            return;
-        }
-        this._buildModalContent();
-        this._setupEventListeners();
+    init(settingsManager) {
+        this._settingsManager = settingsManager;
+        this._buildMainArea();
     }
 
     open() {
-        if (!this._modalElement) return;
         this._editBuffer = this._manager.getCustomStyles();
-        this._selectedElementKey = 'h1';
-        this._selectedPseudoTab = '';
-        this._modalElement.classList.remove('hidden');
-        this._isOpen = true;
-        this._refreshUI();
+        this._pseudoTabs.clear();
+        this._refreshAllBlocks();
     }
 
     close() {
-        if (!this._modalElement) return;
-        this._modalElement.classList.add('hidden');
-        this._isOpen = false;
+        this._editBuffer = {};
     }
 
-    isOpen() {
-        return this._isOpen;
+    save() {
+        this._saveAllTextareasToBuffer();
+
+        for (const [key, data] of Object.entries(this._editBuffer)) {
+            this._manager.setElementStyle(key, data.styles || {}, data.pseudo || {});
+        }
+        this._manager.applyCustomStyles();
     }
 
     // ========================================
     // UI構築
     // ========================================
 
-    _buildModalContent() {
-        this._modalElement.innerHTML = '';
-        this._modalElement.className = 'custom-css-modal hidden';
-
-        const overlay = createElement('div', { className: 'custom-css-overlay' });
-        overlay.addEventListener('click', () => this.close());
-
-        const container = createElement('div', { className: 'custom-css-container' });
-        container.appendChild(this._buildHeader());
-
-        const body = createElement('div', { className: 'custom-css-body' });
-        body.appendChild(this._buildSidebar());
-        body.appendChild(this._buildMainArea());
-        container.appendChild(body);
-        container.appendChild(this._buildFooter());
-
-        this._modalElement.appendChild(overlay);
-        this._modalElement.appendChild(container);
-    }
-
-    _buildHeader() {
-        const header = createElement('div', { className: 'custom-css-header' });
-
-        const title = createElement('h2', { className: 'custom-css-title' });
-        title.textContent = 'カスタムCSS設定';
-
-        const closeBtn = createElement('button', { className: 'custom-css-close-btn' });
-        closeBtn.innerHTML = '&times;';
-        closeBtn.title = '閉じる';
-        closeBtn.addEventListener('click', () => this.close());
-
-        header.appendChild(title);
-        header.appendChild(closeBtn);
-        return header;
-    }
-
-    _buildSidebar() {
-        const sidebar = createElement('div', { className: 'custom-css-sidebar' });
-
-        const label = createElement('div', { className: 'custom-css-sidebar-label' });
-        label.textContent = '対象要素';
-        sidebar.appendChild(label);
-
-        const list = createElement('div', { className: 'custom-css-element-list' });
-        for (const element of this._registry) {
-            const item = createElement('button', {
-                className: 'custom-css-element-item',
-                'data-key': element.key,
-            });
-            item.textContent = element.label;
-            if (element.key === this._selectedElementKey) item.classList.add('active');
-            item.addEventListener('click', () => this._selectElement(element.key));
-            list.appendChild(item);
-        }
-        sidebar.appendChild(list);
-
-        // JSON I/O
-        const ioSection = createElement('div', { className: 'custom-css-io-section' });
-        const exportBtn = createElement('button', { className: 'custom-css-io-btn' });
-        exportBtn.textContent = '📤 エクスポート';
-        exportBtn.addEventListener('click', () => this._handleExport());
-        const importBtn = createElement('button', { className: 'custom-css-io-btn' });
-        importBtn.textContent = '📥 インポート';
-        importBtn.addEventListener('click', () => this._handleImport());
-        ioSection.appendChild(exportBtn);
-        ioSection.appendChild(importBtn);
-        sidebar.appendChild(ioSection);
-
-        return sidebar;
-    }
-
     _buildMainArea() {
-        const main = createElement('div', { className: 'custom-css-main' });
+        const main = document.getElementById('custom-css-editor-mount');
+        if (!main) return;
+        main.innerHTML = '';
+        main.className = 'custom-css-vertical-layout';
 
-        // 疑似要素タブ
-        const pseudoTabs = createElement('div', {
-            className: 'custom-css-pseudo-tabs-container',
-            id: 'custom-css-pseudo-tabs-container',
+        // 各要素ごとのブロックを生成
+        for (const element of this._registry) {
+            main.appendChild(this._createElementBlock(element));
+        }
+
+        // 最下部のグローバルボタンエリア
+        main.appendChild(this._createGlobalActions());
+    }
+
+    /**
+     * 1要素分の設定ブロックを生成
+     * @param {Object} elementDef - レジストリから取得した要素定義
+     * @returns {HTMLElement}
+     */
+    _createElementBlock(elementDef) {
+        const block = createElement('div', {
+            className: 'ccss-block',
+            'data-element-key': elementDef.key,
         });
-        main.appendChild(pseudoTabs);
+
+        // ヘッダー（タイトル + リセットボタン）
+        const header = createElement('div', { className: 'ccss-block-header' });
+        const title = createElement('div', { className: 'ccss-block-title' });
+        title.textContent = elementDef.label;
+        header.appendChild(title);
+
+        const resetBtn = this._createIconButton(SVG_ICONS.reset, '', 'ccss-reset-btn', () => {
+            this._handleResetElement(elementDef.key);
+        });
+        resetBtn.title = `${elementDef.label} をリセット`;
+        header.appendChild(resetBtn);
+
+        block.appendChild(header);
+
+        // 疑似要素タブ（対応する要素のみ）
+        if (elementDef.pseudoSupport) {
+            const pseudoTabs = createElement('div', {
+                className: 'ccss-pseudo-tabs',
+                id: `ccss-pseudo-tabs-${elementDef.key}`,
+            });
+            block.appendChild(pseudoTabs);
+        }
 
         // セレクタ表示
         const selectorDisplay = createElement('div', {
-            className: 'custom-css-selector-display',
-            id: 'custom-css-selector-display',
+            className: 'ccss-selector-display',
+            id: `ccss-selector-${elementDef.key}`,
         });
-        main.appendChild(selectorDisplay);
+        block.appendChild(selectorDisplay);
 
         // コードテキストエリア
-        const codeArea = createElement('div', { className: 'custom-css-code-area' });
+        const codeArea = createElement('div', { className: 'ccss-code-area' });
         const textarea = createElement('textarea', {
-            className: 'custom-css-code-textarea',
-            id: 'custom-css-code-textarea',
+            className: 'ccss-code-textarea',
+            id: `ccss-textarea-${elementDef.key}`,
             spellcheck: 'false',
+            rows: '4',
         });
-        textarea.placeholder = 'CSSプロパティを入力\n例:\nfont-size: 2em;\ncolor: #333;\nmargin-top: 1em;';
-        textarea.addEventListener('input', () => this._handleCodeInput());
+        textarea.placeholder = 'font-size: 2em;\ncolor: #333;';
+        textarea.addEventListener('input', () => this._handleCodeInput(elementDef.key));
 
         const errorDisplay = createElement('div', {
-            className: 'custom-css-code-errors',
-            id: 'custom-css-code-errors',
+            className: 'ccss-code-errors',
+            id: `ccss-errors-${elementDef.key}`,
         });
         codeArea.appendChild(textarea);
         codeArea.appendChild(errorDisplay);
-        main.appendChild(codeArea);
-
-        // WCAGインジケーター
-        main.appendChild(createElement('div', {
-            className: 'custom-css-wcag-indicator',
-            id: 'custom-css-wcag-indicator',
-        }));
+        block.appendChild(codeArea);
 
         // プレビュー
-        const previewSection = createElement('div', { className: 'custom-css-preview-section' });
-        const previewLabel = createElement('div', { className: 'custom-css-preview-label' });
-        previewLabel.textContent = 'プレビュー';
-        const previewArea = createElement('div', {
-            className: 'custom-css-preview',
-            id: 'custom-css-preview',
+        const preview = createElement('div', {
+            className: 'ccss-preview',
+            id: `ccss-preview-${elementDef.key}`,
         });
-        previewSection.appendChild(previewLabel);
-        previewSection.appendChild(previewArea);
-        main.appendChild(previewSection);
+        block.appendChild(preview);
 
-        return main;
+        return block;
     }
 
-    _buildFooter() {
-        const footer = createElement('div', { className: 'custom-css-footer' });
+    /**
+     * グローバル操作ボタン群を生成
+     * @returns {HTMLElement}
+     */
+    _createGlobalActions() {
+        const section = createElement('div', { className: 'ccss-global-actions' });
 
-        const left = createElement('div', { className: 'custom-css-footer-left' });
-        const resetBtn = createElement('button', { className: 'custom-css-btn custom-css-btn-secondary' });
-        resetBtn.textContent = 'この要素をリセット';
-        resetBtn.addEventListener('click', () => this._handleResetElement());
-        const resetAllBtn = createElement('button', { className: 'custom-css-btn custom-css-btn-danger' });
-        resetAllBtn.textContent = 'すべてリセット';
-        resetAllBtn.addEventListener('click', () => this._handleResetAll());
-        left.appendChild(resetBtn);
-        left.appendChild(resetAllBtn);
+        section.appendChild(this._createIconButton(
+            SVG_ICONS.reset, '全要素リセット', 'ccss-action-btn ccss-action-danger',
+            () => this._handleResetAll()
+        ));
+        section.appendChild(this._createIconButton(
+            SVG_ICONS.import, 'インポート', 'ccss-action-btn',
+            () => this._handleImport()
+        ));
+        section.appendChild(this._createIconButton(
+            SVG_ICONS.export, 'エクスポート', 'ccss-action-btn',
+            () => this._handleExport()
+        ));
 
-        const right = createElement('div', { className: 'custom-css-footer-right' });
-        const cancelBtn = createElement('button', { className: 'custom-css-btn custom-css-btn-secondary' });
-        cancelBtn.textContent = 'キャンセル';
-        cancelBtn.addEventListener('click', () => this.close());
-        const applyBtn = createElement('button', { className: 'custom-css-btn custom-css-btn-primary' });
-        applyBtn.textContent = '適用';
-        applyBtn.addEventListener('click', () => this._handleApply());
-        right.appendChild(cancelBtn);
-        right.appendChild(applyBtn);
+        return section;
+    }
 
-        footer.appendChild(left);
-        footer.appendChild(right);
-        return footer;
+    /**
+     * SVGアイコン付きボタンを生成
+     * @param {string} svgPath - SVG pathのd属性
+     * @param {string} label - ボタンテキスト（空文字の場合はアイコンのみ）
+     * @param {string} className - CSSクラス
+     * @param {Function} onClick - クリックハンドラ
+     * @returns {HTMLButtonElement}
+     */
+    _createIconButton(svgPath, label, className, onClick) {
+        const btn = createElement('button', { className });
+        btn.innerHTML = `<svg viewBox="0 0 24 24" width="16" height="16"><path d="${svgPath}" fill="currentColor"/></svg>`;
+        if (label) {
+            const span = createElement('span');
+            span.textContent = label;
+            btn.appendChild(span);
+        }
+        btn.addEventListener('click', onClick);
+        return btn;
     }
 
     // ========================================
     // イベント処理
     // ========================================
 
-    _setupEventListeners() {
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && this._isOpen) this.close();
-        });
-    }
-
-    _selectElement(key) {
-        this._saveTextareaToBuffer();
-        this._selectedElementKey = key;
-        this._selectedPseudoTab = '';
-        this._refreshUI();
-    }
-
-    _selectPseudoTab(tab) {
-        this._saveTextareaToBuffer();
-        this._selectedPseudoTab = tab;
-        this._refreshUI();
-    }
-
-    _handleCodeInput() {
-        const textarea = document.getElementById('custom-css-code-textarea');
-        const errorDisplay = document.getElementById('custom-css-code-errors');
+    _handleCodeInput(key) {
+        const textarea = document.getElementById(`ccss-textarea-${key}`);
+        const errorDisplay = document.getElementById(`ccss-errors-${key}`);
         if (!textarea || !errorDisplay) return;
 
         const text = textarea.value;
-        const elementDef = this._registry.find(e => e.key === this._selectedElementKey);
+        const elementDef = this._registry.find(e => e.key === key);
         if (!elementDef) return;
 
-        // バリデーション（セレクタで包んで検証）
+        // バリデーション
         const fullCss = `${elementDef.selector} { ${text} }`;
         const result = CssSanitizer.validate(fullCss);
         if (result.valid) {
@@ -273,40 +226,30 @@ export class CustomCssEditor {
             errorDisplay.classList.remove('has-errors');
         } else {
             errorDisplay.innerHTML = result.errors
-                .map(e => `<div class="custom-css-error-item">⚠ ${e}</div>`)
+                .map(e => `<div class="ccss-error-item">⚠ ${e}</div>`)
                 .join('');
             errorDisplay.classList.add('has-errors');
         }
 
-        // ライブプレビュー・WCAG更新
-        this._updatePreviewFromText(text);
-        this._updateWcagFromText(text);
+        // プレビュー更新
+        this._updatePreviewFromText(key, text);
     }
 
-    _handleApply() {
-        this._saveTextareaToBuffer();
-
-        for (const [key, data] of Object.entries(this._editBuffer)) {
-            this._manager.setElementStyle(key, data.styles || {}, data.pseudo || {});
-        }
-        this._manager.applyCustomStyles();
-        this._manager.saveToStorage();
-        this.close();
-    }
-
-    _handleResetElement() {
-        delete this._editBuffer[this._selectedElementKey];
-        this._refreshUI();
+    _handleResetElement(key) {
+        delete this._editBuffer[key];
+        this._pseudoTabs.set(key, '');
+        this._refreshBlock(key);
     }
 
     _handleResetAll() {
         if (!confirm('すべてのカスタムCSS設定をリセットしますか？')) return;
         this._editBuffer = {};
-        this._refreshUI();
+        this._pseudoTabs.clear();
+        this._refreshAllBlocks();
     }
 
     _handleExport() {
-        this._saveTextareaToBuffer();
+        this._saveAllTextareasToBuffer();
         const tempManager = new CustomCssManager();
         tempManager.setCustomStyles(this._editBuffer);
         const json = tempManager.exportToJson();
@@ -332,7 +275,7 @@ export class CustomCssEditor {
                 const result = tempManager.importFromJson(ev.target.result);
                 if (result.success) {
                     this._editBuffer = tempManager.getCustomStyles();
-                    this._refreshUI();
+                    this._refreshAllBlocks();
                 } else {
                     alert(result.message);
                 }
@@ -342,79 +285,77 @@ export class CustomCssEditor {
         input.click();
     }
 
+    _selectPseudoTab(key, pseudoSelector) {
+        this._saveTextareaToBuffer(key);
+        this._pseudoTabs.set(key, pseudoSelector);
+        this._refreshBlock(key);
+    }
+
     // ========================================
     // UI更新
     // ========================================
 
-    _refreshUI() {
-        this._updateSidebarActive();
-        this._renderPseudoTabs();
-        this._updateSelectorDisplay();
-        this._populateTextarea();
-        this._updatePreview();
-        this._updateWcagIndicator();
+    _refreshAllBlocks() {
+        for (const element of this._registry) {
+            this._refreshBlock(element.key);
+        }
     }
 
-    _updateSidebarActive() {
-        const items = this._modalElement?.querySelectorAll('.custom-css-element-item');
-        if (!items) return;
-        items.forEach(item => {
-            item.classList.toggle('active', item.dataset.key === this._selectedElementKey);
-        });
+    _refreshBlock(key) {
+        const elementDef = this._registry.find(e => e.key === key);
+        if (!elementDef) return;
+
+        this._renderPseudoTabs(key, elementDef);
+        this._updateSelectorDisplay(key, elementDef);
+        this._populateTextarea(key, elementDef);
+        this._updatePreview(key, elementDef);
     }
 
-    _renderPseudoTabs() {
-        const container = document.getElementById('custom-css-pseudo-tabs-container');
+    _renderPseudoTabs(key, elementDef) {
+        const container = document.getElementById(`ccss-pseudo-tabs-${key}`);
         if (!container) return;
         container.innerHTML = '';
 
-        const elementDef = this._registry.find(e => e.key === this._selectedElementKey);
-        if (!elementDef || !elementDef.pseudoSupport) {
+        if (!elementDef.pseudoSupport) {
             container.classList.add('hidden');
             return;
         }
         container.classList.remove('hidden');
 
+        const currentTab = this._pseudoTabs.get(key) || '';
+
         const normalTab = createElement('button', {
-            className: `custom-css-pseudo-tab ${this._selectedPseudoTab === '' ? 'active' : ''}`,
+            className: `ccss-pseudo-tab ${currentTab === '' ? 'active' : ''}`,
         });
         normalTab.textContent = '通常';
-        normalTab.addEventListener('click', () => this._selectPseudoTab(''));
+        normalTab.addEventListener('click', () => this._selectPseudoTab(key, ''));
         container.appendChild(normalTab);
 
         for (const ps of PSEUDO_SELECTORS) {
             const tab = createElement('button', {
-                className: `custom-css-pseudo-tab ${this._selectedPseudoTab === ps ? 'active' : ''}`,
+                className: `ccss-pseudo-tab ${currentTab === ps ? 'active' : ''}`,
             });
             tab.textContent = ps;
-            tab.addEventListener('click', () => this._selectPseudoTab(ps));
+            tab.addEventListener('click', () => this._selectPseudoTab(key, ps));
             container.appendChild(tab);
         }
     }
 
-    _updateSelectorDisplay() {
-        const display = document.getElementById('custom-css-selector-display');
+    _updateSelectorDisplay(key, elementDef) {
+        const display = document.getElementById(`ccss-selector-${key}`);
         if (!display) return;
-        const elementDef = this._registry.find(e => e.key === this._selectedElementKey);
-        if (!elementDef) return;
-        display.textContent = `${elementDef.selector}${this._selectedPseudoTab} { ... }`;
+        const pseudo = this._pseudoTabs.get(key) || '';
+        display.textContent = `${elementDef.selector}${pseudo} { ... }`;
     }
 
-    /**
-     * テキストエリアに現在のCSS宣言を表示
-     * カスタムCSSがあればそれを、なければデフォルト値を表示
-     */
-    _populateTextarea() {
-        const textarea = document.getElementById('custom-css-code-textarea');
+    _populateTextarea(key, elementDef) {
+        const textarea = document.getElementById(`ccss-textarea-${key}`);
         if (!textarea) return;
 
-        const key = this._selectedElementKey;
-        const elementDef = this._registry.find(e => e.key === key);
-        if (!elementDef) return;
-
+        const pseudo = this._pseudoTabs.get(key) || '';
         let styles;
-        if (this._selectedPseudoTab) {
-            styles = this._editBuffer[key]?.pseudo?.[this._selectedPseudoTab] || {};
+        if (pseudo) {
+            styles = this._editBuffer[key]?.pseudo?.[pseudo] || {};
         } else {
             const custom = this._editBuffer[key]?.styles;
             styles = (custom && Object.keys(custom).length > 0)
@@ -424,23 +365,52 @@ export class CustomCssEditor {
         textarea.value = this._formatDeclarations(styles);
     }
 
+    _updatePreview(key, elementDef) {
+        const area = document.getElementById(`ccss-preview-${key}`);
+        if (!area) return;
+        area.innerHTML = `<style>${this._generatePreviewCss(elementDef)}</style>${this._generateSampleHtml(elementDef)}`;
+    }
+
+    _updatePreviewFromText(key, text) {
+        const area = document.getElementById(`ccss-preview-${key}`);
+        if (!area) return;
+        const def = this._registry.find(e => e.key === key);
+        if (!def) return;
+
+        const styles = this._parseDeclarations(text);
+        const pseudo = this._pseudoTabs.get(key) || '';
+        const sel = `#ccss-preview-content-${key} ${def.key === 'box' ? '.box-container' : def.key}`;
+        const decls = Object.entries(styles)
+            .filter(([, v]) => v)
+            .map(([k, v]) => k === 'font-family' ? `  ${k}: ${CustomCssManager.applyFontFallback(v)};` : `  ${k}: ${v};`)
+            .join('\n');
+        const css = decls ? `${sel}${pseudo} {\n${decls}\n}` : '';
+        area.innerHTML = `<style>${css}</style>${this._generateSampleHtml(def)}`;
+    }
+
     // ========================================
     // テキストエリア ⇔ バッファ変換
     // ========================================
 
-    _saveTextareaToBuffer() {
-        const textarea = document.getElementById('custom-css-code-textarea');
+    _saveAllTextareasToBuffer() {
+        for (const element of this._registry) {
+            this._saveTextareaToBuffer(element.key);
+        }
+    }
+
+    _saveTextareaToBuffer(key) {
+        const textarea = document.getElementById(`ccss-textarea-${key}`);
         if (!textarea) return;
 
         const styles = this._parseDeclarations(textarea.value);
-        const key = this._selectedElementKey;
+        const pseudo = this._pseudoTabs.get(key) || '';
 
         if (!this._editBuffer[key]) {
             this._editBuffer[key] = { styles: {}, pseudo: {} };
         }
-        if (this._selectedPseudoTab) {
+        if (pseudo) {
             if (!this._editBuffer[key].pseudo) this._editBuffer[key].pseudo = {};
-            this._editBuffer[key].pseudo[this._selectedPseudoTab] = styles;
+            this._editBuffer[key].pseudo[pseudo] = styles;
         } else {
             this._editBuffer[key].styles = styles;
         }
@@ -469,39 +439,14 @@ export class CustomCssEditor {
     }
 
     // ========================================
-    // プレビュー
+    // プレビュー生成
     // ========================================
-
-    _updatePreview() {
-        const area = document.getElementById('custom-css-preview');
-        if (!area) return;
-        const def = this._registry.find(e => e.key === this._selectedElementKey);
-        if (!def) return;
-        area.innerHTML = `<style>${this._generatePreviewCss(def)}</style>${this._generateSampleHtml(def)}`;
-    }
-
-    _updatePreviewFromText(text) {
-        const area = document.getElementById('custom-css-preview');
-        if (!area) return;
-        const def = this._registry.find(e => e.key === this._selectedElementKey);
-        if (!def) return;
-
-        const styles = this._parseDeclarations(text);
-        const sel = `#custom-css-preview-content ${def.key === 'box' ? '.box-container' : def.key}`;
-        const decls = Object.entries(styles)
-            .filter(([, v]) => v)
-            .map(([k, v]) => k === 'font-family' ? `  ${k}: ${CustomCssManager.applyFontFallback(v)};` : `  ${k}: ${v};`)
-            .join('\n');
-        const css = decls ? `${sel}${this._selectedPseudoTab} {\n${decls}\n}` : '';
-        area.innerHTML = `<style>${css}</style>${this._generateSampleHtml(def)}`;
-    }
 
     _generatePreviewCss(def) {
         const data = this._editBuffer[def.key];
-        const sel = `#custom-css-preview-content ${def.key === 'box' ? '.box-container' : def.key}`;
+        const sel = `#ccss-preview-content-${def.key} ${def.key === 'box' ? '.box-container' : def.key}`;
         const rules = [];
 
-        // 通常スタイル（カスタムがあればカスタム、なければデフォルト）
         const styles = data?.styles && Object.keys(data.styles).length > 0
             ? data.styles
             : (def.defaults || {});
@@ -514,7 +459,6 @@ export class CustomCssEditor {
             if (decls) rules.push(`${sel} {\n${decls}\n}`);
         }
 
-        // 疑似要素
         if (data?.pseudo) {
             for (const [ps, psStyles] of Object.entries(data.pseudo)) {
                 const decls = Object.entries(psStyles)
@@ -528,7 +472,7 @@ export class CustomCssEditor {
     }
 
     _generateSampleHtml(def) {
-        const id = 'custom-css-preview-content';
+        const id = `ccss-preview-content-${def.key}`;
         const samples = {
             h1: `<h1>見出し 1 のサンプル</h1>`,
             h2: `<h2>見出し 2 のサンプル</h2>`,
@@ -543,52 +487,5 @@ export class CustomCssEditor {
             box: `<div class="box-container"><div class="box-title">ボックスタイトル</div><div class="box-body"><p>ボックス内のテキスト</p></div></div>`,
         };
         return `<div id="${id}">${samples[def.key] || '<p>サンプル</p>'}</div>`;
-    }
-
-    // ========================================
-    // WCAGチェック
-    // ========================================
-
-    _updateWcagIndicator() {
-        const el = document.getElementById('custom-css-wcag-indicator');
-        if (!el) return;
-        if (this._selectedPseudoTab) { el.innerHTML = ''; return; }
-
-        const textarea = document.getElementById('custom-css-code-textarea');
-        if (!textarea) return;
-        this._renderWcag(el, this._parseDeclarations(textarea.value));
-    }
-
-    _updateWcagFromText(text) {
-        const el = document.getElementById('custom-css-wcag-indicator');
-        if (!el || this._selectedPseudoTab) return;
-        this._renderWcag(el, this._parseDeclarations(text));
-    }
-
-    _renderWcag(container, styles) {
-        const fg = styles['color'];
-        const bg = styles['background-color'];
-        if (!fg && !bg) { container.innerHTML = ''; return; }
-
-        const fgColor = fg || '#000000';
-        const bgColor = bg || '#ffffff';
-        const ratio = WcagChecker.getContrastRatio(fgColor, bgColor);
-        const fontSize = styles['font-size'];
-        const fontWeight = styles['font-weight'];
-        const isLargeText = fontSize ? WcagChecker._isLargeText(fontSize, fontWeight) : false;
-        const level = WcagChecker.checkLevel(ratio, isLargeText);
-        const label = WcagChecker.getLabel(ratio, isLargeText);
-
-        container.innerHTML = `
-            <div class="custom-css-wcag-title">コントラストチェック</div>
-            <div class="custom-css-wcag-swatch">
-                <span class="custom-css-wcag-sample" style="color: ${fgColor}; background-color: ${bgColor};">
-                    サンプルテキスト Aa
-                </span>
-            </div>
-            <div class="custom-css-wcag-result ${level.aaa ? 'aaa' : level.aa ? 'aa' : 'fail'}">
-                ${label}
-            </div>
-        `;
     }
 }
