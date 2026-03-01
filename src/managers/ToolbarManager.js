@@ -354,7 +354,6 @@ export class ToolbarManager {
             items.forEach(item => {
                 if (item.dataset.value === currentFormat) {
                     item.classList.add('active');
-                    // SVGの色もactiveクラスCSSで変わるはずだが、念のため確認
                 } else {
                     item.classList.remove('active');
                 }
@@ -372,7 +371,6 @@ export class ToolbarManager {
             } else if (this.editor.tiptap.isActive({ textAlign: 'right' })) {
                 currentAlign = 'right';
             }
-            // default is left (or undefined which behaves like left)
 
             const alignIcons = {
                 'left': "M3,3H21V5H3V3M3,7H15V9H3V7M3,11H21V13H3V11M3,15H15V17H3V15M3,19H21V21H3V19Z",
@@ -410,21 +408,8 @@ export class ToolbarManager {
             const color = this.editor.tiptap.getAttributes('textStyle').color;
             const svgPath = textColorBtn.querySelector('path');
             if (svgPath) {
-                // 色が設定されていればその色、なければCSSの継承(親ボタンの色 => var(--toolbar-button-color))
-                // ボタンのcolorスタイルを直接変更するとhover時の色変化と競合するので、
-                // svgのfillまたはstyleを操作する方が安全だが、
-                // アイコン全体の色を変えるならボタンのstyle.colorが良い
-                // ただし、hover時の挙動を見ると:
-                // button:hover { color: var(--text-color); }
-                // なので、style.colorを設定するとhoverしてもその色が優先されてしまう(インラインスタイルは強い)
-                // 
-                // 要件: 「現在選択範囲に適用されている文字色をアイコンの色に反映してください」
-                // 選択色が赤なら、アイコンも赤に見えるべき。
-
                 if (color) {
                     textColorBtn.style.color = color;
-                    // SVGのfillはcurrentcolorになっていることが多いので、親のcolorに追従するはず
-                    //念のためfillも確認
                     svgPath.style.fill = 'currentColor';
                 } else {
                     textColorBtn.style.color = ''; // デフォルトに戻す
@@ -437,15 +422,8 @@ export class ToolbarManager {
         if (highlightBtn) {
             const highlight = this.editor.tiptap.getAttributes('highlight');
             const color = highlight.color;
-
-            // 背景色ボタンは「背景色」自体を変えるべきか、「アイコンの背景」を変えるべきか
-            // 要件: 「アイコンの背景色に反映してください」
             if (color) {
                 highlightBtn.style.backgroundColor = color;
-                // 背景が濃い色の場合、アイコン（文字）が見えなくなる可能性があるが、
-                // ひとまず要件通り背景色を反映。
-                // 視認性確保のため、背景色の輝度によってアイコン色を変えるなどの工夫が必要かもしれないが、
-                // まずはシンプルに実装
             } else {
                 highlightBtn.style.backgroundColor = ''; // 透明/デフォルト
             }

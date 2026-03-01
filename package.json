@@ -1,7 +1,7 @@
 {
-  "name": "ieditweb",
+  "name": "Tsumugi",
   "version": "1.0.0",
-  "description": "iEditWeb - Markdown & Flowchart Editor",
+  "description": "Tsumugi - テキスト×フローチャート×アウトラインエディタ",
   "type": "module",
   "scripts": {
     "start": "serve .",

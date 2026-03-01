@@ -54,17 +54,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 2.6 カスタムCSSマネージャーの初期化
     const customCssManager = new CustomCssManager();
-    customCssManager.loadFromStorage();
-    customCssManager.applyCustomStyles();
 
     const customCssEditor = new CustomCssEditor(customCssManager);
-    customCssEditor.init();
+    customCssEditor.init(settingsManager);
+    settingsManager.setCustomCssEditor(customCssEditor);
 
-    // SettingsManagerとの連携: カスタムCSS設定ボタン押下時にモーダルを開く
-    settingsManager._onOpenCustomCss = () => {
-        settingsManager.close();
-        customCssEditor.open();
-    };
+    // SettingsManagerとの連携: カスタムCSSのタブが開かれた時の処理などを追加設定できるが、
+    // 現在は SettingsManager 内部のタブ切り替えにて処理されるため削除。
+
 
     // 3. エディタ機能マネージャーの初期化
     // 各マネージャーの作成（依存関係注入）
@@ -220,8 +217,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // SearchManagerにはEditorCoreを渡す（先ほどSearchManagerをEditorCore依存に修正したため）
     const searchManager = new SearchManager(editorCore);
 
-    // StorageManagerには依存関係をフルセットで渡す
-    const storageManager = new StorageManager(editorCore, editorManagers.colorPicker, flowchartApp, settingsManager, lockManager);
+    // StorageManagerには依存関係をフルセットで渡す（CustomCssManagerの追加）
+    const storageManager = new StorageManager(editorCore, editorManagers.colorPicker, flowchartApp, settingsManager, lockManager, customCssManager);
     storageManager.setViewerExporterDeps({
         customCssManager,
         outlineManager: editorManagers.outline,

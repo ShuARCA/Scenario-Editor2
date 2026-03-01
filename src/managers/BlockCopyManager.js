@@ -110,8 +110,8 @@ export class BlockCopyManager {
         // マウス移動でホバー中のブロックを検出（コンテナ全体で監視してボタンも含む）
         this.editorContainer.addEventListener('mousemove', this._boundHandleMouseMove);
 
-        // コンテナからマウスが離れたらボタンを非表示
-        this.editorContainer.addEventListener('mouseleave', this._boundHandleMouseLeave);
+        // editor領域からマウスが離れたらボタンを非表示
+        this.editorElement.addEventListener('mouseleave', this._boundHandleMouseLeave);
 
         // スクロール時にボタン位置を更新
         this.editorContainer.addEventListener('scroll', this._boundHandleEditorScroll);
@@ -134,41 +134,56 @@ export class BlockCopyManager {
             return;
         }
 
-        // ターゲットまたはその祖先からブロック要素を探す
-        const blockElement = target.closest(this.blockSelectors);
+        // --- ステップ1: id="editor" 領域内にマウスがあるか判定 ---
+        if (!this._isInsideEditorArea(event.clientX, event.clientY)) {
+            this._hideButton();
+            this.currentBlock = null;
+            return;
+        }
 
-        if (blockElement && this.editorElement.contains(blockElement)) {
+        // --- ステップ2: ターゲットからブロック要素を直接探す ---
+        const blockElement = this._findBlockFromTarget(target);
+
+        if (blockElement) {
             // 新しいブロックにホバーした場合
             if (blockElement !== this.currentBlock) {
                 this.currentBlock = blockElement;
-                this._resetFeedback(); // フィードバックをリセット
+                this._resetFeedback();
                 this._positionButton(blockElement);
                 this._showButton();
             }
-        } else {
-            // ブロック要素外にいる場合でも、現在のブロックのY軸範囲内（特に左側）にいれば維持
-            if (this.currentBlock && !this.copyButton.classList.contains('hidden')) {
-                const rect = this.currentBlock.getBoundingClientRect();
-                const mouseY = event.clientY;
-                const buffer = 20; // 判定の余裕（上下）
-
-                // 現在のブロックと同じ高さ（＋余裕）の位置にマウスがあれば維持
-                if (mouseY >= rect.top - buffer && mouseY <= rect.bottom + buffer) {
-                    return;
-                }
-            }
-
-            // それ以外は非表示
-            this._hideButton();
-            this.currentBlock = null;
+            return;
         }
+
+        // --- ステップ3: ブロック外の余白にいる場合、Y座標からブロックを推定 ---
+        const inferredBlock = this._findBlockByVerticalPosition(event.clientY);
+
+        if (inferredBlock) {
+            if (inferredBlock !== this.currentBlock) {
+                this.currentBlock = inferredBlock;
+                this._resetFeedback();
+                this._positionButton(inferredBlock);
+                this._showButton();
+            }
+            return;
+        }
+
+        // どのブロックにも該当しない場合は非表示
+        this._hideButton();
+        this.currentBlock = null;
     }
 
     /**
-     * マウスがコンテナ外に出たときの処理。
+     * マウスがeditor領域外に出たときの処理。
+     * コピーボタンへの移動の場合はボタンを維持します。
+     * @param {MouseEvent} event - マウスイベント
      * @private
      */
-    _handleMouseLeave() {
+    _handleMouseLeave(event) {
+        // コピーボタンに移動した場合はボタンを維持
+        if (this.copyButton && this.copyButton.contains(event.relatedTarget)) {
+            return;
+        }
         this._hideButton();
         this.currentBlock = null;
     }
@@ -244,6 +259,28 @@ export class BlockCopyManager {
         // 現在の選択範囲を保存
         const currentRange = selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
 
+        // コピーイベントをフックしてクリップボードデータを上書きするハンドラ
+        const copyHandler = (e) => {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+
+            // HTML形式のデータ（Tiptapでのペースト互換性維持目的）
+            const html = blockElement.outerHTML;
+
+            // プレーンテキスト形式のデータ
+            // 選択範囲のテキストを取得し、末尾に付加される不要な改行を削除
+            let text = selection.toString();
+            if (text) {
+                // 末尾の改行（\r, \n）を単一・複数問わず削除
+                text = text.replace(/[\r\n]+$/, '');
+            }
+
+            if (e.clipboardData) {
+                e.clipboardData.setData('text/html', html);
+                e.clipboardData.setData('text/plain', text);
+            }
+        };
+
         try {
             // ブロック要素を選択
             const range = document.createRange();
@@ -252,8 +289,11 @@ export class BlockCopyManager {
             selection.removeAllRanges();
             selection.addRange(range);
 
+            // コピーイベントを捕捉
+            document.addEventListener('copy', copyHandler, { capture: true });
+
             // コピー実行
-            // execCommand('copy') は同期的に実行され、ユーザーの選択範囲をクリップボードにコピーします
+            // execCommand('copy') は同期的に実行され、上記の copyHandler が呼び出されます
             const successful = document.execCommand('copy');
 
             if (successful) {
@@ -264,6 +304,9 @@ export class BlockCopyManager {
         } catch (err) {
             console.error('BlockCopyManager: コピー中にエラーが発生しました', err);
         } finally {
+            // イベントリスナーを解除
+            document.removeEventListener('copy', copyHandler, { capture: true });
+
             // 選択範囲を復元
             selection.removeAllRanges();
             if (currentRange) {
@@ -293,6 +336,71 @@ export class BlockCopyManager {
     }
 
     // =====================================================
+    // ブロック検出ヘルパー
+    // =====================================================
+
+    /**
+     * 指定座標が id="editor" の要素領域内にあるかを判定します。
+     * @param {number} clientX - マウスのX座標（ビューポート基準）
+     * @param {number} clientY - マウスのY座標（ビューポート基準）
+     * @returns {boolean} editor領域内にある場合 true
+     * @private
+     */
+    _isInsideEditorArea(clientX, clientY) {
+        const editorRect = this.editorElement.getBoundingClientRect();
+        return (
+            clientX >= editorRect.left &&
+            clientX <= editorRect.right &&
+            clientY >= editorRect.top &&
+            clientY <= editorRect.bottom
+        );
+    }
+
+    /**
+     * event.target からブロック要素を探します。
+     * @param {HTMLElement} target - マウス直下の要素
+     * @returns {HTMLElement|null} ブロック要素、見つからなければ null
+     * @private
+     */
+    _findBlockFromTarget(target) {
+        const blockElement = target.closest(this.blockSelectors);
+        if (blockElement && this.editorElement.contains(blockElement)) {
+            return blockElement;
+        }
+        return null;
+    }
+
+    /**
+     * マウスのY座標から、重なるブロック要素を検索します。
+     * まず現在のブロックを優先判定し、該当しなければ全ブロックを走査します。
+     * @param {number} clientY - マウスのY座標（ビューポート基準）
+     * @returns {HTMLElement|null} 該当するブロック要素、見つからなければ null
+     * @private
+     */
+    _findBlockByVerticalPosition(clientY) {
+        const buffer = 4; // 判定の余裕（上下）
+
+        // 現在のブロックがあれば、まずそのY範囲と比較（高速パス）
+        if (this.currentBlock) {
+            const rect = this.currentBlock.getBoundingClientRect();
+            if (clientY >= rect.top - buffer && clientY <= rect.bottom + buffer) {
+                return this.currentBlock;
+            }
+        }
+
+        // 全ブロック要素を走査してY座標が重なるものを探す
+        const blocks = this.editorElement.querySelectorAll(this.blockSelectors);
+        for (const block of blocks) {
+            const rect = block.getBoundingClientRect();
+            if (clientY >= rect.top - buffer && clientY <= rect.bottom + buffer) {
+                return block;
+            }
+        }
+
+        return null;
+    }
+
+    // =====================================================
     // クリーンアップ
     // =====================================================
 
@@ -314,12 +422,11 @@ export class BlockCopyManager {
     destroy() {
         if (this.editorContainer) {
             this.editorContainer.removeEventListener('mousemove', this._boundHandleMouseMove);
-            this.editorContainer.removeEventListener('mouseleave', this._boundHandleMouseLeave);
             this.editorContainer.removeEventListener('scroll', this._boundHandleEditorScroll);
         }
 
-        if (this.editorContainer) {
-            this.editorContainer.removeEventListener('scroll', this._boundHandleEditorScroll);
+        if (this.editorElement) {
+            this.editorElement.removeEventListener('mouseleave', this._boundHandleMouseLeave);
         }
 
         if (this.copyButton && this.copyButton.parentNode) {

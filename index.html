@@ -4,13 +4,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Markdownベースのリッチテキスト編集とフローチャート可視化を統合したPWAアプリケーション">
+    <meta name="description" content="テキスト×フローチャート×アウトラインエディタ">
     <meta name="theme-color" content="#1F1F1F">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <meta name="apple-mobile-web-app-title" content="iEditWeb">
+    <meta name="apple-mobile-web-app-title" content="Tsumugi">
     <link rel="apple-touch-icon" href="icon/icon.png">
-    <title>iEditWeb</title>
+    <title>Tsumugi</title>
     <!-- Google Fontsの読み込み -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -119,7 +119,7 @@
                             <path
                                 d="M7.71,3.5L1.15,15L4.58,21L11.13,9.5M9.73,15L6.3,21H19.42L22.85,15M22.28,14L15.42,2H8.58L8.57,2L15.43,14" />
                         </svg>
-                        <span>Google Driveに保存</span>
+                        <span>Google Driveに保存(仮)</span>
                     </button>
                     <div class="storage-menu-divider"></div>
                     <button class="storage-menu-item" data-target="export">
@@ -127,14 +127,14 @@
                             <path
                                 d="M480-320 280-520l56-58 104 104v-326h80v326l104-104 56 58-200 200ZM240-160q-33 0-56.5-23.5T160-240v-120h80v120h480v-120h80v120q0 33-23.5 56.5T720-160H240Z" />
                         </svg>
-                        <span>HTMLエクスポート</span>
+                        <span>HTMLエクスポート(仮)</span>
                     </button>
                     <button class="storage-menu-item" data-target="pdfexport">
                         <svg class="icon" viewBox="0 -960 960 960">
                             <path
                                 d="M320-240h320v-80H320v80Zm0-160h320v-80H320v80ZM240-80q-33 0-56.5-23.5T160-160v-640q0-33 23.5-56.5T240-880h320l240 240v480q0 33-23.5 56.5T720-80H240Zm280-520v-200H240v640h480v-440H520ZM240-800v200-200 640-640Z" />
                         </svg>
-                        <span>PDFエクスポート</span>
+                        <span>PDFエクスポート(仮)</span>
                     </button>
                 </div>
             </div>
@@ -158,7 +158,7 @@
                             <path
                                 d="M7.71,3.5L1.15,15L4.58,21L11.13,9.5M9.73,15L6.3,21H19.42L22.85,15M22.28,14L15.42,2H8.58L8.57,2L15.43,14" />
                         </svg>
-                        <span>Google Driveから読み込み</span>
+                        <span>Google Driveから読み込み(仮)</span>
                     </button>
                     <div class="storage-menu-divider"></div>
                     <button class="storage-menu-item" data-target="pdf">
@@ -166,7 +166,7 @@
                             <path
                                 d="M19,3H5C3.9,3 3,3.9 3,5V19C3,20.1 3.9,21 5,21H19C20.1,21 21,20.1 21,19V5C21,3.9 20.1,3 19,3M9.5,11.5C9.5,12.3 8.8,13 8,13H7V15H5.5V9H8C8.8,9 9.5,9.7 9.5,10.5V11.5M14.5,13.5C14.5,14.3 13.8,15 13,15H10.5V9H13C13.8,9 14.5,9.7 14.5,10.5V13.5M18.5,10.5H17V11.5H18.5V13H17V15H15.5V9H18.5V10.5M7,10.5H8V12H7V10.5M12,10.5H13V13.5H12V10.5Z" />
                         </svg>
-                        <span>PDFから読み込み</span>
+                        <span>PDFインポート(仮)</span>
                     </button>
                 </div>
             </div>
@@ -624,81 +624,116 @@
 
     <!-- Settings Modal -->
     <div id="settings-modal" class="hidden">
-        <div class="settings-content">
+        <div class="settings-content settings-2pane">
             <div class="settings-header">
                 <h2>設定</h2>
                 <button id="close-settings-btn" class="close-btn">×</button>
             </div>
-            <div class="settings-body">
-                <div class="setting-item">
-                    <label>テーマ</label>
-                    <select id="theme-select">
-                        <option value="light">ライト</option>
-                        <option value="dark">ダーク</option>
-                    </select>
-                </div>
-                <div class="setting-item">
-                    <label>プライマリーカラー</label>
-                    <input type="color" id="primary-color-picker" value="#0d9488">
-                </div>
-                <div class="setting-item">
-                    <label for="font-select">フォント</label>
-                    <select id="font-select">
-                        <option value="sans-serif">ゴシック体</option>
-                        <option value="rounded">丸ゴシック体</option>
-                        <option value="serif">明朝体</option>
-                        <option value="monospace">等幅（コーディング）</option>
-                        <option value="monospace-jp">等幅（日本語対応）</option>
-                        <option value="system">システムフォント</option>
-                    </select>
-                </div>
-                <div class="setting-item">
-                    <label>フォントサイズ (pt)</label>
-                    <input type="number" id="font-size-input" value="12" min="10" max="32">
-                </div>
-                <div class="setting-item">
-                    <label>エディタ背景色</label>
-                    <input type="color" id="editor-bg-color" value="#ffffff">
-                </div>
-                <div class="setting-item">
-                    <label>文字色</label>
-                    <input type="color" id="editor-text-color" value="#334155">
-                </div>
-                <div class="setting-item">
-                    <label>背景画像</label>
-                    <div class="background-image-settings">
-                        <div id="bg-image-preview" class="bg-preview hidden"></div>
-                        <div class="bg-controls">
-                            <label for="bg-image-input" class="file-upload-btn">ファイルを選択</label>
-                            <input type="file" id="bg-image-input" accept="image/png, image/jpeg, image/gif, image/webp"
-                                class="hidden">
-                            <button id="delete-bg-image-btn" class="danger-btn hidden">画像を削除</button>
-                        </div>
+            <div class="settings-body-container">
+                <!-- Sidebar -->
+                <div class="settings-sidebar">
+                    <div class="settings-sidebar-group">
+                        <button class="settings-tab-btn active" data-tab="tab-user-settings">ユーザー設定</button>
+                        <button class="settings-tab-btn" data-tab="tab-file-settings">ファイル設定</button>
+                        <button class="settings-tab-btn" data-tab="tab-custom-css">カスタムCSS</button>
                     </div>
                 </div>
-                <div class="setting-item">
-                    <label>コメント表示</label>
-                    <select id="comment-display-select">
-                        <option value="always">常に表示</option>
-                        <option value="hover">マウスオーバー時のみ</option>
-                    </select>
+
+                <!-- Main Area -->
+                <div class="settings-main-area">
+                    <!-- ユーザー設定タブ -->
+                    <div class="settings-tab-content active" id="tab-user-settings">
+                        <h3>ユーザー設定</h3>
+                        <div class="setting-item">
+                            <label>テーマ</label>
+                            <select id="theme-select">
+                                <option value="light">ライトモード</option>
+                                <option value="dark">ダークモード</option>
+                            </select>
+                        </div>
+                        <div class="setting-item">
+                            <label>フォントサイズ (pt)</label>
+                            <input type="number" id="font-size-input" value="12" min="10" max="32">
+                        </div>
+                        <div class="setting-item">
+                            <label>コメント表示</label>
+                            <select id="comment-display-select">
+                                <option value="always">常に表示</option>
+                                <option value="hover">マウスオーバー時のみ</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- ファイル設定タブ -->
+                    <div class="settings-tab-content hidden" id="tab-file-settings">
+                        <h3>ファイル設定</h3>
+                        <div class="setting-item">
+                            <label>プライマリーカラー</label>
+                            <span id="primary-color-picker" class="color-swatch" style="--swatch-color: #0d9488"
+                                data-color="#0d9488"></span>
+                        </div>
+                        <div class="setting-item">
+                            <label for="font-select">フォント</label>
+                            <select id="font-select">
+                                <option value="sans-serif">ゴシック体</option>
+                                <option value="rounded">丸ゴシック体</option>
+                                <option value="serif">明朝体</option>
+                                <option value="monospace">等幅（コーディング）</option>
+                                <option value="monospace-jp">等幅（日本語対応）</option>
+                                <option value="system">システムフォント</option>
+                            </select>
+                        </div>
+
+                        <div class="setting-item setting-toggle">
+                            <label class="toggle-label">
+                                <input type="checkbox" id="use-file-colors-toggle">
+                                <span class="toggle-slider"></span>
+                                背景・フォントカラー指定
+                            </label>
+                            <div class="toggle-description">ONの時、以下の設定が優先して適用されます</div>
+                        </div>
+
+                        <div id="file-colors-group" class="settings-subgroup hidden">
+                            <div class="setting-item">
+                                <label>文字色</label>
+                                <span id="editor-text-color" class="color-swatch" style="--swatch-color: #334155"
+                                    data-color="#334155"></span>
+                            </div>
+                            <div class="setting-item">
+                                <label>エディタ背景色</label>
+                                <span id="editor-bg-color" class="color-swatch" style="--swatch-color: #ffffff"
+                                    data-color="#ffffff"></span>
+                            </div>
+                            <div class="setting-item">
+                                <label>背景画像</label>
+                                <div class="background-image-settings">
+                                    <div id="bg-image-preview" class="bg-preview hidden"></div>
+                                    <div class="bg-controls">
+                                        <label for="bg-image-input" class="file-upload-btn">ファイルを選択</label>
+                                        <input type="file" id="bg-image-input"
+                                            accept="image/png, image/jpeg, image/gif, image/webp" class="hidden">
+                                        <button id="delete-bg-image-btn" class="danger-btn hidden">画像を削除</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- カスタムCSSエディタ領域 -->
+                    <div class="settings-tab-content hidden" id="tab-custom-css">
+                        <h3>カスタムCSS</h3>
+                        <!-- CustomCssEditor.js が内部を描画 -->
+                        <div id="custom-css-editor-mount"></div>
+                    </div>
                 </div>
-                <div class="setting-item">
-                    <button id="open-custom-css-btn" class="custom-css-open-btn">
-                        <span class="icon">🎨</span>
-                        <span>カスタムCSS設定</span>
-                    </button>
-                </div>
-                <div class="settings-footer">
+            </div>
+            <div class="settings-footer">
+                <div class="settings-footer-left" id="settings-footer-left"></div>
+                <div class="settings-footer-right">
                     <button id="save-settings-btn" class="primary-btn">保存して適用</button>
                 </div>
             </div>
         </div>
-    </div>
-
-    <!-- Custom CSS Modal -->
-    <div id="custom-css-modal" class="custom-css-modal hidden">
-        <!-- コンテンツはCustomCssEditor.jsが動的に構築 -->
     </div>
 
     <!-- Flowchart Context Menu -->

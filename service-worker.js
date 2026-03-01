@@ -1,5 +1,5 @@
 /**
- * iEditWeb Service Worker
+ * Tsumugi Service Worker
  * オフラインキャッシュとPWA機能を提供
  * 
  * 要件 12.1: PWAとしてインストール可能
@@ -7,7 +7,7 @@
  * 要件 12.3: オフライン状態でのドキュメント編集・保存をサポート
  */
 
-const CACHE_NAME = 'ieditweb-v2';
+const CACHE_NAME = 'Tsumugi-v2';
 const ASSETS = [
   // ルートファイル
   './',

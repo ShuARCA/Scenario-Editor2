@@ -1,26 +1,23 @@
 /* リセット & 基本 */
 :root {
-  --bg-color: #f3f4f6;
-  /* SettingsManager.js で上書きされる */
-  --surface-color: #ffffff;
-  /* SettingsManager.js で上書きされる */
-  --text-color: #1f2937;
-  /* SettingsManager.js で上書きされる */
+  --bg-color: #feffff;
+  --surface-color: #f8f8fa;
+  --text-color: #2c2c2c;
   --border-color: #e5e7eb;
-  /* SettingsManager.js で上書きされる */
 
   --primary-color: #0d9488;
-  /* SettingsManager.js で上書きされる */
-  --primary-hover: #0f766e;
-  /* SettingsManager.js で上書きされる */
+  --primary-hover: color-mix(in srgb, var(--primary-color) 80%, transparent);
 
-  /* フォールバック用に追加定義 */
-  --surface-hover: #f1f5f9;
-  --surface-active: #f3f4f6;
-  --text-muted: #64748b;
-  --border-hover: #cbd5e1;
+  --surface-hover: #f0f0f2;
+  --surface-active: #f0f0f2;
+  --text-muted: #54534f;
+  --border-hover: #e5e7eb;
   --shadow-color: rgba(0, 0, 0, 0.1);
   --shadow-heavy: rgba(0, 0, 0, 0.15);
+
+  --danger-color: #d22d39;
+  --danger-bg: #f6e1e3;
+  --danger-border: #d22d39;
 
   --header-height: 40px;
   --sidebar-width: 250px;
@@ -244,8 +241,9 @@ body {
   font-size: 14px;
   font-weight: 500;
   padding: 4px 8px;
-  border-radius: 4px;
+  border-radius: 8px;
   margin-bottom: 4px;
+  overflow: hidden;
   cursor: pointer;
   text-decoration: none;
   transition: background-color 0.1s;
@@ -257,9 +255,25 @@ body {
 }
 
 .outline-item.active {
-  background-color: color-mix(in srgb, var(--primary-color) 15%, transparent);
+  background-image: linear-gradient(90deg, var(--surface-hover) 15%,
+      color-mix(in srgb, var(--primary-color) 15%, var(--surface-hover)) 70%,
+      color-mix(in srgb, var(--primary-color) 30%, var(--surface-hover)) 95%,
+      color-mix(in srgb, var(--primary-color) 50%, var(--surface-hover)));
   color: var(--primary-color);
   font-weight: 500;
+}
+
+.outline-item.active:before {
+  content: '';
+  position: absolute;
+  right: -4px;
+  display: inline-block;
+  width: 4px;
+  height: 18px;
+  -webkit-transform: translateX(-50%);
+  transform: translateX(-50%);
+  background-color: var(--primary-color);
+  border-radius: 8px;
 }
 
 /* 折りたたまれた見出しがハイライト対象の場合のインジケーター */
