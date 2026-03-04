@@ -475,6 +475,48 @@ export class ShapeManager {
     }
 
     // =====================================================
+    // キーボード移動
+    // =====================================================
+
+    /**
+     * 現在選択中のシェイプを取得します。
+     * @private
+     * @returns {Object|null} 選択中のシェイプ、またはnull
+     */
+    _getSelectedShape() {
+        for (const [, shape] of this.app.shapes) {
+            if (shape.element?.classList.contains('selected')) {
+                return shape;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 選択中のシェイプをキーボード操作で移動します。
+     * 
+     * @param {number} deltaX - X方向の移動量（px）
+     * @param {number} deltaY - Y方向の移動量（px）
+     */
+    moveSelectedByKey(deltaX, deltaY) {
+        const selectedShape = this._getSelectedShape();
+        if (!selectedShape) return;
+
+        // 位置を更新（負座標防止）
+        selectedShape.x = Math.max(0, selectedShape.x + deltaX);
+        selectedShape.y = Math.max(0, selectedShape.y + deltaY);
+        this.updateShapePosition(selectedShape);
+
+        // 子ノードも追従
+        if (selectedShape.children && selectedShape.children.length > 0) {
+            this.moveChildrenRecursive(selectedShape, deltaX, deltaY);
+        }
+
+        // 接続線を再描画
+        this.app.drawConnections();
+    }
+
+    // =====================================================
     // 状態チェック
     // =====================================================
 
