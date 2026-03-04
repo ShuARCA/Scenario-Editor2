@@ -25,6 +25,74 @@ export class ToolbarManager {
 
         /** @type {boolean} 編集ロック状態 */
         this._locked = false;
+
+        /** @type {boolean} モバイル（タッチデバイス）モード */
+        this._isMobile = this._detectTouchDevice();
+
+        /** @type {Function|null} Visual Viewport イベントハンドラ参照 */
+        this._viewportHandler = null;
+
+        // モバイルモードの初期化
+        if (this._isMobile) {
+            this._setupMobileMode();
+        }
+    }
+
+    // =====================================================
+    // モバイル判定・初期化
+    // =====================================================
+
+    /**
+     * タッチデバイスかどうかを判定します。
+     * 画面幅は使用せず、ポインター精度とタッチポイント数で判定します。
+     * 
+     * @returns {boolean} タッチデバイスの場合true
+     */
+    _detectTouchDevice() {
+        const hasCoarsePointer = window.matchMedia('(pointer: coarse)').matches;
+        const hasTouchPoints = navigator.maxTouchPoints > 0;
+        return hasCoarsePointer && hasTouchPoints;
+    }
+
+    /**
+     * モバイルモードの初期化処理を行います。
+     * Visual Viewport APIへのイベントリスナー登録、CSSクラスの付与を行います。
+     */
+    _setupMobileMode() {
+        this.floatToolbar.classList.add('mobile-mode');
+
+        // Visual Viewport APIでキーボードの表示/非表示を追従
+        if (window.visualViewport) {
+            this._viewportHandler = this._onVisualViewportChange.bind(this);
+            window.visualViewport.addEventListener('resize', this._viewportHandler);
+            window.visualViewport.addEventListener('scroll', this._viewportHandler);
+        }
+    }
+
+    /**
+     * Visual Viewport の resize / scroll イベントハンドラ。
+     * ツールバーが表示中の場合、キーボード上部に位置を更新します。
+     */
+    _onVisualViewportChange() {
+        if (this.floatToolbar.classList.contains('hidden')) return;
+        this._positionMobileToolbar();
+    }
+
+    /**
+     * モバイル環境でのツールバー位置を計算・設定します。
+     * キーボードの直上に配置するために Visual Viewport API を利用します。
+     */
+    _positionMobileToolbar() {
+        const vv = window.visualViewport;
+        if (!vv) return;
+
+        // Visual Viewport の bottom = offsetTop + height
+        // キーボードが表示されるとvv.heightが縮む
+        const toolbarBottom = window.innerHeight - (vv.offsetTop + vv.height);
+        this.floatToolbar.style.bottom = `${toolbarBottom}px`;
+        // fixed配置なので top / left はCSSで制御
+        this.floatToolbar.style.top = 'auto';
+        this.floatToolbar.style.left = '0';
     }
 
     // =====================================================
@@ -208,6 +276,7 @@ export class ToolbarManager {
 
     /**
      * フローティングツールバーを表示します。
+     * モバイルとデスクトップで配置方法を切り替えます。
      */
     showFloatToolbar() {
         if (!this.editor.tiptap || this._locked) return;
@@ -219,6 +288,24 @@ export class ToolbarManager {
         this.floatToolbar.style.visibility = 'hidden';
         this.floatToolbar.classList.remove('hidden');
 
+        if (this._isMobile) {
+            this._showMobileToolbar();
+        } else {
+            this._showDesktopToolbar(from, to);
+        }
+
+        // 可視化
+        this.floatToolbar.style.visibility = '';
+    }
+
+    /**
+     * デスクトップ環境でのツールバー表示処理。
+     * 選択範囲の中央上部に絶対座標で配置します。
+     * 
+     * @param {number} from - 選択範囲の開始位置
+     * @param {number} to - 選択範囲の終了位置
+     */
+    _showDesktopToolbar(from, to) {
         // Tiptapのview.coordsAtPosを使用して位置を計算
         const startCoords = this.editor.tiptap.view.coordsAtPos(from);
         const endCoords = this.editor.tiptap.view.coordsAtPos(to);
@@ -240,9 +327,14 @@ export class ToolbarManager {
 
         this.floatToolbar.style.top = `${top + window.scrollY}px`;
         this.floatToolbar.style.left = `${left + window.scrollX}px`;
+    }
 
-        // 可視化
-        this.floatToolbar.style.visibility = '';
+    /**
+     * モバイル環境でのツールバー表示処理。
+     * 画面下部（キーボードの直上）にfixed配置します。
+     */
+    _showMobileToolbar() {
+        this._positionMobileToolbar();
     }
 
     /**
@@ -258,6 +350,13 @@ export class ToolbarManager {
         // カラーピッカーも非表示
         if (this.editor.colorPickerManager) {
             this.editor.colorPickerManager.hideAllPickers();
+        }
+
+        // モバイルモード時のインラインスタイルをリセット
+        if (this._isMobile) {
+            this.floatToolbar.style.bottom = '';
+            this.floatToolbar.style.top = '';
+            this.floatToolbar.style.left = '';
         }
     }
 

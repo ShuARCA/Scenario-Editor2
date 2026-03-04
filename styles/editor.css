@@ -428,6 +428,61 @@
 }
 
 /* ============================================
+   モバイルモード用フローティングツールバー
+   ============================================ */
+#float-toolbar.mobile-mode {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    top: auto;
+    width: 100%;
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+    border-bottom: none;
+    box-sizing: border-box;
+    padding: 6px 8px;
+    gap: 4px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    white-space: nowrap;
+    -webkit-overflow-scrolling: touch;
+    flex-wrap: nowrap;
+    /* スクロールバーを非表示にする */
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    z-index: 1100;
+}
+
+#float-toolbar.mobile-mode::-webkit-scrollbar {
+    display: none;
+}
+
+/* セパレーターが横スクロール時に潰れないようにする */
+#float-toolbar.mobile-mode .separator {
+    flex-shrink: 0;
+}
+
+/* ボタンが横スクロール時に潰れないようにする */
+#float-toolbar.mobile-mode button {
+    flex-shrink: 0;
+}
+
+/* ドロップダウンコンテナも潰れないようにする */
+#float-toolbar.mobile-mode .dropdown-container {
+    flex-shrink: 0;
+}
+
+/* モバイルモード時: ドロップダウンメニューを上方向に展開 */
+#float-toolbar.mobile-mode .dropdown-menu {
+    top: auto;
+    bottom: 100%;
+    margin-top: 0;
+    margin-bottom: 4px;
+}
+
+/* ============================================
    カラーピッカー
    ============================================ */
 .color-picker {

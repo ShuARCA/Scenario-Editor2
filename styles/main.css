@@ -491,7 +491,7 @@ body.locked .outline-icon {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 12px;
+  padding: 6px;
   border-radius: 4px;
   cursor: pointer;
   font-size: 14px;

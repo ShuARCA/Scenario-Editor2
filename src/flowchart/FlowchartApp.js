@@ -136,6 +136,9 @@ export class FlowchartApp {
         document.addEventListener('mousemove', (e) => this.handleMouseMove(e));
         document.addEventListener('mouseup', (e) => this.handleMouseUp(e));
 
+        // キーボードイベント（矢印キーでノード移動）
+        document.addEventListener('keydown', (e) => this.handleKeyDown(e));
+
         // ツールバー折りたたみ/展開ボタン
         const toggleBtn = document.getElementById('flowchart-toggle-btn');
         if (toggleBtn) {
@@ -515,6 +518,46 @@ export class FlowchartApp {
             }
             this.connectionManager.clearConnectionPreview();
         }
+    }
+
+    /**
+     * キーダウンイベントを処理します。
+     * 選択中のノードを矢印キーで移動します。
+     * 
+     * @param {KeyboardEvent} e
+     */
+    handleKeyDown(e) {
+        // 入力フィールドやエディタ内ではスキップ
+        const tag = e.target.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
+            || e.target.isContentEditable) {
+            return;
+        }
+
+        // フローチャートが非表示の場合はスキップ
+        if (!this.container || this.container.classList.contains('collapsed')) return;
+
+        const arrowKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
+        if (!arrowKeys.includes(e.key)) return;
+
+        // 選択中のノードがなければスキップ
+        if (!this.shapeManager._getSelectedShape()) return;
+
+        // 移動量（1px固定）
+        const step = 1;
+
+        let deltaX = 0, deltaY = 0;
+        switch (e.key) {
+            case 'ArrowUp': deltaY = -step; break;
+            case 'ArrowDown': deltaY = step; break;
+            case 'ArrowLeft': deltaX = -step; break;
+            case 'ArrowRight': deltaX = step; break;
+        }
+
+        this.shapeManager.moveSelectedByKey(deltaX, deltaY);
+
+        // ブラウザのスクロールを抑制
+        e.preventDefault();
     }
 
     // ========================================
