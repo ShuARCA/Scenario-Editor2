@@ -423,7 +423,7 @@ body {
   width: 20px;
   height: 20px;
   min-width: 20px;
-  display: flex;
+  display: none;
   align-items: center;
   justify-content: center;
   cursor: pointer;
@@ -435,11 +435,14 @@ body {
 }
 
 .outline-item:hover .outline-menu-btn,
-.outline-menu-btn:focus {
+.outline-menu-btn:focus,
+.outline-item.menu-open .outline-menu-btn {
+  display: flex;
   opacity: 0.6;
 }
 
-.outline-menu-btn:hover {
+.outline-menu-btn:hover,
+.outline-item.menu-open .outline-menu-btn {
   opacity: 1;
   background-color: var(--surface-hover);
 }

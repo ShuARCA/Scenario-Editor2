@@ -240,7 +240,8 @@ export class ToolbarManager {
                 document.getElementById('comment-panel'),
                 document.getElementById('textColorPicker'),
                 document.getElementById('highlightPicker'),
-                document.getElementById('image-toolbar')
+                document.getElementById('image-toolbar'),
+                document.getElementById('global-color-picker-container')
             ];
 
             // ターゲットがいずれかの除外要素内にあるかチェック
@@ -393,10 +394,38 @@ export class ToolbarManager {
             }
         });
 
-        // リストドロップダウントリガーのアクティブ状態更新
-        const dropdownTrigger = this.floatToolbar.querySelector('.dropdown-trigger');
-        if (dropdownTrigger) {
-            dropdownTrigger.classList.toggle('active', isAnyListActive);
+        // リストドロップダウントリガーのアクティブ状態とアイコンの更新
+        const listDropdown = document.getElementById('listDropdown');
+        if (listDropdown) {
+            const trigger = listDropdown.querySelector('.dropdown-trigger');
+            const triggerIcon = trigger ? trigger.querySelector('.icon:not([style*="width"]) path') : null;
+
+            let currentList = null;
+            if (this.editor.tiptap.isActive('bulletList')) {
+                currentList = 'bulletList';
+            } else if (this.editor.tiptap.isActive('orderedList')) {
+                currentList = 'orderedList';
+            } else if (this.editor.tiptap.isActive('taskList')) {
+                currentList = 'taskList';
+            }
+
+            const listIcons = {
+                'bulletList': "M360-200v-80h480v80H360Zm0-240v-80h480v80H360Zm0-240v-80h480v80H360ZM200-160q-33 0-56.5-23.5T120-240q0-33 23.5-56.5T200-320q33 0 56.5 23.5T280-240q0 33-23.5 56.5T200-160Zm0-240q-33 0-56.5-23.5T120-480q0-33 23.5-56.5T200-560q33 0 56.5 23.5T280-480q0 33-23.5 56.5T200-400Zm-56.5-263.5Q120-687 120-720t23.5-56.5Q167-800 200-800t56.5 23.5Q280-753 280-720t-23.5 56.5Q233-640 200-640t-56.5-23.5Z",
+                'orderedList': "M120-80v-60h100v-30h-60v-60h60v-30H120v-60h120q17 0 28.5 11.5T280-280v40q0 17-11.5 28.5T240-200q17 0 28.5 11.5T280-160v40q0 17-11.5 28.5T240-80H120Zm0-280v-110q0-17 11.5-28.5T160-510h60v-30H120v-60h120q17 0 28.5 11.5T280-560v70q0 17-11.5 28.5T240-450h-60v30h100v60H120Zm60-280v-180h-60v-60h120v240h-60Zm180 440v-80h480v80H360Zm0-240v-80h480v80H360Zm0-240v-80h480v80H360Z",
+                'taskList': "M222-200 80-342l56-56 85 85 170-170 56 57-225 226Zm0-320L80-662l56-56 85 85 170-170 56 57-225 226Zm298 240v-80h360v80H520Zm0-320v-80h360v80H520Z"
+            };
+
+            if (currentList && listIcons[currentList]) {
+                if (triggerIcon) {
+                    triggerIcon.setAttribute('d', listIcons[currentList]);
+                }
+                trigger.classList.add('active');
+            } else {
+                if (triggerIcon) {
+                    triggerIcon.setAttribute('d', listIcons['bulletList']); // デフォルトは箇条書きアイコン
+                }
+                trigger.classList.remove('active');
+            }
         }
 
         // フォーマット選択の更新 (カスタムドロップダウン)

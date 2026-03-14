@@ -6,7 +6,6 @@
  * @module managers/LinkManager
  */
 
-import { PanelPositioner } from '../ui/PanelPositioner.js';
 import { isValidUrl } from '../extensions/link.js';
 
 /**
@@ -21,9 +20,6 @@ export class LinkManager {
     constructor(editorCore) {
         /** @type {Object} エディタへの参照 */
         this.editor = editorCore;
-
-        /** @type {PanelPositioner} 位置計算ユーティリティ */
-        this.positioner = new PanelPositioner();
 
         /** @type {Object|null} 編集中のリンク情報（詳細） */
         this.existingLinkInfo = null;
@@ -46,7 +42,6 @@ export class LinkManager {
         this.linkDeleteBtn = document.getElementById('link-delete-btn');
         this.linkBtn = document.getElementById('linkBtn');
         this.linkPopup = document.getElementById('link-popup');
-        this.floatToolbar = document.getElementById('float-toolbar');
 
         /** @type {boolean} 編集ロック状態 */
         this._locked = false;
@@ -369,13 +364,8 @@ export class LinkManager {
             this.linkHeadingList.classList.add('hidden');
             this.linkHeadingList.innerHTML = '';
         }
-
-        // 位置計算
-        const position = this._calculatePanelPosition();
-        if (position) {
-            this.linkPanel.style.top = `${position.top}px`;
-            this.linkPanel.style.left = `${position.left}px`;
-        }
+        // 表示テキスト欄・適用ボタンを表示状態にリセット
+        this._setHeadingSuggestionsVisible(false);
 
         this.linkPanel.classList.remove('hidden');
 
@@ -422,37 +412,6 @@ export class LinkManager {
         }
     }
 
-    // =====================================================
-    // プライベートメソッド
-    // =====================================================
-
-    /**
-     * パネル位置を計算します。
-     * 
-     * @returns {{top: number, left: number}|null}
-     * @private
-     */
-    _calculatePanelPosition() {
-        const panelWidth = 300;
-        const panelHeight = 220; // 少し高さを確保
-
-        // リンクボタンが表示されていればそこを基準に
-        // ここでの this.floatToolbar の参照は constructor で取得している前提
-        const isFloatToolbarVisible = this.floatToolbar && !this.floatToolbar.classList.contains('hidden');
-        if (this.linkBtn && isFloatToolbarVisible) {
-            return this.positioner.calculateFromAnchor(this.linkBtn, {
-                offsetY: 8,
-                panelWidth,
-                panelHeight
-            });
-        }
-
-        // ボタンがない場合は選択範囲から計算
-        return this.positioner.calculateFromSelection({
-            panelWidth,
-            panelHeight
-        });
-    }
 
     /**
      * 見出しをフィルタリングして候補リストを更新します。
@@ -463,22 +422,36 @@ export class LinkManager {
     _filterHeadings(query) {
         if (!this.linkHeadingList) return;
 
-        // URLっぽい文字列の場合はリストを非表示
-        if (isValidUrl(query)) {
-            this.linkHeadingList.classList.add('hidden');
-            this.selectedHeadingId = null; // リストから選んでないので解除
+        const trimmedQuery = query.trim();
+        const isUrl = isValidUrl(trimmedQuery);
+
+        // 空クエリの場合は候補・URLボタンともに非表示
+        if (!trimmedQuery) {
+            this._hideHeadingSuggestions();
+            return;
+        }
+
+        // URLの場合は見出し候補を表示せず、URLとして適用ボタンのみ表示
+        if (isUrl) {
+            this.linkHeadingList.innerHTML = '';
+            this.selectedHeadingId = null;
+            this._appendUrlApplyButton(trimmedQuery);
+            this.linkHeadingList.classList.remove('hidden');
+            this._setHeadingSuggestionsVisible(true);
             return;
         }
 
         const headings = this.editor.getHeadings?.() || [];
-        const lowerQuery = query.toLowerCase().trim();
+        const lowerQuery = trimmedQuery.toLowerCase();
 
-        const filteredHeadings = lowerQuery
-            ? headings.filter(h => h.text.toLowerCase().includes(lowerQuery))
-            : headings;
+        const filteredHeadings = headings.filter(h => h.text.toLowerCase().includes(lowerQuery));
 
         if (filteredHeadings.length === 0) {
-            this.linkHeadingList.classList.add('hidden');
+            if (this.linkHeadingList) {
+                this.linkHeadingList.classList.add('hidden');
+                this.linkHeadingList.innerHTML = '';
+            }
+            this._setHeadingSuggestionsVisible(true);
             return;
         }
 
@@ -503,12 +476,68 @@ export class LinkManager {
                     this.linkInput.value = heading.text;
                 }
                 this.linkHeadingList.classList.add('hidden');
+                this._setHeadingSuggestionsVisible(false);
             });
 
             this.linkHeadingList.appendChild(item);
         });
 
         this.linkHeadingList.classList.remove('hidden');
+        this._setHeadingSuggestionsVisible(true);
+    }
+
+    /**
+     * 見出し候補リストを非表示にし、表示テキスト欄・適用ボタンを復元します。
+     * 
+     * @private
+     */
+    _hideHeadingSuggestions() {
+        if (this.linkHeadingList) {
+            this.linkHeadingList.classList.add('hidden');
+            this.linkHeadingList.innerHTML = '';
+        }
+        this._setHeadingSuggestionsVisible(false);
+    }
+
+    /**
+     * 見出し候補リストの表示状態に応じて、表示テキスト欄と適用ボタンの表示を制御します。
+     * 
+     * @param {boolean} visible - 見出し候補が表示中かどうか（trueで欄を隠す）
+     * @private
+     */
+    _setHeadingSuggestionsVisible(visible) {
+        // 表示テキスト入力欄の親要素
+        const titleField = this.linkTitleInput?.closest('.link-panel-field');
+        // 適用ボタンの親要素
+        const buttonsContainer = this.linkApplyBtn?.closest('.link-panel-buttons');
+
+        if (titleField) {
+            titleField.style.display = visible ? 'none' : '';
+        }
+        if (buttonsContainer) {
+            buttonsContainer.style.display = visible ? 'none' : '';
+        }
+    }
+
+    /**
+     * 見出し候補リスト内に「URLとして適用」ボタンを追加します。
+     * 
+     * @param {string} url - 適用するURL文字列
+     * @private
+     */
+    _appendUrlApplyButton(url) {
+        const btn = document.createElement('div');
+        btn.className = 'link-heading-item link-url-apply-item';
+        btn.textContent = `🔗 "${url}" をURLとしてリンク`;
+        btn.addEventListener('click', () => {
+            this.selectedHeadingId = null;
+            if (this.linkInput) {
+                this.linkInput.value = url;
+            }
+            this.linkHeadingList.classList.add('hidden');
+            this._setHeadingSuggestionsVisible(false);
+        });
+        this.linkHeadingList.appendChild(btn);
     }
 
     /**
@@ -669,15 +698,26 @@ export class LinkManager {
             const from = foundPos;
             const to = foundPos + foundNode.nodeSize;
 
-            // 連続する同じLineIDのノードがあれば範囲を広げるべきだが、
-            // ここでは簡易的に最初のノードを選択してパネルを開く
+            // 1. テキストを選択状態にする
             this.editor.tiptap.chain()
                 .focus()
                 .setTextSelection({ from, to })
                 .run();
 
-            // 編集モードに入る
-            this.insertLink();
+            // 2. フローティングツールバーを表示 (ToolBarManager経由)
+            if (this.editor.toolbarManager) {
+                this.editor.toolbarManager.showFloatToolbar();
+            }
+
+            // 3. リンクボタンを押下する (setTimeoutで安定させる)
+            // CommentManagerと同じパターン: ツールバー表示後にボタンclickで
+            // 正規フロー (insertLink → showLinkPanel) を経由する
+            setTimeout(() => {
+                const linkBtn = document.getElementById('linkBtn');
+                if (linkBtn) {
+                    linkBtn.click();
+                }
+            }, 10);
         }
     }
 

@@ -43,6 +43,42 @@ export class OutlineManager {
 
         /** @type {boolean} 編集ロック状態 */
         this._locked = false;
+
+        /** @type {number} 1階層あたりのインデント幅(px) */
+        this._outlineIndentWidth = 28; // デフォルト値。動的に計算して上書きされる
+
+        // スタイルから1階層分のインデント幅を計算
+        this._calculateOutlineIndentWidth();
+    }
+
+    /**
+     * `.outline-children` クラスのCSS定義から1階層分のインデント幅を動的に計算します。
+     * @private
+     */
+    _calculateOutlineIndentWidth() {
+        // DOMに一瞬だけダミー要素を追加して、ブラウザが計算したスタイルを取得する
+        const dummy = document.createElement('div');
+        dummy.className = 'outline-children';
+        Object.assign(dummy.style, {
+            position: 'absolute',
+            visibility: 'hidden',
+            pointerEvents: 'none'
+        });
+        document.body.appendChild(dummy);
+
+        const style = window.getComputedStyle(dummy);
+        
+        // marginLeft, borderLeftWidth, paddingLeft の合計をインデント幅とする
+        const ml = parseFloat(style.marginLeft) || 0;
+        const bl = parseFloat(style.borderLeftWidth) || 0;
+        const pl = parseFloat(style.paddingLeft) || 0;
+        
+        const total = ml + bl + pl;
+        if (total > 0) {
+           this._outlineIndentWidth = total;
+        }
+
+        document.body.removeChild(dummy);
     }
 
     // =====================================================
@@ -212,6 +248,8 @@ export class OutlineManager {
                 stack.pop();
             }
 
+            item.parentLevel = stack.length > 0 ? stack[stack.length - 1].level : 0;
+
             if (stack.length === 0) {
                 result.push(item);
             } else {
@@ -237,7 +275,13 @@ export class OutlineManager {
         wrapper.dataset.headingId = item.id;
         wrapper.dataset.level = item.level;
 
-        if (item.level === 1) {
+        const parentLevel = item.parentLevel || 0;
+        const gap = item.level - parentLevel - 1;
+
+        if (gap > 0) {
+            // 動的に計算したインデント幅（デフォルト28px）に合わせ追加のインデントを付与
+            wrapper.style.paddingLeft = `${gap * this._outlineIndentWidth}px`;
+        } else if (item.level === 1) {
             wrapper.style.paddingLeft = `0px`;
         }
 
@@ -571,7 +615,23 @@ export class OutlineManager {
     _showContextMenuFromButton(headingId, level, buttonEl) {
         if (!this.contextMenu || this._locked) return;
 
+        // 既存のメニュー表示状態をクリア
+        if (this.contextMenuTargetId && this.contextMenuTargetId !== headingId) {
+            this.hideContextMenu();
+        }
+
         this.contextMenuTargetId = headingId;
+
+        // menu-open クラスを追加
+        if (this.outlineList) {
+            const targetWrapper = this.outlineList.querySelector(`[data-heading-id="${headingId}"]`);
+            if (targetWrapper) {
+                const targetItem = targetWrapper.querySelector('.outline-item');
+                if (targetItem) {
+                    targetItem.classList.add('menu-open');
+                }
+            }
+        }
 
         // 以前のアンカーをクリア
         if (this.currentAnchorButton) {
@@ -608,7 +668,23 @@ export class OutlineManager {
     _showContextMenuAtCoords(headingId, level, x, y) {
         if (!this.contextMenu || this._locked) return;
 
+        // 既存のメニュー表示状態をクリア
+        if (this.contextMenuTargetId && this.contextMenuTargetId !== headingId) {
+            this.hideContextMenu();
+        }
+
         this.contextMenuTargetId = headingId;
+
+        // menu-open クラスを追加
+        if (this.outlineList) {
+            const targetWrapper = this.outlineList.querySelector(`[data-heading-id="${headingId}"]`);
+            if (targetWrapper) {
+                const targetItem = targetWrapper.querySelector('.outline-item');
+                if (targetItem) {
+                    targetItem.classList.add('menu-open');
+                }
+            }
+        }
 
         // 以前のアンカーをクリア
         if (this.currentAnchorButton) {
@@ -707,6 +783,16 @@ export class OutlineManager {
      * コンテキストメニューを非表示にします。
      */
     hideContextMenu() {
+        if (this.contextMenuTargetId && this.outlineList) {
+            const targetWrapper = this.outlineList.querySelector(`[data-heading-id="${this.contextMenuTargetId}"]`);
+            if (targetWrapper) {
+                const targetItem = targetWrapper.querySelector('.outline-item');
+                if (targetItem) {
+                    targetItem.classList.remove('menu-open');
+                }
+            }
+        }
+
         if (this.contextMenu) {
             this.contextMenu.classList.add('hidden');
         }
@@ -840,6 +926,11 @@ export class OutlineManager {
         // 新しいボタン要素を検索
         const wrapper = this.outlineList.querySelector(`[data-heading-id="${this.contextMenuTargetId}"]`);
         if (wrapper) {
+            const targetItem = wrapper.querySelector('.outline-item');
+            if (targetItem) {
+                targetItem.classList.add('menu-open');
+            }
+
             const newButton = wrapper.querySelector('.outline-menu-btn');
             if (newButton) {
                 this.currentAnchorButton = newButton;

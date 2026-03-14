@@ -56,7 +56,6 @@
 
     /* サイズ */
     --canvas-size: 3000px;
-    --grid-size: 20px;
 }
 
 /* ============================================
@@ -205,13 +204,13 @@
 .shape {
     position: absolute;
     border-radius: 8px;
-    padding: 4px 24px;
+    padding: 4px;
     min-width: 100px;
     text-align: center;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
     cursor: move;
     user-select: none;
-    font-size: 14px;
+    font-size: var(--editor-font-size);
     font-weight: 500;
 
     /* Defaults */
@@ -319,7 +318,7 @@
    ============================================ */
 .shape.group-parent {
     align-items: flex-start;
-    padding-top: 6px;
+    padding-right: 24px;
 }
 
 .group-toggle {
