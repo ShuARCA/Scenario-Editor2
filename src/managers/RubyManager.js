@@ -6,7 +6,6 @@
  * @module managers/RubyManager
  */
 
-import { PanelPositioner } from '../ui/PanelPositioner.js';
 
 /**
  * ルビ管理クラス
@@ -20,9 +19,6 @@ export class RubyManager {
     constructor(editorCore) {
         /** @type {Object} エディタへの参照 */
         this.editor = editorCore;
-
-        /** @type {PanelPositioner} 位置計算ユーティリティ */
-        this.positioner = new PanelPositioner();
 
         /** @type {Object|null} 編集中のルビ情報 */
         this.currentRubyTarget = null;
@@ -196,14 +192,8 @@ export class RubyManager {
             }
         }
 
-        // 位置計算
-        const position = this._calculatePanelPosition();
-        if (position) {
-            this.rubyPanel.style.top = `${position.top}px`;
-            this.rubyPanel.style.left = `${position.left}px`;
-        }
-
         this.rubyPanel.classList.remove('hidden');
+
 
         // 入力フィールドにフォーカス
         setTimeout(() => {
@@ -222,32 +212,6 @@ export class RubyManager {
         this.currentRubyTarget = null;
     }
 
-    // =====================================================
-    // プライベートメソッド
-    // =====================================================
-
-    /**
-     * パネル位置を計算します。
-     * 
-     * @returns {{top: number, left: number}|null}
-     * @private
-     */
-    _calculatePanelPosition() {
-        // ルビボタンを基準にする
-        if (this.rubyBtn) {
-            return this.positioner.calculateFromAnchor(this.rubyBtn, {
-                offsetY: 8,
-                panelWidth: 200,
-                panelHeight: 80
-            });
-        }
-
-        // フォールバック: 選択範囲から計算
-        return this.positioner.calculateFromSelection({
-            panelWidth: 200,
-            panelHeight: 80
-        });
-    }
 
     /**
      * ルビパネルからルビを適用します。

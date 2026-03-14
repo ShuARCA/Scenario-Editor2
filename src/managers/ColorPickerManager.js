@@ -8,6 +8,7 @@
  */
 
 import { CONFIG } from '../core/Config.js';
+import { ColorPicker } from '../ui/ColorPicker.js';
 
 /**
  * カラーピッカー管理クラス
@@ -36,6 +37,21 @@ export class ColorPickerManager {
         this.textColorBtn = null;
         this.highlightBtn = null;
 
+        // カラーピッカー関連
+        this.activeColorPicker = null;
+        this.activePickerElement = null;
+        this.globalPickerContainer = document.getElementById('global-color-picker-container');
+        
+        this.pickerOutsideClickHandler = (e) => {
+            if (this.activeColorPicker && this.globalPickerContainer) {
+                // ピッカー内なら何もしない
+                if (this.globalPickerContainer.contains(e.target)) {
+                    return;
+                }
+                this._closeColorPicker();
+            }
+        };
+
         // 外側クリックで閉じる
         document.addEventListener('mousedown', (e) => {
             const checkAndHide = (picker, btn) => {
@@ -44,7 +60,9 @@ export class ColorPickerManager {
                     !picker.contains(e.target) &&
                     (!btn || !btn.contains(e.target)) &&
                     // カスタムカラー追加ボタンのinput要素などは除外
-                    !e.target.closest('.hidden-color-input')) {
+                    !e.target.closest('.hidden-color-input') &&
+                    // グローバルピッカー表示中は閉じない
+                    !(this.globalPickerContainer && this.globalPickerContainer.contains(e.target))) {
                     picker.classList.add('hidden');
                 }
             };
@@ -147,9 +165,6 @@ export class ColorPickerManager {
         btn.addEventListener('mousedown', (e) => {
             e.preventDefault();
             picker.classList.toggle('hidden');
-            const rect = btn.getBoundingClientRect();
-            picker.style.top = `${rect.bottom + 5 + window.scrollY}px`;
-            picker.style.left = `${rect.left + window.scrollX}px`;
         });
     }
 
@@ -257,6 +272,11 @@ export class ColorPickerManager {
                 this.editor.tiptap.chain().focus().setHighlight({ color: colorValue }).run();
             }
         }
+
+        // ツールバーの状態（アイコンの表示色等）を即時更新する
+        if (this.editor.toolbarManager) {
+            this.editor.toolbarManager.updateToolbarState();
+        }
     }
 
     /**
@@ -272,32 +292,18 @@ export class ColorPickerManager {
         addBtn.textContent = '＋';
         addBtn.title = 'カスタム色を追加';
 
-        // 隠しカラーインプット
-        const colorInput = document.createElement('input');
-        colorInput.type = 'color';
-        colorInput.className = 'hidden-color-input';
-        colorInput.style.position = 'absolute';
-        colorInput.style.opacity = '0';
-        colorInput.style.pointerEvents = 'none';
-
         addBtn.addEventListener('mousedown', (e) => {
             e.preventDefault();
             e.stopPropagation();
-            colorInput.click();
+            
+            const initialColor = isForeColor 
+                ? (this.editor.tiptap?.getAttributes('textStyle').color || '#000000') 
+                : (this.editor.tiptap?.getAttributes('highlight').color || '#ffff00');
+            
+            // ピッカーの展開起点を＋ボタン(addBtn)にする
+            this._openColorPicker(addBtn, initialColor, isForeColor);
         });
 
-        // changeイベント：色を決定したときのみ追加
-        colorInput.addEventListener('change', (e) => {
-            const newColor = e.target.value;
-            if (isForeColor) {
-                this.addCustomTextColor(newColor);
-            } else {
-                this.addCustomHighlightColor(newColor);
-            }
-            this.rebuildAllPickers();
-        });
-
-        addBtn.appendChild(colorInput);
         picker.appendChild(addBtn);
     }
 
@@ -313,6 +319,69 @@ export class ColorPickerManager {
     }
 
     /**
+     * アルファ付きカラーピッカーを開く
+     * @private
+     */
+    _openColorPicker(targetEl, initialColor, isForeColor) {
+        this._closeColorPicker();
+        
+        if (!this.globalPickerContainer) return;
+
+        targetEl.style.anchorName = '--color-picker-anchor';
+        this.activePickerElement = targetEl;
+
+        this.globalPickerContainer.style.display = 'block';
+
+        let finalHex = initialColor; // 最終的に選択された色を保存
+
+        this.activeColorPicker = new ColorPicker(this.globalPickerContainer, {
+            color: initialColor,
+            hasAlpha: true,
+            onChange: (hex) => {
+                finalHex = hex;
+                // リアルタイム反映
+                this._applyColor(hex, isForeColor);
+            }
+        });
+
+        // カスタム色の保存用のハンドラ
+        this._onColorPickerClose = () => {
+            if (isForeColor) {
+                this.addCustomTextColor(finalHex);
+            } else {
+                this.addCustomHighlightColor(finalHex);
+            }
+            this.rebuildAllPickers();
+        };
+
+        requestAnimationFrame(() => {
+            document.addEventListener('mousedown', this.pickerOutsideClickHandler, true);
+        });
+    }
+
+    /**
+     * アルファ付きカラーピッカーを閉じる
+     * @private
+     */
+    _closeColorPicker() {
+        document.removeEventListener('mousedown', this.pickerOutsideClickHandler, true);
+
+        if (this.globalPickerContainer) {
+            this.globalPickerContainer.innerHTML = '';
+            this.globalPickerContainer.style.display = 'none';
+        }
+        if (this.activePickerElement) {
+            this.activePickerElement.style.anchorName = '';
+            this.activePickerElement = null;
+        }
+        if (this.activeColorPicker && this._onColorPickerClose) {
+            this._onColorPickerClose();
+            this._onColorPickerClose = null;
+        }
+        this.activeColorPicker = null;
+    }
+
+    /**
      * ピッカーを非表示にします。
      */
     hideAllPickers() {
@@ -322,5 +391,6 @@ export class ColorPickerManager {
         if (this.highlightPicker) {
             this.highlightPicker.classList.add('hidden');
         }
+        this._closeColorPicker();
     }
 }

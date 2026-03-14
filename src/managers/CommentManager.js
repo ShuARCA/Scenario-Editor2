@@ -6,7 +6,6 @@
  * @module managers/CommentManager
  */
 
-import { PanelPositioner } from '../ui/PanelPositioner.js';
 
 /**
  * コメント管理クラス
@@ -20,9 +19,6 @@ export class CommentManager {
     constructor(editorCore) {
         /** @type {Object} エディタへの参照 */
         this.editor = editorCore;
-
-        /** @type {PanelPositioner} 位置計算ユーティリティ */
-        this.positioner = new PanelPositioner();
 
         /** @type {Object|null} 編集中のコメント情報 */
         this.currentCommentTarget = null;
@@ -310,13 +306,6 @@ export class CommentManager {
             }
         }
 
-        // 位置計算
-        const position = this._calculatePanelPosition();
-        if (position) {
-            this.commentPanel.style.top = `${position.top}px`;
-            this.commentPanel.style.left = `${position.left}px`;
-        }
-
         this.commentPanel.classList.remove('hidden');
 
         // 入力フィールドにフォーカス
@@ -446,30 +435,6 @@ export class CommentManager {
         });
     }
 
-    // =====================================================
-    // プライベートメソッド
-    // =====================================================
-
-    /**
-     * パネル位置を計算します。
-     * 
-     * @returns {{top: number, left: number}|null}
-     * @private
-     */
-    _calculatePanelPosition() {
-        if (this.commentBtn) {
-            return this.positioner.calculateFromAnchor(this.commentBtn, {
-                offsetY: 8,
-                panelWidth: 280,
-                panelHeight: 120
-            });
-        }
-
-        return this.positioner.calculateFromSelection({
-            panelWidth: 280,
-            panelHeight: 120
-        });
-    }
 
     /**
      * コメントパネルからコメントを適用します。
