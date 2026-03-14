@@ -517,30 +517,33 @@ export const BoxBody = Node.create({
 
     addKeyboardShortcuts() {
         return {
-            'Shift-Enter': () => {
+            // Enter: ボックス外へ改行（段落挿入）
+            'Enter': () => {
                 if (!this.editor.isActive('boxBody')) {
                     return false;
                 }
                 const { state } = this.editor;
                 const { $from } = state.selection;
-                let wrapperPos = -1;
 
                 // 親の boxContainer を探す
                 for (let d = $from.depth; d > 0; d--) {
                     if ($from.node(d).type.name === 'boxContainer') {
-                        wrapperPos = $from.after(d);
-                        break;
+                        const wrapperPos = $from.after(d);
+                        return this.editor.chain()
+                            .insertContentAt(wrapperPos, { type: 'paragraph' })
+                            .setTextSelection(wrapperPos + 1)
+                            .scrollIntoView()
+                            .run();
                     }
                 }
-
-                if (wrapperPos > -1) {
-                    return this.editor.chain()
-                        .insertContentAt(wrapperPos, { type: 'paragraph' })
-                        .setTextSelection(wrapperPos + 1)
-                        .scrollIntoView()
-                        .run();
-                }
                 return false;
+            },
+            // Shift+Enter: ボックス内改行（<br> 挿入）
+            'Shift-Enter': () => {
+                if (!this.editor.isActive('boxBody')) {
+                    return false;
+                }
+                return this.editor.commands.setHardBreak();
             },
         }
     }
