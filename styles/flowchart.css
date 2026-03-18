@@ -99,6 +99,7 @@
     background-color: var(--surface-color);
     border: 1px solid var(--border-color);
     border-radius: 4px;
+    padding: 2px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -113,10 +114,10 @@
 }
 
 .flowchart-toggle-btn svg {
-    width: 24px;
-    height: 24px;
+    width: 20px;
+    height: 20px;
     fill: currentColor;
-    color: var(--text-color);
+    color: var(--flowchart-muted-color);
 }
 
 .flowchart-toolbar:hover {

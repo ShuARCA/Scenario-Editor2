@@ -5,7 +5,7 @@
    ============================================ */
 :root {
     --editor-max-width: 800px;
-    --editor-padding: 16px 24px;
+    --editor-padding: 4px 12px;
     --editor-border-radius: 8px;
     --editor-line-height: 1.5;
     --editor-font-size: 12pt;
@@ -484,6 +484,7 @@
 #textColorBtn {
     anchor-name: --text-color-btn-anchor;
 }
+
 #highlightBtn {
     anchor-name: --highlight-btn-anchor;
 }
@@ -505,9 +506,11 @@
     margin-top: 4px;
     position-try-fallbacks: flip-block, flip-inline, flip-block flip-inline;
 }
+
 #textColorPicker {
     position-anchor: --text-color-btn-anchor;
 }
+
 #highlightPicker {
     position-anchor: --highlight-btn-anchor;
 }
@@ -1583,9 +1586,11 @@ body.locked .box-settings-btn {
 #formatBlockDropdown .dropdown-trigger {
     anchor-name: --format-dropdown-anchor;
 }
+
 #alignDropdown .dropdown-trigger {
     anchor-name: --align-dropdown-anchor;
 }
+
 #listDropdown .dropdown-trigger {
     anchor-name: --list-dropdown-anchor;
 }
@@ -1607,12 +1612,15 @@ body.locked .box-settings-btn {
     position-area: bottom span-right;
     position-try-fallbacks: flip-block, flip-inline, flip-block flip-inline;
 }
+
 #formatBlockDropdown .dropdown-menu {
     position-anchor: --format-dropdown-anchor;
 }
+
 #alignDropdown .dropdown-menu {
     position-anchor: --align-dropdown-anchor;
 }
+
 #listDropdown .dropdown-menu {
     position-anchor: --list-dropdown-anchor;
 }
