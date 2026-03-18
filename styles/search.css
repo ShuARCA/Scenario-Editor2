@@ -1,36 +1,28 @@
+/* 検索ボタンのアンカーネーム設定 */
+#searchBtn {
+    anchor-name: --search-btn;
+}
+
 /* 検索パネル */
 #search-panel {
     position: absolute;
+    position-anchor: --search-btn;
+    top: calc(anchor(bottom) + 8px);
+    right: calc(anchor(center) - 180px);
+    right: anchor(right);
     background-color: var(--surface-color);
     border: 1px solid var(--border-color);
     border-radius: 8px;
-    padding: 16px;
-    box-shadow: 0 10px 25px -5px var(--shadow-heavy), 0 8px 10px -6px var(--shadow-color);
+    padding: 8px;
+    box-shadow: 0 4px 12px var(--shadow-heavy), 0 1px 3px var(--shadow-color);
     z-index: 1000;
-    width: 380px;
+    width: 360px;
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    top: auto;
-    left: auto;
+    gap: 6px;
     transition: opacity 0.2s ease, transform 0.2s ease;
     opacity: 1;
     transform: translateY(0);
-}
-
-/* 吹き出しの矢印 */
-#search-panel::before {
-    content: '';
-    position: absolute;
-    top: -6px;
-    right: 20px;
-    /* アイコンの位置に合わせる */
-    width: 12px;
-    height: 12px;
-    background-color: var(--surface-color);
-    transform: rotate(45deg);
-    border-left: 1px solid var(--border-color);
-    border-top: 1px solid var(--border-color);
 }
 
 #search-panel.hidden {
@@ -41,21 +33,46 @@
 
 .search-row {
     display: flex;
-    gap: 6px;
+    gap: 4px;
     align-items: center;
 }
 
-#search-input,
+.main-search-row {
+    flex-wrap: nowrap;
+    position: relative;
+}
+
+.search-actions {
+    display: flex;
+    gap: 2px;
+    align-items: center;
+    margin-left: auto;
+}
+
+#search-input {
+    flex-grow: 1;
+    padding: 6px 10px;
+    padding-right: 50px;
+    /* 右側にsearch-infoを絶対配置するための余白 */
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    font-size: 13px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    background-color: var(--surface-color);
+    color: var(--text-color);
+    min-width: 0;
+    /* flex-grow で縮むようにする */
+}
+
 #replace-input {
     flex-grow: 1;
     padding: 6px 10px;
     border: 1px solid var(--border-color);
-    border-radius: 6px;
-    font-size: 14px;
-    transition: border-color 0.2s, box-shadow 0.2s;
+    border-radius: 4px;
+    font-size: 13px;
     background-color: var(--surface-color);
     color: var(--text-color);
-    max-width: 180px;
+    min-width: 0;
 }
 
 #search-input:focus,
@@ -65,55 +82,63 @@
     box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary-color) 20%, transparent);
 }
 
-#search-panel button {
-    padding: 6px 10px;
-    background-color: var(--surface-color);
-    border: 1px solid var(--border-color);
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 13px;
+/* 検索情報 (件数表示) を入力欄の右端に重ねる */
+.search-info {
+    position: absolute;
+    right: 90px;
+    /* .search-actions の左側付近 */
+    font-size: 11px;
+    color: var(--text-muted);
+    pointer-events: none;
     white-space: nowrap;
-    transition: all 0.2s;
-    color: var(--text-color);
+}
+
+/* 検索パネル内のボタンベース */
+#search-panel button {
+    padding: 4px;
+    height: 26px;
+    min-width: 26px;
+    background-color: transparent;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    color: var(--text-muted);
     display: flex;
     align-items: center;
     justify-content: center;
+    transition: background-color 0.15s, color 0.15s;
+}
+
+#search-panel button .btn-icon {
+    width: 16px;
+    height: 16px;
+    fill: currentColor;
 }
 
 #search-panel button:hover {
     background-color: var(--border-color);
-    transform: translateY(-1px);
+    color: var(--text-color);
 }
 
-#search-panel button:active {
-    transform: translateY(0);
-}
-
-#do-search-btn,
+/* 置換用ボタン */
 #replace-btn,
 #replace-all-btn {
+    padding: 4px 8px;
+    border: 1px solid var(--border-color) !important;
     background-color: var(--primary-color) !important;
-    color: white !important;
-    border-color: var(--primary-color) !important;
-    font-weight: 500;
+    font-size: 12px;
+    color: #FDFFFF !important;
 }
 
-#do-search-btn:hover,
 #replace-btn:hover,
 #replace-all-btn:hover {
     background-color: var(--primary-hover) !important;
-    color: white !important;
-    /* Update fixed text color to maintain contrast */
-    box-shadow: 0 2px 4px var(--shadow-color);
 }
 
 /* 閉じるボタン */
 #close-search-btn {
-    padding: 8px;
-    width: 32px;
-    color: var(--text-muted) !important;
-    background: transparent !important;
-    border: none !important;
+    font-size: 16px !important;
 }
 
 #close-search-btn:hover {
@@ -121,35 +146,43 @@
     background-color: var(--danger-bg) !important;
 }
 
-/* 検索オプション */
+/* 検索オプション (正規表現、大小文字) */
 .search-options {
     display: flex;
-    gap: 16px;
-    padding: 4px 0;
+    gap: 12px;
+    padding: 0 4px;
 }
 
 .search-option {
     display: flex;
     align-items: center;
-    gap: 6px;
-    font-size: 13px;
-    color: var(--text-color);
+    gap: 4px;
+    font-size: 11px;
+    color: var(--text-muted);
     cursor: pointer;
     user-select: none;
 }
 
-.search-option input[type="checkbox"] {
-    width: 16px;
-    height: 16px;
-    cursor: pointer;
-    accent-color: var(--primary-color);
+.search-option:hover {
+    color: var(--text-color);
 }
 
-/* 検索情報 */
-.search-info {
-    font-size: 12px;
-    color: var(--text-muted);
-    padding: 0 4px;
-    min-height: 1.5em;
-    /* ちらつき防止 */
+.search-option input[type="checkbox"] {
+    width: 12px;
+    height: 12px;
+    cursor: pointer;
+    accent-color: var(--primary-color);
+    margin: 0;
+}
+
+/* ─── エディタ内 検索ハイライト (CSS Custom Highlight API) ─── */
+
+/* 全マッチ（薄いハイライト） */
+::highlight(search-all) {
+    background-color: color-mix(in srgb, var(--primary-color) 25%, transparent);
+}
+
+/* 現在のマッチ（濃いハイライト） */
+::highlight(search-current) {
+    background-color: color-mix(in srgb, var(--primary-color) 60%, transparent);
 }

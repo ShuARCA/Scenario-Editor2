@@ -1,7 +1,7 @@
 /**
  * 検索・置換ロジック (Tiptap対応版)
  * エディタ内のテキスト検索と置換機能を提供します。
- * Tiptapエディタと完全に統合されています。
+ * ハイライトは CSS Custom Highlight API を使用し、DOMを一切変更しません。
  */
 export class SearchManager {
     /**
@@ -27,6 +27,15 @@ export class SearchManager {
         /** @type {boolean} 編集ロック状態 */
         this._locked = false;
 
+        /** @type {boolean} IME変換中フラグ */
+        this.isComposing = false;
+
+        // CSS Custom Highlight API のハイライトオブジェクト
+        this._highlightAll = new Highlight();
+        this._highlightCurrent = new Highlight();
+        CSS.highlights.set('search-all', this._highlightAll);
+        CSS.highlights.set('search-current', this._highlightCurrent);
+
         this.init();
     }
 
@@ -45,27 +54,43 @@ export class SearchManager {
         // 検索パネルの表示/非表示
         document.getElementById('searchBtn').addEventListener('click', () => this.toggleSearchPanel());
 
-        // 検索ボタン
-        const doSearchBtn = document.getElementById('do-search-btn');
-        if (doSearchBtn) {
-            doSearchBtn.addEventListener('click', () => this.performSearchWithoutFocusChange());
-        }
+        // IME入力状態の管理
+        this.searchInput.addEventListener('compositionstart', () => { this.isComposing = true; });
+        this.searchInput.addEventListener('compositionend', () => {
+            this.isComposing = false;
+            this.performSilentSearch();
+        });
 
-        // Enterキーで検索実行
+        // リアルタイム検索
+        this.searchInput.addEventListener('input', () => {
+            if (!this.isComposing) {
+                this.performSilentSearch();
+            }
+        });
+
+        // Enter / Shift+Enter でマッチ間を移動
         this.searchInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
                 e.preventDefault();
                 if (this.matches.length > 0) {
-                    this.nextMatch();
-                } else {
-                    this.performSearchWithoutFocusChange();
+                    if (e.shiftKey) {
+                        this.prevMatch();
+                    } else {
+                        this.nextMatch();
+                    }
                 }
             }
         });
 
-        // ナビゲーションボタン
-        document.getElementById('find-next-btn').addEventListener('click', () => this.nextMatch());
-        document.getElementById('find-prev-btn').addEventListener('click', () => this.prevMatch());
+        // ナビゲーションボタン（フォーカスを検索入力欄に保持）
+        document.getElementById('find-next-btn').addEventListener('click', () => {
+            this.nextMatch();
+            this.searchInput.focus();
+        });
+        document.getElementById('find-prev-btn').addEventListener('click', () => {
+            this.prevMatch();
+            this.searchInput.focus();
+        });
 
         // 置換ボタン
         document.getElementById('replace-btn').addEventListener('click', () => this.replaceCurrent());
@@ -78,11 +103,13 @@ export class SearchManager {
         if (this.regexModeCheckbox) {
             this.regexModeCheckbox.addEventListener('change', () => {
                 this.regexMode = this.regexModeCheckbox.checked;
+                this.performSilentSearch();
             });
         }
         if (this.caseSensitiveCheckbox) {
             this.caseSensitiveCheckbox.addEventListener('change', () => {
                 this.caseSensitive = this.caseSensitiveCheckbox.checked;
+                this.performSilentSearch();
             });
         }
 
@@ -96,18 +123,22 @@ export class SearchManager {
         });
     }
 
+    // ─────────────── UI状態管理 ───────────────
+
     /**
      * 編集ロック状態を設定します。
-     * ロック中は置換機能をブロックしますが、検索はそのまま利用可能です。
-     * 
-     * @param {boolean} locked - trueでロック、falseで解除
+     * @param {boolean} locked
      */
     setLocked(locked) {
         this._locked = locked;
-        // 置換関連UIの表示/非表示
-        const replaceRow = document.getElementById('replace-row');
-        if (replaceRow) {
-            replaceRow.style.display = locked ? 'none' : '';
+        if (this.replaceInput) {
+            this.replaceInput.disabled = locked;
+            const replaceBtn = document.getElementById('replace-btn');
+            const replaceAllBtn = document.getElementById('replace-all-btn');
+            if (replaceBtn) replaceBtn.disabled = locked;
+            if (replaceAllBtn) replaceAllBtn.disabled = locked;
+            if (replaceBtn) replaceBtn.style.opacity = locked ? '0.5' : '1';
+            if (replaceAllBtn) replaceAllBtn.style.opacity = locked ? '0.5' : '1';
         }
     }
 
@@ -117,18 +148,6 @@ export class SearchManager {
     toggleSearchPanel() {
         this.searchContainer.classList.toggle('hidden');
         if (!this.searchContainer.classList.contains('hidden')) {
-            // ポップアップ位置の計算
-            const btn = document.getElementById('searchBtn');
-            if (!btn) return;
-            const rect = btn.getBoundingClientRect();
-
-            this.searchContainer.style.position = 'absolute';
-            this.searchContainer.style.top = `${rect.bottom + 10}px`;
-            const right = window.innerWidth - rect.right;
-            this.searchContainer.style.right = `${Math.max(10, right - 10)}px`;
-            this.searchContainer.style.left = 'auto';
-            this.searchContainer.style.bottom = 'auto';
-
             this.searchInput.focus();
         } else {
             this.clearHighlights();
@@ -143,34 +162,22 @@ export class SearchManager {
         this.clearHighlights();
     }
 
-    /**
-     * 正規表現モードを設定します。
-     * @param {boolean} enabled - 正規表現モードを有効にするかどうか
-     */
+    // ─────────────── 検索オプション設定 ───────────────
+
     setRegexMode(enabled) {
         this.regexMode = enabled;
-        if (this.regexModeCheckbox) {
-            this.regexModeCheckbox.checked = enabled;
-        }
+        if (this.regexModeCheckbox) this.regexModeCheckbox.checked = enabled;
     }
 
-    /**
-     * 大文字/小文字区別を設定します。
-     * @param {boolean} enabled - 大文字/小文字を区別するかどうか
-     */
     setCaseSensitive(enabled) {
         this.caseSensitive = enabled;
-        if (this.caseSensitiveCheckbox) {
-            this.caseSensitiveCheckbox.checked = enabled;
-        }
+        if (this.caseSensitiveCheckbox) this.caseSensitiveCheckbox.checked = enabled;
     }
+
+    // ─────────────── 検索ロジック ───────────────
 
     /**
      * 検索用の正規表現を作成します。
-     * @param {string} query - 検索クエリ
-     * @param {boolean} useRegex - 正規表現モード
-     * @param {boolean} useCaseSensitive - 大文字/小文字区別
-     * @returns {RegExp|null} 正規表現オブジェクト（無効な場合はnull）
      * @private
      */
     _createSearchRegex(query, useRegex, useCaseSensitive) {
@@ -188,40 +195,18 @@ export class SearchManager {
     }
 
     /**
-     * 検索を実行します。
-     * @param {string} [query] - 検索クエリ（省略時は入力フィールドの値を使用）
-     * @param {Object} [options] - 検索オプション
-     * @param {boolean} [options.regex] - 正規表現モード
-     * @param {boolean} [options.caseSensitive] - 大文字/小文字区別
-     * @returns {Array} マッチした箇所の配列
+     * エディタ内のテキストノードを走査し、マッチ情報の配列を返します。
+     * @private
      */
-    search(query, options = {}) {
-        const searchQuery = query !== undefined ? query : this.searchInput.value;
-        const useRegex = options.regex !== undefined ? options.regex : this.regexMode;
-        const useCaseSensitive = options.caseSensitive !== undefined ? options.caseSensitive : this.caseSensitive;
+    _findMatches(searchQuery, useRegex, useCaseSensitive) {
+        const matches = [];
+        if (!searchQuery) return matches;
 
-        this.clearHighlights();
-        this.matches = [];
-        this.currentMatchIndex = -1;
-
-        if (!searchQuery) {
-            this.updateSearchInfo();
-            return this.matches;
-        }
-
-        // 正規表現を作成
         const regex = this._createSearchRegex(searchQuery, useRegex, useCaseSensitive);
-        if (!regex) {
-            this.updateSearchInfo('無効な正規表現です');
-            return this.matches;
-        }
+        if (!regex) return matches;
 
-        // Tiptap要素からテキストノードを走査
         const editorEl = this.getEditorElement();
-        if (!editorEl) {
-            this.updateSearchInfo();
-            return this.matches;
-        }
+        if (!editorEl) return matches;
 
         const walker = document.createTreeWalker(editorEl, NodeFilter.SHOW_TEXT, null, false);
         let node;
@@ -229,19 +214,16 @@ export class SearchManager {
 
         while (node = walker.nextNode()) {
             const text = node.nodeValue;
-            // 正規表現のlastIndexをリセット
             regex.lastIndex = 0;
-
             let match;
             while ((match = regex.exec(text)) !== null) {
-                this.matches.push({
+                matches.push({
                     node: node,
                     nodeIndex: nodeIndex,
                     index: match.index,
                     length: match[0].length,
                     text: match[0]
                 });
-                // 空文字列にマッチした場合の無限ループ防止
                 if (match[0].length === 0) {
                     regex.lastIndex++;
                 }
@@ -249,18 +231,33 @@ export class SearchManager {
             nodeIndex++;
         }
 
+        return matches;
+    }
+
+    /**
+     * 検索を実行します (旧APIとの互換用)。
+     */
+    search(query, options = {}) {
+        const searchQuery = query !== undefined ? query : this.searchInput.value;
+        const useRegex = options.regex !== undefined ? options.regex : this.regexMode;
+        const useCaseSensitive = options.caseSensitive !== undefined ? options.caseSensitive : this.caseSensitive;
+
+        this.clearHighlights();
+        this.matches = this._findMatches(searchQuery, useRegex, useCaseSensitive);
+        this.currentMatchIndex = -1;
         this.updateSearchInfo();
         return this.matches;
     }
 
+    // ─────────────── 検索実行フロー ───────────────
+
     /**
-     * 検索を実行し、マッチした箇所をリストアップします。
+     * 検索を実行し、ハイライトとナビゲーションを適用します。
      */
     performSearch() {
         this.search();
-
         if (this.matches.length > 0) {
-            this.highlightMatches();
+            this._applyHighlights();
             this.nextMatch();
         }
     }
@@ -270,37 +267,37 @@ export class SearchManager {
      */
     performSearchWithoutFocusChange() {
         this.search();
-
         if (this.matches.length > 0) {
-            this.highlightMatches();
+            this._applyHighlights();
             this.currentMatchIndex = 0;
-            this.scrollToMatch(this.matches[this.currentMatchIndex]);
+            this._updateCurrentHighlight();
+            this._scrollToCurrentMatch();
             this.updateSearchInfo();
         }
-
-        // 検索入力欄にフォーカスを戻す
         if (this.searchInput && document.activeElement !== this.searchInput) {
             this.searchInput.focus();
         }
     }
 
     /**
-     * 指定されたマッチ位置にスクロールします。
-     * @param {Object} match - マッチ情報
+     * 入力操作を阻害しないための静かな検索。
+     * DOMやSelectionを一切操作せず、ハイライトと件数表示だけ更新します。
      */
-    scrollToMatch(match) {
-        if (match.node.parentElement && typeof match.node.parentElement.scrollIntoView === 'function') {
-            match.node.parentElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    performSilentSearch() {
+        const searchQuery = this.searchInput.value;
+
+        this._clearHighlightRanges();
+        this.matches = this._findMatches(searchQuery, this.regexMode, this.caseSensitive);
+        this.currentMatchIndex = -1;
+
+        if (this.matches.length > 0) {
+            this._applyHighlights();
         }
+
+        this.updateSearchInfo();
     }
 
-    /**
-     * マッチした箇所をハイライト表示します（現状は簡易実装）。
-     */
-    highlightMatches() {
-        // 本格的なハイライトはcontenteditable/Tiptapの動作を不安定にする可能性があるため
-        // 現在のマッチのみを選択状態にする実装としています
-    }
+    // ─────────────── マッチ移動 ───────────────
 
     /**
      * 次のマッチに移動します。
@@ -308,7 +305,8 @@ export class SearchManager {
     nextMatch() {
         if (this.matches.length === 0) return;
         this.currentMatchIndex = (this.currentMatchIndex + 1) % this.matches.length;
-        this.selectMatch(this.matches[this.currentMatchIndex]);
+        this._updateCurrentHighlight();
+        this._scrollToCurrentMatch();
         this.updateSearchInfo();
     }
 
@@ -318,105 +316,139 @@ export class SearchManager {
     prevMatch() {
         if (this.matches.length === 0) return;
         this.currentMatchIndex = (this.currentMatchIndex - 1 + this.matches.length) % this.matches.length;
-        this.selectMatch(this.matches[this.currentMatchIndex]);
+        this._updateCurrentHighlight();
+        this._scrollToCurrentMatch();
         this.updateSearchInfo();
     }
 
+    // ─────────────── CSS Custom Highlight API ───────────────
+
     /**
-     * 指定されたマッチを選択状態にします。
-     * @param {Object} match - マッチ情報
+     * 全マッチのハイライト Range を登録します。
+     * @private
      */
-    selectMatch(match) {
-        const range = document.createRange();
-        range.setStart(match.node, match.index);
-        range.setEnd(match.node, match.index + match.length);
+    _applyHighlights() {
+        this._highlightAll.clear();
+        this._highlightCurrent.clear();
 
-        const selection = window.getSelection();
-        selection.removeAllRanges();
-        selection.addRange(range);
+        for (const m of this.matches) {
+            try {
+                const range = new Range();
+                range.setStart(m.node, m.index);
+                range.setEnd(m.node, m.index + m.length);
+                this._highlightAll.add(range);
+            } catch (e) {
+                // ノード参照が無効な場合はスキップ
+            }
+        }
+    }
 
+    /**
+     * 現在のマッチだけを「濃い」ハイライトとして登録します。
+     * @private
+     */
+    _updateCurrentHighlight() {
+        this._highlightCurrent.clear();
+
+        if (this.currentMatchIndex < 0 || this.currentMatchIndex >= this.matches.length) return;
+
+        const m = this.matches[this.currentMatchIndex];
+        try {
+            const range = new Range();
+            range.setStart(m.node, m.index);
+            range.setEnd(m.node, m.index + m.length);
+            this._highlightCurrent.add(range);
+        } catch (e) {
+            // ノード参照が無効な場合はスキップ
+        }
+    }
+
+    /**
+     * 現在のマッチ位置にスクロールします（フォーカスは移しません）。
+     * @private
+     */
+    _scrollToCurrentMatch() {
+        if (this.currentMatchIndex < 0 || this.currentMatchIndex >= this.matches.length) return;
+
+        const m = this.matches[this.currentMatchIndex];
+        if (m.node.parentElement && typeof m.node.parentElement.scrollIntoView === 'function') {
+            m.node.parentElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    }
+
+    /**
+     * ハイライト Range をすべてクリアします。
+     * @private
+     */
+    _clearHighlightRanges() {
+        this._highlightAll.clear();
+        this._highlightCurrent.clear();
+    }
+
+    /**
+     * ハイライトと検索状態をすべてクリアします。
+     */
+    clearHighlights() {
+        this._clearHighlightRanges();
+        this.matches = [];
+        this.currentMatchIndex = -1;
+        this.updateSearchInfo();
+    }
+
+    // ─────────────── 旧互換メソッド ───────────────
+
+    highlightMatches() {
+        this._applyHighlights();
+    }
+
+    scrollToMatch(match) {
         if (match.node.parentElement && typeof match.node.parentElement.scrollIntoView === 'function') {
             match.node.parentElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
     }
 
-    /**
-     * HTMLコンテンツ内の特定のマッチを置換します（単一置換用）。
-     * @param {string} html - 元のHTMLコンテンツ
-     * @param {Object} match - マッチ情報
-     * @param {string} replacement - 置換文字列
-     * @returns {string} 置換後のHTMLコンテンツ
-     * @private
-     */
-    _replaceInHtml(html, match, replacement) {
-        const tempDiv = document.createElement('div');
-        tempDiv.innerHTML = html;
-
-        const walker = document.createTreeWalker(tempDiv, NodeFilter.SHOW_TEXT, null, false);
-        let currentIndex = 0;
-        let node;
-
-        while (node = walker.nextNode()) {
-            if (currentIndex === match.nodeIndex) {
-                const text = node.nodeValue;
-                node.nodeValue = text.substring(0, match.index) +
-                    replacement +
-                    text.substring(match.index + match.length);
-                break;
-            }
-            currentIndex++;
-        }
-
-        return tempDiv.innerHTML;
+    selectMatch(match) {
+        this.scrollToMatch(match);
     }
 
+    // ─────────────── 置換ロジック ───────────────
+
     /**
-     * HTMLコンテンツ内のすべてのマッチを置換します。
-     * @param {string} html - 元のHTMLコンテンツ
-     * @param {string} query - 検索クエリ
-     * @param {string} replacement - 置換文字列
-     * @returns {string} 置換後のHTMLコンテンツ
+     * Tiptapのeditorインスタンスを取得します。
+     * @returns {Object} Tiptap editor
      * @private
      */
-    _replaceAllInHtml(html, query, replacement) {
-        const tempDiv = document.createElement('div');
-        tempDiv.innerHTML = html;
-
-        const regex = this._createSearchRegex(query, this.regexMode, this.caseSensitive);
-        if (!regex) return html;
-
-        const walker = document.createTreeWalker(tempDiv, NodeFilter.SHOW_TEXT, null, false);
-        const nodesToReplace = [];
-        let node;
-
-        while (node = walker.nextNode()) {
-            nodesToReplace.push(node);
-        }
-
-        nodesToReplace.forEach(textNode => {
-            textNode.nodeValue = textNode.nodeValue.replace(regex, replacement);
-        });
-
-        return tempDiv.innerHTML;
+    _getTiptapEditor() {
+        return this.editorCore.tiptap;
     }
 
     /**
      * 現在のマッチを置換します。
-     * @param {string} [replacement] - 置換文字列（省略時は入力フィールドの値を使用）
-     * @returns {boolean} 置換が成功したかどうか
+     * @param {string} [replacement]
+     * @returns {boolean}
      */
     replace(replacement) {
         if (this.currentMatchIndex === -1 || this.matches.length === 0) return false;
 
+        const editor = this._getTiptapEditor();
+        if (!editor || !editor.view) return false;
+
         const match = this.matches[this.currentMatchIndex];
         const replaceText = replacement !== undefined ? replacement : this.replaceInput.value;
 
-        // TiptapのHTMLを取得して置換
-        const currentHtml = this.editorCore.getContent();
-        const newHtml = this._replaceInHtml(currentHtml, match, replaceText);
+        // ハイライトを除去してから置換
+        this._clearHighlightRanges();
 
-        // Tiptapに反映（setContentを使用）
-        this.editorCore.setContent(newHtml);
+        try {
+            // DOM ノードから ProseMirror の Pos を取得
+            const from = editor.view.posAtDOM(match.node, match.index);
+            const to = editor.view.posAtDOM(match.node, match.index + match.length);
+
+            // Tiptap コマンドで指定範囲を置換
+            editor.chain().setTextSelection({ from, to }).insertContent(replaceText).run();
+        } catch (e) {
+            console.error('Failed to replace text at pos', e);
+        }
 
         // 再検索
         this.performSearch();
@@ -433,8 +465,9 @@ export class SearchManager {
 
     /**
      * すべてのマッチを置換します。
-     * @param {string} [replacement] - 置換文字列（省略時は入力フィールドの値を使用）
-     * @returns {number} 置換した件数
+     * 後方のマッチから置換することで、前方のPosズレを防ぎます。
+     * @param {string} [replacement]
+     * @returns {number}
      */
     replaceAll(replacement) {
         if (this._locked) return 0;
@@ -442,20 +475,38 @@ export class SearchManager {
         const replaceText = replacement !== undefined ? replacement : this.replaceInput.value;
         if (!query) return 0;
 
-        // まず検索を実行して件数を取得
-        this.search();
-        const count = this.matches.length;
+        const editor = this._getTiptapEditor();
+        if (!editor || !editor.view) return 0;
 
+        this._clearHighlightRanges();
+        this.search();
+        
+        const count = this.matches.length;
         if (count === 0) return 0;
 
-        // TiptapのHTMLを取得して一括置換
-        const currentHtml = this.editorCore.getContent();
-        const newHtml = this._replaceAllInHtml(currentHtml, query, replaceText);
+        // すべてのDOMに対応するPosを収集
+        // 注意: 置換によってDOMが変わるため、先に全てのPosを解決してから置換するのが安全ですが、
+        // Pos も前方置換するとズレるので、後方から処理します。
+        const positions = [];
+        for (const match of this.matches) {
+            try {
+                const from = editor.view.posAtDOM(match.node, match.index);
+                const to = editor.view.posAtDOM(match.node, match.index + match.length);
+                positions.push({ from, to });
+            } catch (e) {
+                // Ignore invalid DOM pos
+            }
+        }
 
-        // Tiptapに反映
-        this.editorCore.setContent(newHtml);
+        // 後ろから置換 (Posズレ回避)
+        positions.sort((a, b) => b.from - a.from);
 
-        // 状態をリセット
+        const chain = editor.chain();
+        for (const pos of positions) {
+            chain.setTextSelection({ from: pos.from, to: pos.to }).insertContent(replaceText);
+        }
+        chain.run();
+
         this.matches = [];
         this.currentMatchIndex = -1;
         this.updateSearchInfo();
@@ -463,18 +514,8 @@ export class SearchManager {
         return count;
     }
 
-    /**
-     * ハイライトをクリアします。
-     */
-    clearHighlights() {
-        window.getSelection().removeAllRanges();
-        this.updateSearchInfo();
-    }
+    // ─────────────── 検索情報表示 ───────────────
 
-    /**
-     * 検索情報を更新します。
-     * @param {string} [message] - カスタムメッセージ
-     */
     updateSearchInfo(message) {
         if (!this.searchInfo) return;
 
@@ -482,12 +523,12 @@ export class SearchManager {
             this.searchInfo.textContent = message;
         } else if (this.matches.length === 0) {
             if (this.searchInput.value) {
-                this.searchInfo.textContent = '見つかりませんでした';
+                this.searchInfo.textContent = '0 / 0';
             } else {
                 this.searchInfo.textContent = '';
             }
         } else {
-            this.searchInfo.textContent = `${this.currentMatchIndex + 1} / ${this.matches.length} 件`;
+            this.searchInfo.textContent = `${this.currentMatchIndex + 1} / ${this.matches.length} `;
         }
     }
 }
