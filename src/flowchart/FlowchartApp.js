@@ -478,9 +478,10 @@ export class FlowchartApp {
 
         // 接続プレビュー
         if (this.mode === 'connect' && this.connectionManager.connectStartShape) {
+            const zoomLevel = this.zoomPanManager?.getZoom() || 1;
             const canvasRect = this.canvas.getBoundingClientRect();
-            const mouseX = (e.clientX - canvasRect.left + this.canvas.scrollLeft) / this.zoomLevel;
-            const mouseY = (e.clientY - canvasRect.top + this.canvas.scrollTop) / this.zoomLevel;
+            const mouseX = (e.clientX - canvasRect.left + this.canvas.scrollLeft) / zoomLevel;
+            const mouseY = (e.clientY - canvasRect.top + this.canvas.scrollTop) / zoomLevel;
             this.connectionManager.drawConnectionPreview(mouseX, mouseY);
         }
     }
