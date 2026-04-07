@@ -162,38 +162,7 @@ export class ToolbarManager {
                     const menu = item.closest('.dropdown-menu');
                     if (menu) menu.classList.remove('show');
 
-                    const value = item.dataset.value;
-                    const isBox = this.editor.tiptap.isActive('boxContainer');
-
-                    // Box解除処理 (他スタイル選択時)
-                    if (isBox && value !== 'box') {
-                        // まずBoxを解除してParagraphに戻す
-                        this.editor.tiptap.chain().focus().unsetBox().run();
-
-                        // Paragraph以外が選択されていたら、さらにそのスタイルを適用
-                        if (value !== 'p') {
-                            if (value === 'blockquote') {
-                                this.editor.tiptap.chain().focus().toggleBlockquote().run();
-                            } else if (value.startsWith('h')) {
-                                const level = parseInt(value.replace('h', ''));
-                                this.editor.tiptap.chain().focus().toggleHeading({ level }).run();
-                            }
-                        }
-                        return;
-                    }
-
-                    if (value === 'p') {
-                        this.editor.tiptap.chain().focus().setParagraph().run();
-                    } else if (value === 'blockquote') {
-                        this.editor.tiptap.chain().focus().toggleBlockquote().run();
-                    } else if (value === 'box') {
-                        this.editor.tiptap.chain().focus().toggleBox().run();
-                    } else if (value.startsWith('h')) {
-                        const level = parseInt(value.replace('h', ''));
-                        this.editor.tiptap.chain().focus().toggleHeading({ level }).run();
-                    }
-
-                    this.updateToolbarState();
+                    this._applyFormatBlock(item.dataset.value);
                 });
             });
         }
@@ -256,6 +225,85 @@ export class ToolbarManager {
                 this.hideFloatToolbar();
             }
         });
+    }
+
+    // =====================================================
+    // フォーマットブロック排他制御
+    // =====================================================
+
+    /**
+     * フォーマットブロック変更処理（排他制御付き）。
+     * 全ブロックフォーマット（テキスト / 見出し1〜4 / 引用 / ボックス）は
+     * 排他関係にあり、同時に複数適用されないよう制御します。
+     * 
+     * @param {string} value - 適用するフォーマット ('p' | 'h1'-'h4' | 'blockquote' | 'box')
+     */
+    _applyFormatBlock(value) {
+        const currentFormat = this._detectCurrentFormat();
+
+        // 同じフォーマットの再選択 = トグルオフ（段落に戻す）
+        if (currentFormat === value) {
+            this._resetToParagraph(currentFormat);
+            this.updateToolbarState();
+            return;
+        }
+
+        // 別フォーマットへの変更: 現在のフォーマットを解除 → 新フォーマットを適用
+        this._resetToParagraph(currentFormat);
+        this._applyFormat(value);
+        this.updateToolbarState();
+    }
+
+    /**
+     * 現在アクティブなブロックフォーマットを検出します。
+     * 
+     * @returns {string} 'p' | 'h1'-'h4' | 'blockquote' | 'box'
+     */
+    _detectCurrentFormat() {
+        const tiptap = this.editor.tiptap;
+        if (tiptap.isActive('boxContainer')) return 'box';
+        if (tiptap.isActive('blockquote')) return 'blockquote';
+        for (let level = 1; level <= 4; level++) {
+            if (tiptap.isActive('heading', { level })) return `h${level}`;
+        }
+        return 'p';
+    }
+
+    /**
+     * 現在のブロックフォーマットを解除して段落に戻します。
+     * 
+     * @param {string} format - 解除するフォーマット
+     */
+    _resetToParagraph(format) {
+        const tiptap = this.editor.tiptap;
+        if (format === 'box') {
+            tiptap.chain().focus().unsetBox().run();
+        } else if (format === 'blockquote') {
+            tiptap.chain().focus().toggleBlockquote().run();
+        } else if (format.startsWith('h')) {
+            tiptap.chain().focus().setParagraph().run();
+        }
+        // 'p' = 既に段落なので何もしない
+    }
+
+    /**
+     * 指定されたブロックフォーマットを適用します。
+     * 段落状態から呼び出すことを前提とします。
+     * 
+     * @param {string} value - 適用するフォーマット
+     */
+    _applyFormat(value) {
+        if (value === 'p') return; // 既に段落状態
+
+        const tiptap = this.editor.tiptap;
+        if (value === 'blockquote') {
+            tiptap.chain().focus().toggleBlockquote().run();
+        } else if (value === 'box') {
+            tiptap.chain().focus().toggleBox().run();
+        } else if (value.startsWith('h')) {
+            const level = parseInt(value.replace('h', ''));
+            tiptap.chain().focus().toggleHeading({ level }).run();
+        }
     }
 
     // =====================================================
