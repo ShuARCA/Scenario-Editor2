@@ -199,7 +199,7 @@
     width: 100%;
     height: 100%;
     pointer-events: none;
-    z-index: 10;
+    /* z-index指定を外し、内部の要素が独立したスタッキングコンテキストを形成しないようにする */
 }
 
 .shape {
@@ -351,7 +351,17 @@
     width: 100%;
     height: 100%;
     pointer-events: none;
-    z-index: 5;
+    z-index: 9999; /* プレビュー用：常にすべてのノードより手前に表示 */
+}
+
+/* 独立した接続線ラッパー */
+.connection-wrapper {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
 }
 
 .connection-path {
