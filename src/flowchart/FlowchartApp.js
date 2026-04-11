@@ -678,7 +678,25 @@ export class FlowchartApp {
      * 子ノードは親ノードより上に表示されるようにします。
      */
     updateAllZIndexes() {
-        let zIndex = 1;
+        const BASE_Z_INDEX = 10;
+        const Z_INDEX_STEP = 20;
+
+        // 再帰的に深さ（depth）をベースにz-indexを設定
+        const setZIndexRecursive = (shape, depth) => {
+            if (shape.element) {
+                // depth=0 -> 10, depth=1 -> 30, depth=2 -> 50...
+                shape.element.style.zIndex = BASE_Z_INDEX + (depth * Z_INDEX_STEP);
+            }
+
+            if (shape.children && shape.children.length > 0) {
+                shape.children.forEach(childId => {
+                    const child = this.shapes.get(childId);
+                    if (child) {
+                        setZIndexRecursive(child, depth + 1);
+                    }
+                });
+            }
+        };
 
         // ルートノード（親を持たないノード）を取得
         const rootShapes = [];
@@ -688,30 +706,15 @@ export class FlowchartApp {
             }
         });
 
-        // 再帰的にz-indexを設定（子は親より高いz-indexを持つ）
-        const setZIndexRecursive = (shape, baseZ) => {
-            if (shape.element) {
-                shape.element.style.zIndex = baseZ;
-            }
-
-            let currentZ = baseZ;
-
-            if (shape.children && shape.children.length > 0) {
-                shape.children.forEach(childId => {
-                    const child = this.shapes.get(childId);
-                    if (child) {
-                        currentZ = setZIndexRecursive(child, currentZ + 1);
-                    }
-                });
-            }
-
-            return currentZ;
-        };
-
         // ルートノードから順に処理
         rootShapes.forEach(shape => {
-            zIndex = setZIndexRecursive(shape, zIndex) + 1;
+            setZIndexRecursive(shape, 0);
         });
+
+        // 接続線のzIndexも更新するため再描画
+        if (this.connectionManager) {
+            this.connectionManager.drawConnections();
+        }
     }
 
     // ========================================

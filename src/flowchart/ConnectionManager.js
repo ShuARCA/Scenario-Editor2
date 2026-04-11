@@ -141,6 +141,11 @@ export class ConnectionManager {
             }
         });
 
+        if (this.app.shapesLayer) {
+            const wrappers = this.app.shapesLayer.querySelectorAll('.connection-wrapper');
+            wrappers.forEach(w => w.remove());
+        }
+
         this.app.connections.forEach(conn => {
             this._drawConnection(conn);
         });
@@ -191,7 +196,20 @@ export class ConnectionManager {
             }
         });
 
-        this.app.connectionsLayer.appendChild(hitPath);
+        // 独立したSVGラッパーの作成
+        const wrapper = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        wrapper.classList.add('connection-wrapper');
+        wrapper.id = `conn-wrapper-${conn.id}`;
+
+        // z-indexの計算（接続するノードのうち深い方のdepthを基準にする）
+        const fromDepth = this.app.groupManager ? this.app.groupManager._getNodeDepth(fromShape) : 0;
+        const toDepth = this.app.groupManager ? this.app.groupManager._getNodeDepth(toShape) : 0;
+        const maxDepth = Math.max(fromDepth, toDepth);
+        // depth=0(ルート) -> zIndex=0, depth=1 -> 20, depth=2 -> 40...
+        // この計算により、親ノード（z-index: 10）の上、かつ子ノード（z-index: 30）の下に表示される
+        wrapper.style.zIndex = maxDepth * 20;
+
+        wrapper.appendChild(hitPath);
 
         // 表示用パス
         const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
@@ -227,11 +245,15 @@ export class ConnectionManager {
             path.removeAttribute('marker-start');
         }
 
-        this.app.connectionsLayer.appendChild(path);
+        wrapper.appendChild(path);
 
         // ラベル
         if (conn.style?.label) {
-            this._drawConnectionLabel(conn, startPt, endPt);
+            this._drawConnectionLabel(conn, startPt, endPt, wrapper);
+        }
+
+        if (this.app.shapesLayer) {
+            this.app.shapesLayer.appendChild(wrapper);
         }
     }
 
@@ -295,13 +317,15 @@ export class ConnectionManager {
      * @param {Object} conn - 接続データ
      * @param {{x: number, y: number}} startPt - 開始点
      * @param {{x: number, y: number}} endPt - 終了点
+     * @param {Element} parentSVG - 描画先のSVG要素
      * @private
      */
-    _drawConnectionLabel(conn, startPt, endPt) {
+    _drawConnectionLabel(conn, startPt, endPt, parentSVG) {
         const midX = (startPt.x + endPt.x) / 2;
         const midY = (startPt.y + endPt.y) / 2;
 
         const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        text.id = `conn-label-${conn.id}`;
         text.setAttribute('x', midX);
         text.setAttribute('y', midY - 8);
         text.setAttribute('text-anchor', 'middle');
@@ -309,7 +333,7 @@ export class ConnectionManager {
         text.setAttribute('font-size', '12');
         text.textContent = conn.style.label;
 
-        this.app.connectionsLayer.appendChild(text);
+        parentSVG.appendChild(text);
     }
 
     // =====================================================
@@ -351,9 +375,11 @@ export class ConnectionManager {
         const path = document.getElementById(`conn-path-${id}`);
         const hit = document.getElementById(`conn-hit-${id}`);
         const label = document.getElementById(`conn-label-${id}`);
+        const wrapper = document.getElementById(`conn-wrapper-${id}`);
         if (path) path.remove();
         if (hit) hit.remove();
         if (label) label.remove();
+        if (wrapper) wrapper.remove();
 
         // マーカーの削除
         const marker = document.getElementById(`arrow-${id}`);
@@ -524,7 +550,7 @@ export class ConnectionManager {
 
         // 1. 初期スタブの計算
         // ノードから少し離れた位置まで必ず直進させる
-        const minDistance = 20;
+        const minDistance = 0; // 20
         const startStub = {
             x: start.x + sourceDir.x * minDistance,
             y: start.y + sourceDir.y * minDistance
