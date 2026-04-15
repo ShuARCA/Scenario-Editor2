@@ -162,6 +162,9 @@ export class ConnectionManager {
         const toShape = this.app.shapes.get(conn.to);
         if (!fromShape || !toShape) return;
 
+        // 始点・終点のいずれかが非表示（折りたたみ中の子ノード）なら描画しない
+        if (this._isShapeHidden(fromShape) || this._isShapeHidden(toShape)) return;
+
         const startPt = this._getConnectionPoint(fromShape, conn.fromPoint || 'bottom');
         const endPt = this._getConnectionPoint(toShape, conn.toPoint || 'top');
 
@@ -442,6 +445,32 @@ export class ConnectionManager {
     // =====================================================
     // プライベートメソッド
     // =====================================================
+
+    /**
+     * シェイプが非表示かどうかを判定します。
+     * DOM要素の表示状態と、祖先ノードの折りたたみ状態の両方を確認します。
+     * 
+     * @param {Object} shape - 判定対象のシェイプ
+     * @returns {boolean} 非表示の場合true
+     * @private
+     */
+    _isShapeHidden(shape) {
+        // DOM要素が非表示であれば非表示と判定
+        if (shape.element && shape.element.style.display === 'none') {
+            return true;
+        }
+
+        // 祖先ノードを遡り、折りたたまれた親を持つ場合も非表示と判定
+        let parentId = shape.parent;
+        while (parentId) {
+            const parent = this.app.shapes.get(parentId);
+            if (!parent) break;
+            if (parent.collapsed) return true;
+            parentId = parent.parent;
+        }
+
+        return false;
+    }
 
     /**
      * 要素から接続ポイントを取得します。

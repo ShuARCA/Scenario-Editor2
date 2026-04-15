@@ -123,10 +123,6 @@ export const Comment = Mark.create({
                 return commands.unsetMark(this.name);
             },
 
-            /**
-             * 指定IDのコメントを削除する
-             * @param {string} commentId - 削除対象のコメントID
-             */
             removeCommentById: (commentId) => ({ state, tr, dispatch }) => {
                 if (!dispatch) return false;
 
