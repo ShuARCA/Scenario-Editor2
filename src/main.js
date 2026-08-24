@@ -37,8 +37,9 @@ import { FlowchartApp } from './flowchart/index.js'; // FlowchartAppはindexか�
 import { UIManager, SearchManager, SettingsManager, CustomCssManager, CustomCssEditor } from './ui/index.js';
 import { StorageManager } from './storage/index.js';
 
-// PDFエクスポートモーダル (ui/index.js経由の想定だが直接でも可)
+// PDF/HTMLエクスポートモーダル
 import { PdfExportModal } from './ui/PdfExportModal.js';
+import { HtmlExportModal } from './ui/HtmlExportModal.js';
 
 document.addEventListener('DOMContentLoaded', () => {
     // 1. コアモジュールの初期化
@@ -105,7 +106,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (prop === 'resizeImage') return (id, width) => editorManagers.image.resizeImage(id, width);
             if (prop === 'getHeadings') return () => editorManagers.outline.getHeadings();
             if (prop === 'updateOutline') return () => editorManagers.outline.updateOutline();
-            if (prop === 'scrollToHeading') return (id) => editorManagers.outline.scrollToHeading(id);
+            if (prop === 'scrollToHeading') return (id, options) => editorManagers.outline.scrollToHeading(id, options);
             if (prop === 'setCustomColors') return (c) => editorManagers.colorPicker.setCustomColors(c);
             if (prop === 'setCustomColors') return (c) => editorManagers.colorPicker.setCustomColors(c);
             if (prop === 'getCustomColors') return () => editorManagers.colorPicker.getCustomColors();
@@ -203,8 +204,8 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // EventBusリスナー（スクロール処理）
-    eventBus.on('editor:scrollToHeading', (headingId) => {
-        editorManagers.outline.scrollToHeading(headingId);
+    eventBus.on('editor:scrollToHeading', (headingId, options) => {
+        editorManagers.outline.scrollToHeading(headingId, options);
     });
 
 
@@ -219,6 +220,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // StorageManagerには依存関係をフルセットで渡す（CustomCssManagerの追加）
     const storageManager = new StorageManager(editorCore, editorManagers.colorPicker, flowchartApp, settingsManager, lockManager, customCssManager);
+    storageManager.outlineManager = editorManagers.outline;
     storageManager.setViewerExporterDeps({
         customCssManager,
         outlineManager: editorManagers.outline,
@@ -232,6 +234,10 @@ document.addEventListener('DOMContentLoaded', () => {
         editorManagers.outline
     );
     storageManager.setPdfExportModal(pdfExportModal);
+
+    // HtmlExportModal(HTMLエクスポート設定UI) の初期化と依存注入
+    const htmlExportModal = new HtmlExportModal(storageManager.viewerExporter);
+    storageManager.setHtmlExportModal(htmlExportModal);
 
     // 9. 初期同期
     editorManagers.outline.updateOutline();

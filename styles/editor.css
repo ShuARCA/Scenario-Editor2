@@ -5,7 +5,7 @@
    ============================================ */
 :root {
     --editor-max-width: 800px;
-    --editor-padding: 4px 12px;
+    --editor-padding: 4px 16px;
     --editor-border-radius: 8px;
     --editor-line-height: 1.5;
     --editor-font-size: 12pt;
@@ -58,6 +58,15 @@
 /* ============================================
    エディタ内のタイポグラフィ
    ============================================ */
+#editor h1,
+#editor h2,
+#editor h3,
+#editor h4,
+#editor h5,
+#editor h6 {
+    scroll-margin-top: 16px;
+}
+
 #editor h1 {
     font-size: 2.25em;
     margin-top: 2em;
@@ -882,7 +891,7 @@
     background-color: var(--surface-color);
     border-radius: 6px;
     cursor: pointer;
-    transition: background-color 0.2s, box-shadow 0.2s;
+    /* transition: background-color 0.2s, box-shadow 0.2s, top 0.15s ease-out;*/
     border-left: 3px solid var(--primary-color);
     box-shadow: 0 1px 3px var(--shadow-color);
     width: calc(100% - 16px);

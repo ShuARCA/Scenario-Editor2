@@ -297,17 +297,25 @@ export function calculatePositionFromSelection(options = {}) {
 // =====================================================
 
 /**
- * 要素を滑らかにスクロールして表示します。
+ * 要素をスクロールして表示します。
  * 
  * @param {HTMLElement} element - 対象要素
  * @param {Object} [options] - スクロールオプション
- * @param {string} [options.behavior='smooth'] - スクロール動作
- * @param {string} [options.block='center'] - 垂直方向の配置
+ * @param {ScrollBehavior} [options.behavior='smooth'] - スクロール動作 ('smooth' | 'auto')
+ * @param {ScrollLogicalPosition} [options.block='start'] - 垂直方向の配置 ('start' | 'center' | 'end' | 'nearest')
+ * @param {ScrollLogicalPosition} [options.inline='nearest'] - 水平方向の配置
  */
 export function scrollIntoView(element, options = {}) {
-    if (!element) return;
-    element.scrollIntoView({
-        behavior: options.behavior ?? 'smooth',
-        block: options.block ?? 'center'
-    });
+    if (!element || typeof element.scrollIntoView !== 'function') return;
+    try {
+        element.scrollIntoView({
+            behavior: options.behavior ?? 'smooth',
+            block: options.block ?? 'start',
+            inline: options.inline ?? 'nearest'
+        });
+    } catch (e) {
+        // レガシー環境や非標準ブラウザ向けのフォールバック
+        element.scrollIntoView(true);
+    }
 }
+

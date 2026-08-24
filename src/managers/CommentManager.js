@@ -39,6 +39,12 @@ export class CommentManager {
 
         /** @type {boolean} 編集ロック状態 */
         this._locked = false;
+
+        /** @type {ResizeObserver|null} エディタコンテナのリサイズ監視 */
+        this._resizeObserver = null;
+
+        /** @type {boolean} リサイズ位置更新の保留フラグ */
+        this._resizePending = false;
     }
 
     // =====================================================
@@ -109,6 +115,9 @@ export class CommentManager {
                 }
             });
         }
+
+        // エディタコンテナのリサイズ監視を開始
+        this._setupResizeObserver();
 
         // 外部クリックでの選択解除
         document.addEventListener('mousedown', (e) => {
@@ -527,10 +536,12 @@ export class CommentManager {
         if (this.displayMode === 'always') {
             this.commentSidebar?.classList.remove('hidden');
             this.updateCommentSidebar();
+            this._setupResizeObserver();
         } else {
             if (this.commentSidebar) {
                 this.commentSidebar.classList.add('hidden');
             }
+            this._teardownResizeObserver();
         }
     }
 
@@ -583,7 +594,11 @@ export class CommentManager {
         let lastBottom = 0; // 直前のコメントの下端位置
         const MIN_SPACING = 8; // コメント間の最小間隔
 
-        items.forEach(item => {
+        // パフォーマンス改善: ループ内でのoffsetHeight取得によるリフロー（レイアウトスラッシング）を避けるため、
+        // 事前にすべての高さを取得しておく
+        const itemHeights = Array.from(items).map(item => item.offsetHeight);
+
+        items.forEach((item, index) => {
             const from = parseInt(item.getAttribute('data-comment-from'), 10);
             if (isNaN(from)) return;
 
@@ -609,8 +624,8 @@ export class CommentManager {
                 item.style.right = '8px';
 
                 // 次の判定のために下端を更新
-                // offsetHeightで高さを取得 (レイアウト再計算が発生する可能性があるが、整合性確保のため必要)
-                const height = item.offsetHeight;
+                // 事前に取得した高さを使用する
+                const height = itemHeights[index];
                 lastBottom = relativeTop + height;
 
             } catch (e) {
@@ -618,6 +633,51 @@ export class CommentManager {
                 console.warn('Comment positioning error:', e);
             }
         });
+    }
+
+    /**
+     * エディタコンテナのリサイズ監視を開始します。
+     * ResizeObserverでコンテナサイズの変更を検出し、
+     * コメント位置を再計算します。
+     * 
+     * @private
+     */
+    _setupResizeObserver() {
+        // 既に監視中の場合は何もしない（二重登録防止）
+        if (this._resizeObserver) return;
+
+        const editorContainer = document.getElementById('editor-container');
+        if (!editorContainer) return;
+
+        this._resizeObserver = new ResizeObserver(() => {
+            // 表示モードが 'always' でない場合は何もしない
+            if (this.displayMode !== 'always') return;
+
+            // rAFの重複リクエストを防止
+            if (this._resizePending) return;
+            this._resizePending = true;
+
+            requestAnimationFrame(() => {
+                this._resizePending = false;
+                this._updateCommentPositions();
+            });
+        });
+
+        this._resizeObserver.observe(editorContainer);
+    }
+
+    /**
+     * エディタコンテナのリサイズ監視を停止します。
+     * リソース解放のため、監視が不要になった時に呼び出します。
+     * 
+     * @private
+     */
+    _teardownResizeObserver() {
+        if (this._resizeObserver) {
+            this._resizeObserver.disconnect();
+            this._resizeObserver = null;
+        }
+        this._resizePending = false;
     }
 
     /**

@@ -26,6 +26,7 @@
     <link rel="stylesheet" href="styles/color-picker.css">
     <link rel="stylesheet" href="styles/custom-css.css">
     <link rel="stylesheet" href="styles/pdf-export.css">
+    <link rel="stylesheet" href="styles/html-export.css">
     <script>
         /**
          * Service Worker登録
@@ -127,7 +128,7 @@
                             <path
                                 d="M480-320 280-520l56-58 104 104v-326h80v326l104-104 56 58-200 200ZM240-160q-33 0-56.5-23.5T160-240v-120h80v120h480v-120h80v120q0 33-23.5 56.5T720-160H240Z" />
                         </svg>
-                        <span>HTMLエクスポート(仮)</span>
+                        <span>HTMLエクスポート</span>
                     </button>
                     <button class="storage-menu-item" data-target="pdfexport">
                         <svg class="icon" viewBox="0 -960 960 960">
@@ -887,6 +888,32 @@
             </div>
             <div class="pdf-export-footer">
                 <button id="exec-pdf-export-btn" class="primary-btn">エクスポート実行</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- HTML Export Modal -->
+    <div id="html-export-modal" class="hidden">
+        <div class="html-export-content">
+            <div class="html-export-header">
+                <h2>HTMLエクスポート設定</h2>
+                <button id="close-html-export-btn" class="close-btn">×</button>
+            </div>
+            <div class="html-export-body">
+                <div class="setting-item">
+                    <label for="html-export-flowchart">フローチャートキャンバス</label>
+                    <select id="html-export-flowchart">
+                        <option value="include">含める（表示）</option>
+                        <option value="exclude">含めない（非表示）</option>
+                    </select>
+                    <div class="toggle-description" style="font-size: 12px; color: var(--text-muted);">
+                        「含めない」を選択すると、フローチャートおよび展開ボタンを含まない形式でエクスポートします。
+                    </div>
+                </div>
+            </div>
+            <div class="html-export-footer">
+                <button id="cancel-html-export-btn" class="secondary-btn">キャンセル</button>
+                <button id="exec-html-export-btn" class="primary-btn">エクスポート実行</button>
             </div>
         </div>
     </div>

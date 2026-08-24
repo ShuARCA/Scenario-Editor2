@@ -5,3 +5,4 @@ export { SettingsManager } from './SettingsManager.js';
 export { CustomCssManager } from './CustomCssManager.js';
 export { CustomCssEditor } from './CustomCssEditor.js';
 export { PdfExportModal } from './PdfExportModal.js';
+export { HtmlExportModal } from './HtmlExportModal.js';

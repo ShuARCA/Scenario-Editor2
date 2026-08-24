@@ -7,6 +7,8 @@
  */
 
 import { TOGGLE_ICONS, OUTLINE_ICONS, getIconList } from '../assets/icons/OutlineIcons.js';
+import { CONFIG } from '../core/Config.js';
+import { scrollIntoView } from '../utils/dom.js';
 
 /**
  * アウトライン管理クラス
@@ -504,16 +506,63 @@ export class OutlineManager {
      * 指定されたIDの見出し要素までスクロールします。
      * 
      * @param {string} headingId - 見出し要素のID
+     * @param {Object} [options] - スクロールオプション（Configのデフォルト値をオーバーライド可能）
+     * @param {ScrollBehavior} [options.behavior] - スクロール動作 ('smooth' | 'auto')
+     * @param {ScrollLogicalPosition} [options.block] - 垂直方向の配置 ('start' | 'center' | 'end' | 'nearest')
+     * @param {ScrollLogicalPosition} [options.inline] - 水平方向の配置
+     * @returns {boolean} 対象要素が見つかりスクロールを実行できたかどうか
      */
-    scrollToHeading(headingId) {
+    scrollToHeading(headingId, options = {}) {
+        if (!headingId) return false;
         const editorContainer = this.editor.editorContainer;
         const element = editorContainer?.querySelector(`[id="${headingId}"]`);
 
         if (element) {
-            element.scrollIntoView({
-                behavior: 'smooth',
-                block: 'center'
-            });
+            const scrollOptions = {
+                behavior: options.behavior ?? CONFIG.EDITOR?.SCROLL?.BEHAVIOR ?? 'smooth',
+                block: options.block ?? CONFIG.EDITOR?.SCROLL?.BLOCK_HEADING ?? 'start',
+                ...options
+            };
+            scrollIntoView(element, scrollOptions);
+            return true;
+        }
+        return false;
+    }
+
+    // =====================================================
+    // 折りたたみ状態のシリアライズ / デシリアライズ
+    // =====================================================
+
+    /**
+     * 折りたたみ状態をシリアライズ可能なオブジェクトとして取得します。
+     * 保存時に呼び出されます。
+     * 
+     * @returns {Object<string, boolean>} headingId → isCollapsed のマッピング（折りたたみ済みのみ）
+     */
+    getCollapsedState() {
+        const state = {};
+        for (const [id, collapsed] of this.outlineCollapsedState) {
+            if (collapsed) {
+                state[id] = true;
+            }
+        }
+        return state;
+    }
+
+    /**
+     * シリアライズされたオブジェクトから折りたたみ状態を復元します。
+     * 読み込み時に呼び出されます。
+     * 
+     * @param {Object<string, boolean>|null} stateObj - headingId → isCollapsed のマッピング
+     */
+    setCollapsedState(stateObj) {
+        this.outlineCollapsedState.clear();
+        if (stateObj && typeof stateObj === 'object') {
+            for (const [id, collapsed] of Object.entries(stateObj)) {
+                if (collapsed) {
+                    this.outlineCollapsedState.set(id, true);
+                }
+            }
         }
     }
 
