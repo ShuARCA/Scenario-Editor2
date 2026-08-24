@@ -110,7 +110,7 @@ body {
   color: var(--text-color);
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
 }
 
 .header-controls button:hover {

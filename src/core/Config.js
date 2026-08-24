@@ -53,6 +53,14 @@ export const CONFIG = {
         DEBOUNCE_WAIT: 500,      // デバウンス待機時間（ms）
         MAX_IMAGE_WIDTH: 500,    // 画像の最大幅（px）
 
+        /** スクロール設定 */
+        SCROLL: {
+            BEHAVIOR: 'smooth',          // スクロール動作 ('smooth' | 'auto')
+            BLOCK_HEADING: 'start',      // 見出しジャンプ時の垂直配置 ('start' | 'center' | 'end' | 'nearest')
+            BLOCK_DEFAULT: 'start',      // デフォルトの垂直配置
+            SCROLL_MARGIN_TOP: 16        // スクロール時の上部余白（px）
+        },
+
         /** エラーメッセージ */
         ERRORS: {
             CONTAINER_NOT_FOUND: 'エディタコンテナが見つかりません',

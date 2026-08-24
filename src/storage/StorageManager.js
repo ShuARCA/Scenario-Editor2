@@ -35,6 +35,10 @@ export class StorageManager {
         this.settingsManager = settingsManager;
         this.lockManager = lockManager || null;
         this.customCssManager = customCssManager || null;
+
+        /** @type {import('../managers/OutlineManager.js').OutlineManager|null} アウトラインマネージャー */
+        this.outlineManager = null;
+
         this.sanitizer = new Sanitizer();
 
         // ヘルパーインスタンス
@@ -57,6 +61,9 @@ export class StorageManager {
         // ViewerExporter（HTMLエクスポート）は外部から注入される依存を待つため遅延初期化
         this.viewerExporter = null;
 
+        // HTMLエクスポート設定モーダル
+        this.htmlExportModal = null;
+
         // PDFエクスポート機能 (UIを含む) は外部から注入される依存を待つため遅延初期化
         this.pdfExportModal = null;
 
@@ -77,6 +84,15 @@ export class StorageManager {
             customCssManager: deps.customCssManager,
             outlineManager: deps.outlineManager,
         });
+    }
+
+    /**
+     * HtmlExportModal (HTML出力設定機能) のインスタンスを受け取ります。
+     * main.js から呼び出されます。
+     * @param {import('../ui/HtmlExportModal.js').HtmlExportModal} htmlExportModal
+     */
+    setHtmlExportModal(htmlExportModal) {
+        this.htmlExportModal = htmlExportModal;
     }
 
     /**
@@ -137,6 +153,7 @@ export class StorageManager {
 
     /**
      * エディタの内容をスタンドアロンHTMLビューワーとしてエクスポートします。
+     * 設定モーダルを表示してオプションを選択させます。
      */
     async exportAsHtml() {
         if (!this.viewerExporter) {
@@ -145,7 +162,13 @@ export class StorageManager {
         }
         const titleText = this.title || '無題のドキュメント';
         const baseFilename = this.filename.replace(/\.zip$/i, '');
-        await this.viewerExporter.export(titleText, baseFilename);
+
+        if (this.htmlExportModal) {
+            this.htmlExportModal.show(titleText, baseFilename);
+        } else {
+            // モーダルが未設定の場合は直接エクスポート
+            await this.viewerExporter.export(titleText, baseFilename);
+        }
     }
 
     /**
@@ -490,7 +513,8 @@ export class StorageManager {
             settings: settings,
             customColors: this.colorPickerManager.getCustomColors(),
             locked: this.lockManager ? this.lockManager.isLocked() : false,
-            customCss: this.customCssManager ? JSON.parse(this.customCssManager.exportToJson()) : null
+            customCss: this.customCssManager ? JSON.parse(this.customCssManager.exportToJson()) : null,
+            outlineCollapsedState: this.outlineManager ? this.outlineManager.getCollapsedState() : null
         };
     }
 
@@ -644,6 +668,9 @@ export class StorageManager {
 
         // ロック状態を復元
         this._restoreLockState(data);
+
+        // アウトラインの折りたたみ状態を復元
+        this._restoreOutlineCollapsedState(data);
     }
 
     /**
@@ -738,6 +765,15 @@ export class StorageManager {
                 highlight: []
             });
         }
+    }
+
+    /**
+     * アウトラインの折りたたみ状態を復元します。
+     * @private
+     */
+    _restoreOutlineCollapsedState(data) {
+        if (!this.outlineManager) return;
+        this.outlineManager.setCollapsedState(data.outlineCollapsedState || null);
     }
 
     /**

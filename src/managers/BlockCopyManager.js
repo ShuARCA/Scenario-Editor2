@@ -217,7 +217,7 @@ export class BlockCopyManager {
 
         // 左位置の計算: コンテナ左端からの距離
         // blockRect.left (ビューポート) - containerRect.left (ビューポート) - オフセット
-        const relativeLeft = blockRect.left - containerRect.left - 32;
+        const relativeLeft = blockRect.left - containerRect.left - 24;
 
         this.copyButton.style.position = 'absolute';
         this.copyButton.style.top = `${relativeTop}px`;
