@@ -1070,11 +1070,6 @@ body.viewer-mode .outline-icon { pointer-events: none; }
             }
         });
 
-        canvas.addEventListener('wheel', function(e) {
-            e.preventDefault();
-            const delta = e.deltaY > 0 ? -0.05 : 0.05;
-            setZoom(zoomLevel + delta);
-        }, { passive: false });
 
         if (shapesLayer) {
             shapesLayer.addEventListener('mousedown', function(e) {
