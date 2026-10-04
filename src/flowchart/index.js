@@ -12,3 +12,6 @@ export { ContextMenuManager } from './ContextMenuManager.js';
 export { ZoomPanManager } from './ZoomPanManager.js';
 export { FlowchartApp } from './FlowchartApp.js';
 export { GroupManager } from './GroupManager.js';
+export { InlineGroupStrategy } from './InlineGroupStrategy.js';
+export { OverlayGroupStrategy } from './OverlayGroupStrategy.js';
+export { OverlayCanvas } from './OverlayCanvas.js';

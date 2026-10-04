@@ -284,7 +284,8 @@ ${viewerScript}
             `--sidebar-width: 250px;`,
             `--bg-color: ${targetBg};`,
             `--editor-bg-color: ${targetBg};`,
-            `--editor-text-color: ${targetText};`
+            `--editor-text-color: ${targetText};`,
+            `--flowchart-danger-color: ${themeColors.danger};`
         ].map(line => `    ${line}`).join('\n');
 
         return {
@@ -406,9 +407,90 @@ ${viewerScript}
     color: var(--text-color) !important;
     cursor: pointer;
 }
+.shape:hover {
+    border-color: var(--primary-color) !important;
+    box-shadow: 0 0 3px color-mix(in srgb, var(--primary-color) 50%, transparent) !important;
+}
 .shape-text { color: var(--text-color) !important; }
 body.viewer-mode .resize-handle,
 body.viewer-mode .connection-point { display: none !important; }
+.group-parent-overlay { align-items: center; padding-right: 28px; }
+.group-overlay-btn {
+    position: absolute;
+    top: 6px;
+    right: 4px;
+    width: 22px;
+    height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    border-radius: 4px;
+    font-size: 16px;
+    font-weight: 600;
+    line-height: 1;
+    color: var(--text-muted);
+    background: color-mix(in srgb, var(--surface-color) 80%, transparent);
+    border: none;
+    transition: all 0.15s ease;
+    z-index: 10;
+}
+.group-overlay-btn:hover {
+    color: var(--primary-color);
+}
+.overlay-group-area {
+    position: absolute;
+    background-color: var(--overlay-bg-color, color-mix(in srgb, var(--surface-color) 85%, transparent));
+    border: 2px solid var(--overlay-border-color, var(--primary-color));
+    border-radius: 10px;
+    box-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.12);
+    /* z-indexはJSで動的設定（親シェイプより前面になるよう深さに応じて算出） */
+    pointer-events: none;
+    box-sizing: border-box;
+}
+.overlay-area-header {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 34px;
+    background: transparent;
+    border-bottom: none;
+    border-radius: 8px 8px 0 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 10px;
+    pointer-events: auto;
+    cursor: default !important;
+    user-select: none;
+    z-index: 12;
+}
+
+.overlay-area-title-group { display: flex; align-items: center; gap: 8px; overflow: hidden; }
+.overlay-area-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+.overlay-area-icon svg {
+    width: 18px;
+    height: 18px;
+    fill: var(--primary-color);
+}
+.overlay-area-title { font-size: 12px; font-weight: 600; color: var(--overlay-text-color, var(--text-color)); }
+.overlay-area-close-btn {
+    width: 22px;
+    height: 22px;
+    border-radius: 4px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    font-size: 16px;
+    color: var(--text-muted);
+}
+.overlay-area-close-btn:hover { color: var(--flowchart-danger-color); transform: scale(1.05); }
 ` : '';
 
         return `/* === ビューワー専用スタイル === */
@@ -673,6 +755,51 @@ body.viewer-mode .outline-icon { pointer-events: none; }
     word-break: break-word;
     flex: 1;
 }
+
+/* === ボックスコントロールスタイル補強 === */
+.box-controls {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    display: flex;
+    gap: 4px;
+    z-index: 10;
+}
+.box-control-btn {
+    width: 28px;
+    height: 28px;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: opacity 0.2s, background-color 0.2s, color 0.2s;
+    opacity: 0;
+}
+.box-container:hover .box-control-btn,
+.box-control-btn:focus,
+.box-control-btn.active {
+    opacity: 1;
+}
+.box-control-btn:hover {
+    background-color: var(--border-color);
+    color: var(--text-color);
+}
+.box-control-btn.copied {
+    color: #10b981 !important;
+}
+
+@media print {
+    .box-controls,
+    .block-copy-button,
+    .sidebar-toggle-fixed,
+    .flowchart-toggle-btn {
+        display: none !important;
+    }
+}
 `;
     }
 
@@ -681,7 +808,7 @@ body.viewer-mode .outline-icon { pointer-events: none; }
     // ========================================
 
     /**
-     * エディタコンテンツを取得し、空ブロックに <br> を補完します。
+     * エディタコンテンツを取得し、空ブロックの補完やボックスコピーボタンの追加を行います。
      * @private
      */
     _collectEditorContent() {
@@ -697,6 +824,33 @@ body.viewer-mode .outline-icon { pointer-events: none; }
                     el.innerHTML = '<br>';
                 }
             });
+
+            // ボックスコンテナの整形: コピーボタンを追加し、設定関連要素を除去
+            const boxContainers = doc.body.querySelectorAll('.box-container');
+            boxContainers.forEach(box => {
+                // 設定ボタンや設定パネルが存在する場合は除去
+                box.querySelectorAll('.box-settings-btn, .box-settings-panel').forEach(el => el.remove());
+
+                // 既存の controls がない場合は作成
+                let controls = box.querySelector('.box-controls');
+                if (!controls) {
+                    controls = doc.createElement('div');
+                    controls.className = 'box-controls';
+                    box.insertBefore(controls, box.firstChild);
+                }
+
+                // コピーボタンが存在しない場合は追加
+                if (!controls.querySelector('.box-copy-btn')) {
+                    const copyBtn = doc.createElement('button');
+                    copyBtn.type = 'button';
+                    copyBtn.className = 'box-control-btn box-copy-btn';
+                    copyBtn.title = '内容をコピー';
+                    copyBtn.setAttribute('aria-label', 'ボックスの内容をコピー');
+                    copyBtn.innerHTML = `<svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="${VIEWER_ICONS.COPY}" /></svg>`;
+                    controls.appendChild(copyBtn);
+                }
+            });
+
             return doc.body.innerHTML;
         } catch (e) {
             return rawHtml
@@ -759,12 +913,17 @@ body.viewer-mode .outline-icon { pointer-events: none; }
         const data = {};
         if (!this.flowchartApp?.shapes) return JSON.stringify(data);
 
+        const overlayStrat = this.flowchartApp?.groupManager?.overlayStrategy;
         for (const [id, shape] of this.flowchartApp.shapes.entries()) {
+            const isOpen = overlayStrat ? (overlayStrat.isOverlayOpen(id) || !!shape.overlayOpen || !!shape._overlayWasOpen) : (!!shape.overlayOpen || !!shape._overlayWasOpen);
             data[id] = {
                 headingId: shape.headingId || null,
-                collapsed: shape.collapsed || false,
+                groupMode: shape.groupMode || (shape.collapsed ? 'overlay' : 'inline'),
                 children: shape.children ? shape.children.map(c => typeof c === 'string' ? c : c.id || c) : [],
-                parent: shape.parent || null
+                parent: shape.parent || null,
+                overlayBounds: shape.overlayBounds || null,
+                overlayStyle: shape.overlayStyle || null,
+                overlayOpen: isOpen
             };
         }
         return JSON.stringify(data);
@@ -794,6 +953,10 @@ body.viewer-mode .outline-icon { pointer-events: none; }
             collapsed: TOGGLE_ICONS.collapsed,
             expanded: TOGGLE_ICONS.expanded
         });
+        const viewerIconsJson = JSON.stringify({
+            COPY: VIEWER_ICONS.COPY,
+            CHECK: VIEWER_ICONS.CHECK
+        });
 
         return `(function() {
     'use strict';
@@ -802,7 +965,8 @@ body.viewer-mode .outline-icon { pointer-events: none; }
         shapesData: ${shapesData},
         collapsedOutlineIds: ${collapsedOutlineIds},
         commentDisplayMode: ${JSON.stringify(commentDisplayMode)},
-        toggleIcons: ${toggleIconsJson}
+        toggleIcons: ${toggleIconsJson},
+        viewerIcons: ${viewerIconsJson}
     };
 
     function scrollToHeading(headingId, options = {}) {
@@ -1003,45 +1167,112 @@ body.viewer-mode .outline-icon { pointer-events: none; }
 
         if (!canvas || !canvasContent) return;
 
-        let zoomLevel = parseFloat(canvasContent.style.transform?.match(/scale\\(([^)]+)\\)/)?.[1]) || 1.0;
+        let zoomLevel = 1.0;
+        let panX = 0, panY = 0;
+
+        const transMatch = canvasContent.style.transform ? canvasContent.style.transform.match(/translate\\(([^,]+)px,\\s*([^)]+)px\\)\\s*scale\\(([^)]+)\\)/) : null;
+        if (transMatch) {
+            panX = parseFloat(transMatch[1]) || 0;
+            panY = parseFloat(transMatch[2]) || 0;
+            zoomLevel = parseFloat(transMatch[3]) || 1.0;
+        } else {
+            const scaleMatch = canvasContent.style.transform ? canvasContent.style.transform.match(/scale\\(([^)]+)\\)/) : null;
+            if (scaleMatch) {
+                zoomLevel = parseFloat(scaleMatch[1]) || 1.0;
+            }
+        }
+
+        function applyTransform() {
+            canvasContent.style.transform = 'translate(' + panX + 'px, ' + panY + 'px) scale(' + zoomLevel + ')';
+            canvasContent.style.transformOrigin = '0 0';
+        }
+
+        applyTransform();
+
         let isPanning = false;
-        let startX = 0, startY = 0;
+        let startMouseX = 0, startMouseY = 0;
+        let startPanX = 0, startPanY = 0;
 
         const zoomInBtn = document.getElementById('zoom-in-btn');
         const zoomOutBtn = document.getElementById('zoom-out-btn');
         const fitViewBtn = document.getElementById('fit-view-btn');
 
-        function setZoom(newLevel) {
-            zoomLevel = Math.max(0.2, Math.min(3.0, newLevel));
-            canvasContent.style.transform = 'scale(' + zoomLevel + ')';
-            canvasContent.style.transformOrigin = 'top left';
+        function setZoom(newLevel, centerClientX, centerClientY) {
+            const oldZoom = zoomLevel;
+            const targetZoom = Math.max(0.1, Math.min(2.0, newLevel));
+            if (targetZoom === oldZoom) return;
+
+            const rect = canvas.getBoundingClientRect();
+            const cx = centerClientX !== undefined && centerClientX !== null ? centerClientX - rect.left : canvas.clientWidth / 2;
+            const cy = centerClientY !== undefined && centerClientY !== null ? centerClientY - rect.top : canvas.clientHeight / 2;
+
+            const contentX = (cx - panX) / oldZoom;
+            const contentY = (cy - panY) / oldZoom;
+
+            panX = cx - contentX * targetZoom;
+            panY = cy - contentY * targetZoom;
+            zoomLevel = targetZoom;
+
+            applyTransform();
         }
 
         function fitView() {
             const shapes = document.querySelectorAll('#shapes-layer .shape');
-            if (shapes.length === 0) return;
+            if (shapes.length === 0) {
+                zoomLevel = 1.0;
+                panX = 0;
+                panY = 0;
+                applyTransform();
+                return;
+            }
             let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
             shapes.forEach(function(s) {
                 if (s.style.display === 'none') return;
-                const x = parseInt(s.style.left) || 0;
-                const y = parseInt(s.style.top) || 0;
-                const w = parseInt(s.style.width) || 120;
-                const h = parseInt(s.style.height) || 50;
+                const x = parseFloat(s.style.left) || 0;
+                const y = parseFloat(s.style.top) || 0;
+                const w = parseFloat(s.style.width) || 120;
+                const h = parseFloat(s.style.height) || 50;
                 if (x < minX) minX = x;
                 if (y < minY) minY = y;
                 if (x + w > maxX) maxX = x + w;
                 if (y + h > maxY) maxY = y + h;
             });
-            const padding = 40;
-            const contentW = maxX - minX + padding * 2;
-            const contentH = maxY - minY + padding * 2;
+
+            const overlays = document.querySelectorAll('.overlay-group-area');
+            overlays.forEach(function(o) {
+                if (o.style.display === 'none') return;
+                const x = parseFloat(o.style.left) || 0;
+                const y = parseFloat(o.style.top) || 0;
+                const w = parseFloat(o.style.width) || 100;
+                const h = parseFloat(o.style.height) || 100;
+                if (x < minX) minX = x;
+                if (y < minY) minY = y;
+                if (x + w > maxX) maxX = x + w;
+                if (y + h > maxY) maxY = y + h;
+            });
+
+            if (minX === Infinity) return;
+
+            const padding = 50;
+            minX -= padding;
+            minY -= padding;
+            maxX += padding;
+            maxY += padding;
+
             const canvasRect = canvas.getBoundingClientRect();
+            const contentW = Math.max(1, maxX - minX);
+            const contentH = Math.max(1, maxY - minY);
             const scaleX = canvasRect.width / contentW;
             const scaleY = canvasRect.height / contentH;
-            zoomLevel = Math.min(scaleX, scaleY, 1.5);
-            setZoom(zoomLevel);
-            canvas.scrollLeft = (minX - padding) * zoomLevel;
-            canvas.scrollTop = (minY - padding) * zoomLevel;
+            zoomLevel = Math.max(0.1, Math.min(1.0, Math.min(scaleX, scaleY)));
+
+            const centerX = (minX + maxX) / 2;
+            const centerY = (minY + maxY) / 2;
+
+            panX = canvasRect.width / 2 - centerX * zoomLevel;
+            panY = canvasRect.height / 2 - centerY * zoomLevel;
+
+            applyTransform();
         }
 
         if (zoomInBtn) zoomInBtn.addEventListener('click', function() { setZoom(zoomLevel + 0.1); });
@@ -1049,18 +1280,21 @@ body.viewer-mode .outline-icon { pointer-events: none; }
         if (fitViewBtn) fitViewBtn.addEventListener('click', fitView);
 
         canvas.addEventListener('mousedown', function(e) {
-            if (e.target.closest('.shape') || e.target.closest('.mode-btn')) return;
+            if (e.target.closest('.shape') || e.target.closest('.mode-btn') || e.target.closest('.overlay-group-area')) return;
             isPanning = true;
-            startX = e.clientX + canvas.scrollLeft;
-            startY = e.clientY + canvas.scrollTop;
+            startMouseX = e.clientX;
+            startMouseY = e.clientY;
+            startPanX = panX;
+            startPanY = panY;
             canvas.style.cursor = 'grabbing';
             e.preventDefault();
         });
 
         window.addEventListener('mousemove', function(e) {
             if (!isPanning) return;
-            canvas.scrollLeft = startX - e.clientX;
-            canvas.scrollTop = startY - e.clientY;
+            panX = startPanX + (e.clientX - startMouseX);
+            panY = startPanY + (e.clientY - startMouseY);
+            applyTransform();
         });
 
         window.addEventListener('mouseup', function() {
@@ -1071,68 +1305,455 @@ body.viewer-mode .outline-icon { pointer-events: none; }
         });
 
 
-        if (shapesLayer) {
-            shapesLayer.addEventListener('mousedown', function(e) {
-                const toggle = e.target.closest('.group-toggle');
-                if (!toggle) return;
-                e.stopPropagation();
+        // -----------------------------------------------------
+        // オーバーレイ管理（エディタ同等の多重・入れ子・再帰的可視性対応）
+        // -----------------------------------------------------
+        const openOverlays = new Map(); // shapeId => { area, shapeId, shapeEl, btn }
+        const activeOverlayStack = [];  // [shapeId, ...] (Escキー順序用)
 
-                const shapeEl = toggle.closest('.shape');
-                if (!shapeEl) return;
-                const shapeId = shapeEl.id;
-                const shapeData = CONFIG.shapesData[shapeId];
-                if (!shapeData || !shapeData.children || shapeData.children.length === 0) return;
-
-                shapeData.collapsed = !shapeData.collapsed;
-                toggle.textContent = shapeData.collapsed ? '+' : '-';
-                setChildrenVisibility(shapeId, !shapeData.collapsed);
-                redrawConnections();
-            });
-
-            shapesLayer.addEventListener('mousedown', function(e) {
-                if (e.target.closest('.group-toggle')) return;
-                const shapeEl = e.target.closest('.shape');
-                if (!shapeEl) return;
-                const shapeId = shapeEl.id;
-                const shapeData = CONFIG.shapesData[shapeId];
-                if (shapeData && shapeData.headingId) {
-                    setTimeout(function() {
-                        scrollToHeading(shapeData.headingId);
-                    }, 0);
+        /**
+         * 指定シェイプのオーバーレイ入れ子深さを返す。
+         * 祖先シェイプを遡り、現在開いているオーバーレイの数をカウント。
+         * トップレベル = 0、子 = 1、孫 = 2 ...
+         * @param {string} shapeId
+         * @returns {number}
+         */
+        function getOverlayDepth(shapeId) {
+            var depth = 0;
+            var pid = CONFIG.shapesData[shapeId] && CONFIG.shapesData[shapeId].parent;
+            while (pid) {
+                var pd = CONFIG.shapesData[pid];
+                if (!pd) break;
+                if (pd.groupMode === 'overlay' && openOverlays.has(pid)) {
+                    depth++;
                 }
-            });
+                pid = pd.parent;
+            }
+            return depth;
         }
 
-        function setChildrenVisibility(parentId, visible) {
-            const parentData = CONFIG.shapesData[parentId];
-            if (!parentData || !parentData.children) return;
-            parentData.children.forEach(function(childId) {
+        /**
+         * シェイプがビューワー上で実際に可視（表示中）かどうかを判定
+         */
+        function isShapeVisibleInViewer(shapeId) {
+            if (!shapeId) return false;
+            if (shapeId.startsWith('overlay-area-')) {
+                const pid = shapeId.replace('overlay-area-', '');
+                return openOverlays.has(pid) && isShapeVisibleInViewer(pid);
+            }
+            const el = document.getElementById(shapeId);
+            if (!el || el.style.display === 'none') return false;
+            let pid = CONFIG.shapesData[shapeId]?.parent;
+            while (pid) {
+                const pd = CONFIG.shapesData[pid];
+                if (!pd) break;
+                if (pd.groupMode === 'overlay' && !openOverlays.has(pid)) {
+                    return false;
+                }
+                pid = pd.parent;
+            }
+            return true;
+        }
+
+        /**
+         * インライングループ配下の子孫ノードを再帰的に表示
+         */
+        function showInlineDescendants(parentId) {
+            const pData = CONFIG.shapesData[parentId];
+            if (!pData || !pData.children) return;
+            pData.children.forEach(function(childId) {
                 const childEl = document.getElementById(childId);
-                if (childEl) childEl.style.display = visible ? '' : 'none';
-                const childData = CONFIG.shapesData[childId];
-                if (childData && childData.children && childData.children.length > 0) {
-                    if (visible && !childData.collapsed) {
-                        setChildrenVisibility(childId, true);
-                    } else if (!visible) {
-                        setChildrenVisibility(childId, false);
+                if (childEl) childEl.style.display = 'flex';
+                const cData = CONFIG.shapesData[childId];
+                if (cData && cData.children && cData.children.length > 0) {
+                    if (cData.groupMode === 'overlay') {
+                        const btn = childEl.querySelector('.group-overlay-btn, .group-toggle');
+                        if (btn) btn.classList.toggle('active', openOverlays.has(childId));
+                        if (openOverlays.has(childId)) {
+                            showInlineDescendants(childId);
+                        }
+                    } else {
+                        showInlineDescendants(childId);
                     }
                 }
             });
         }
 
-        function redrawConnections() {
-            const svg = document.getElementById('connections-layer');
-            if (!svg) return;
-            const paths = svg.querySelectorAll('path[data-from], g[data-from]');
-            paths.forEach(function(pathOrGroup) {
-                const fromId = pathOrGroup.dataset.from;
-                const toId = pathOrGroup.dataset.to;
-                const fromEl = fromId ? document.getElementById(fromId) : null;
-                const toEl = toId ? document.getElementById(toId) : null;
-                const fromVisible = fromEl && fromEl.style.display !== 'none';
-                const toVisible = toEl && toEl.style.display !== 'none';
-                pathOrGroup.style.display = (fromVisible && toVisible) ? '' : 'none';
+        /**
+         * 指定シェイプの子孫ノードをすべて再帰的に非表示
+         */
+        function hideDescendants(parentId) {
+            const pData = CONFIG.shapesData[parentId];
+            if (!pData || !pData.children) return;
+            pData.children.forEach(function(childId) {
+                const childEl = document.getElementById(childId);
+                if (childEl) childEl.style.display = 'none';
+                const cData = CONFIG.shapesData[childId];
+                if (cData && cData.children && cData.children.length > 0) {
+                    hideDescendants(childId);
+                }
             });
+        }
+
+        /**
+         * 指定シェイプ配下の開いているオーバーレイをすべて再帰的に閉じる（再展開用フラグをセット）
+         */
+        function closeDescendantOverlays(parentId) {
+            const pData = CONFIG.shapesData[parentId];
+            if (!pData || !pData.children) return;
+            pData.children.forEach(function(childId) {
+                const cData = CONFIG.shapesData[childId];
+                if (!cData) return;
+                if (openOverlays.has(childId)) {
+                    cData._overlayWasOpen = true;
+                    closeViewerOverlay(childId);
+                } else if (cData.children && cData.children.length > 0) {
+                    closeDescendantOverlays(childId);
+                }
+            });
+        }
+
+        /**
+         * 記憶された展開状態（_overlayWasOpen）を元に子孫オーバーレイを再展開
+         */
+        function restoreDescendantOverlays(parentId) {
+            const pData = CONFIG.shapesData[parentId];
+            if (!pData || !pData.children) return;
+            pData.children.forEach(function(childId) {
+                const cData = CONFIG.shapesData[childId];
+                if (!cData) return;
+                if (cData._overlayWasOpen) {
+                    delete cData._overlayWasOpen;
+                    const childEl = document.getElementById(childId);
+                    if (childEl) openViewerOverlay(childEl, cData);
+                } else if (cData.children && cData.children.length > 0) {
+                    restoreDescendantOverlays(childId);
+                }
+            });
+        }
+
+        /**
+         * オーバーレイを閉じる
+         */
+        function closeViewerOverlay(shapeId) {
+            const overlay = openOverlays.get(shapeId);
+            if (!overlay) return;
+
+            // 子孫オーバーレイを再帰的に閉じる
+            closeDescendantOverlays(shapeId);
+
+            if (overlay.btn) overlay.btn.classList.remove('active');
+
+            // 子孫ノードを非表示
+            hideDescendants(shapeId);
+
+            // 子シェイプのz-indexをリセット（CSSデフォルトに戻す）
+            resetChildrenZIndex(shapeId);
+
+            // マップとスタックから削除
+            openOverlays.delete(shapeId);
+            const idx = activeOverlayStack.indexOf(shapeId);
+            if (idx !== -1) activeOverlayStack.splice(idx, 1);
+
+            // DOM削除
+            if (overlay.area) overlay.area.remove();
+
+            redrawConnections();
+        }
+
+        /**
+         * 子シェイプのz-indexを指定値に設定します（インライングループの子孫も再帰的に）。
+         * オーバーレイグループの子については、そのオーバーレイが開かれた際に再度設定されます。
+         * @param {string} parentId
+         * @param {number} zIndex
+         */
+        function setChildrenZIndex(parentId, zIndex) {
+            var pd = CONFIG.shapesData[parentId];
+            if (!pd || !pd.children) return;
+            pd.children.forEach(function(cid) {
+                var cel = document.getElementById(cid);
+                if (cel) cel.style.zIndex = zIndex;
+                var cd = CONFIG.shapesData[cid];
+                // インライングループの子孫は常時展開なので同じz-indexを再帰設定
+                // （オーバーレイグループの子はそのオーバーレイが開かれた際に再設定される）
+                if (cd && cd.groupMode !== 'overlay' && cd.children && cd.children.length > 0) {
+                    setChildrenZIndex(cid, zIndex);
+                }
+            });
+        }
+
+        /**
+         * 子シェイプのz-indexをリセットします（オーバーレイを閉じる際に呼び出す）。
+         * @param {string} parentId
+         */
+        function resetChildrenZIndex(parentId) {
+            var pd = CONFIG.shapesData[parentId];
+            if (!pd || !pd.children) return;
+            pd.children.forEach(function(cid) {
+                var cel = document.getElementById(cid);
+                if (cel) cel.style.zIndex = '';
+                var cd = CONFIG.shapesData[cid];
+                if (cd && cd.children && cd.children.length > 0) {
+                    resetChildrenZIndex(cid);
+                }
+            });
+        }
+
+
+
+        /**
+         * オーバーレイを開く
+         */
+        function openViewerOverlay(shapeEl, shapeData) {
+            const shapeId = shapeEl.id;
+            if (openOverlays.has(shapeId)) return;
+
+            const canvasContent = document.getElementById('canvas-content');
+            if (!canvasContent) return;
+
+            // 1. エリアDOM作成
+            const area = document.createElement('div');
+            area.className = 'overlay-group-area';
+            area.id = 'overlay-area-' + shapeId;
+
+            const header = document.createElement('div');
+            header.className = 'overlay-area-header';
+
+            const titleGroup = document.createElement('div');
+            titleGroup.className = 'overlay-area-title-group';
+            const icon = document.createElement('span');
+            icon.className = 'overlay-area-icon';
+            icon.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" height="18px" viewBox="0 -960 960 960" width="18px" fill="var(--primary-color)"><path d="M800-360v-200q0-50-35-85t-85-35H240v-120q0-33 23.5-56.5T320-880h480q33 0 56.5 23.5T880-800v360q0 33-23.5 56.5T800-360ZM160-80q-33 0-56.5-23.5T80-160v-360q0-33 23.5-56.5T160-600h480q33 0 56.5 23.5T720-520v360q0 33-23.5 56.5T640-80H160Z"/></svg>';
+            const title = document.createElement('span');
+            title.className = 'overlay-area-title';
+            const textEl = shapeEl.querySelector('.shape-text');
+            title.textContent = textEl ? textEl.textContent : 'グループエリア';
+            titleGroup.appendChild(icon);
+            titleGroup.appendChild(title);
+
+            const closeBtn = document.createElement('button');
+            closeBtn.className = 'overlay-area-close-btn';
+            closeBtn.innerHTML = '&times;';
+            closeBtn.title = '閉じる (Esc)';
+            closeBtn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                closeViewerOverlay(shapeId);
+            });
+
+            header.appendChild(titleGroup);
+            header.appendChild(closeBtn);
+            area.appendChild(header);
+
+            // ビューワーではオーバーレイキャンバスはドラッグ不可（位置固定）
+
+            canvasContent.appendChild(area);
+
+            // 2. 直接の子を表示し、インライングループの子孫も再帰的に表示
+            if (shapeData.children) {
+                shapeData.children.forEach(function(cid) {
+                    const cel = document.getElementById(cid);
+                    if (cel) cel.style.display = 'flex';
+                    const cData = CONFIG.shapesData[cid];
+                    if (cData && cData.children && cData.children.length > 0) {
+                        if (cData.groupMode === 'overlay') {
+                            const btn = cel.querySelector('.group-overlay-btn, .group-toggle');
+                            if (btn) btn.classList.toggle('active', openOverlays.has(cid));
+                        } else {
+                            showInlineDescendants(cid);
+                        }
+                    }
+                });
+            }
+
+            // 3. 枠のバウンディングボックス設定
+            if (shapeData.overlayBounds) {
+                area.style.left = shapeData.overlayBounds.x + 'px';
+                area.style.top = shapeData.overlayBounds.y + 'px';
+                area.style.width = shapeData.overlayBounds.width + 'px';
+                area.style.height = shapeData.overlayBounds.height + 'px';
+            } else {
+                let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+                function collectBounds(pid) {
+                    const pd = CONFIG.shapesData[pid];
+                    if (!pd || !pd.children) return;
+                    pd.children.forEach(function(cid) {
+                        const cel = document.getElementById(cid);
+                        if (cel && cel.style.display !== 'none') {
+                            const cx = parseFloat(cel.style.left) || 0;
+                            const cy = parseFloat(cel.style.top) || 0;
+                            const cw = parseFloat(cel.style.width) || 120;
+                            const ch = parseFloat(cel.style.height) || 36;
+                            if (cx < minX) minX = cx;
+                            if (cy < minY) minY = cy;
+                            if (cx + cw > maxX) maxX = cx + cw;
+                            if (cy + ch > maxY) maxY = cy + ch;
+                        }
+                        const cd = CONFIG.shapesData[cid];
+                        if (cd && cd.groupMode !== 'overlay') {
+                            collectBounds(cid);
+                        }
+                    });
+                }
+                collectBounds(shapeId);
+
+                if (minX !== Infinity) {
+                    const padding = 20;
+                    const headerH = 34;
+                    area.style.left = (minX - padding) + 'px';
+                    area.style.top = (minY - headerH - padding) + 'px';
+                    area.style.width = ((maxX - minX) + padding * 2) + 'px';
+                    area.style.height = ((maxY - minY) + headerH + padding * 2) + 'px';
+                }
+            }
+
+            // 4. overlayStyle（背景色・枠線色・文字色）の適用
+            if (shapeData.overlayStyle) {
+                const { backgroundColor, borderColor, textColor } = shapeData.overlayStyle;
+                if (backgroundColor) {
+                    area.style.backgroundColor = backgroundColor;
+                    area.style.setProperty('--overlay-bg-color', backgroundColor);
+                }
+                if (borderColor) {
+                    area.style.setProperty('--overlay-border-color', borderColor);
+                }
+                const actualTextColor = textColor || shapeData.overlayStyle.color;
+                if (actualTextColor) {
+                    area.style.setProperty('--overlay-text-color', actualTextColor);
+                    area.style.color = actualTextColor;
+                    const titleEl = area.querySelector('.overlay-area-title');
+                    if (titleEl) {
+                        titleEl.style.color = actualTextColor;
+                    }
+                }
+            }
+
+            const btn = shapeEl.querySelector('.group-overlay-btn, .group-toggle');
+            if (btn) btn.classList.add('active');
+
+            openOverlays.set(shapeId, {
+                area: area,
+                shapeId: shapeId,
+                shapeEl: shapeEl,
+                btn: btn
+            });
+            activeOverlayStack.push(shapeId);
+
+            // z-index: 親シェイプより前面に、入れ子深さに応じて増加
+            // 全体の重なり: 親(100) < 親オーバーレイ(200) < 子(300) < 子オーバーレイ(400) < 孫(500)...
+            var overlayDepth = getOverlayDepth(shapeId);
+            var overlayZ = 200 + overlayDepth * 200;
+            area.style.zIndex = overlayZ;
+
+            // 子シェイプをオーバーレイより前面に設定 (overlayZ + 100 = 300, 500, 700...)
+            setChildrenZIndex(shapeId, overlayZ + 100);
+
+            // 4. 子孫オーバーレイの復元（親がスタックに積まれた後に復元することでEscキー順序を正しく維持）
+            restoreDescendantOverlays(shapeId);
+
+            redrawConnections();
+        }
+
+        // 初期状態の可視性設定（overlayモードのグループ配下を非表示に）
+        if (CONFIG.shapesData) {
+            Object.keys(CONFIG.shapesData).forEach(function(id) {
+                const data = CONFIG.shapesData[id];
+                if (data.groupMode === 'overlay' && data.children) {
+                    hideDescendants(id);
+                }
+            });
+
+            // 保存時に開いていたオーバーレイの自動復元
+            Object.entries(CONFIG.shapesData).forEach(function([sid, sdata]) {
+                if (sdata.groupMode === 'overlay' && sdata.overlayOpen) {
+                    let canOpen = true;
+                    let pid = sdata.parent;
+                    while (pid) {
+                        const pd = CONFIG.shapesData[pid];
+                        if (!pd) break;
+                        if (pd.groupMode === 'overlay' && !pd.overlayOpen) {
+                            canOpen = false;
+                            break;
+                        }
+                        pid = pd.parent;
+                    }
+                    if (canOpen) {
+                        const el = document.getElementById(sid);
+                        if (el && !openOverlays.has(sid)) {
+                            openViewerOverlay(el, sdata);
+                        }
+                    } else {
+                        sdata._overlayWasOpen = true;
+                    }
+                }
+            });
+
+            redrawConnections();
+        }
+
+        // クリックイベント
+        if (shapesLayer) {
+            shapesLayer.addEventListener('click', function(e) {
+                const btn = e.target.closest('.group-overlay-btn, .group-toggle');
+                if (btn) {
+                    e.stopPropagation();
+                    const shapeEl = btn.closest('.shape');
+                    if (!shapeEl) return;
+                    const shapeId = shapeEl.id;
+                    const shapeData = CONFIG.shapesData[shapeId];
+                    if (!shapeData || !shapeData.children || shapeData.children.length === 0) return;
+
+                    if (openOverlays.has(shapeId)) {
+                        closeViewerOverlay(shapeId);
+                    } else {
+                        openViewerOverlay(shapeEl, shapeData);
+                    }
+                    return;
+                }
+
+                const shapeEl = e.target.closest('.shape');
+                if (!shapeEl) return;
+                const shapeId = shapeEl.id;
+                const shapeData = CONFIG.shapesData[shapeId];
+                if (shapeData && shapeData.headingId) {
+                    scrollToHeading(shapeData.headingId);
+                }
+            });
+        }
+
+        // Escキーで一番手前のオーバーレイを閉じる
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && activeOverlayStack.length > 0) {
+                const topId = activeOverlayStack[activeOverlayStack.length - 1];
+                closeViewerOverlay(topId);
+            }
+        });
+
+        // 接続線の再描画（可視性に応じて表示/非表示を切り替え）
+        function redrawConnections() {
+            // 接続線はshapes-layer内の.connection-wrapperまたはconnections-layerに格納されている
+            const shapesLayerEl = document.getElementById('shapes-layer');
+            if (shapesLayerEl) {
+                const wrappers = shapesLayerEl.querySelectorAll('.connection-wrapper');
+                wrappers.forEach(function(wrapper) {
+                    const path = wrapper.querySelector('path[data-from]');
+                    const fromId = wrapper.getAttribute('data-from') || wrapper.dataset?.from || path?.getAttribute('data-from') || path?.dataset?.from;
+                    const toId = wrapper.getAttribute('data-to') || wrapper.dataset?.to || path?.getAttribute('data-to') || path?.dataset?.to;
+                    const fromVisible = fromId ? isShapeVisibleInViewer(fromId) : false;
+                    const toVisible = toId ? isShapeVisibleInViewer(toId) : false;
+                    wrapper.style.display = (fromVisible && toVisible) ? '' : 'none';
+                });
+            }
+            const connLayer = document.getElementById('connections-layer');
+            if (connLayer) {
+                const paths = connLayer.querySelectorAll('path[data-from]');
+                paths.forEach(function(path) {
+                    const fromId = path.getAttribute('data-from') || path.dataset?.from;
+                    const toId = path.getAttribute('data-to') || path.dataset?.to;
+                    const fromVisible = fromId ? isShapeVisibleInViewer(fromId) : false;
+                    const toVisible = toId ? isShapeVisibleInViewer(toId) : false;
+                    path.style.display = (fromVisible && toVisible) ? '' : 'none';
+                });
+            }
         }
     }
 
@@ -1519,6 +2140,137 @@ body.viewer-mode .outline-icon { pointer-events: none; }
         });
     }
 
+    function initBoxCopy() {
+        const editorElement = document.getElementById('editor');
+        if (!editorElement) return;
+
+        // 防御策: 万が一静的HTMLに .box-controls が未注入のボックスがあれば補完
+        const boxes = editorElement.querySelectorAll('.box-container');
+        boxes.forEach(function(box) {
+            box.querySelectorAll('.box-settings-btn, .box-settings-panel').forEach(function(el) {
+                el.remove();
+            });
+
+            let controls = box.querySelector('.box-controls');
+            if (!controls) {
+                controls = document.createElement('div');
+                controls.className = 'box-controls';
+                box.insertBefore(controls, box.firstChild);
+            }
+            if (!controls.querySelector('.box-copy-btn')) {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'box-control-btn box-copy-btn';
+                btn.title = '内容をコピー';
+                btn.setAttribute('aria-label', 'ボックスの内容をコピー');
+                btn.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="' + CONFIG.viewerIcons.COPY + '" /></svg>';
+                controls.appendChild(btn);
+            }
+        });
+
+        const feedbackTimers = new WeakMap();
+        const resetIconTimers = new WeakMap();
+
+        function copyText(text) {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                return navigator.clipboard.writeText(text);
+            }
+            return new Promise(function(resolve, reject) {
+                try {
+                    const textarea = document.createElement('textarea');
+                    textarea.value = text;
+                    textarea.style.position = 'fixed';
+                    textarea.style.left = '-9999px';
+                    textarea.style.top = '-9999px';
+                    textarea.setAttribute('readonly', '');
+                    document.body.appendChild(textarea);
+                    textarea.select();
+                    const successful = document.execCommand('copy');
+                    document.body.removeChild(textarea);
+                    if (successful) {
+                        resolve();
+                    } else {
+                        reject(new Error('execCommand copy failed'));
+                    }
+                } catch (e) {
+                    reject(e);
+                }
+            });
+        }
+
+        function showCopySuccess(btn, box) {
+            if (feedbackTimers.has(btn)) {
+                clearTimeout(feedbackTimers.get(btn));
+            }
+            if (resetIconTimers.has(btn)) {
+                clearTimeout(resetIconTimers.get(btn));
+            }
+            if (!btn.dataset.originalHtml) {
+                btn.dataset.originalHtml = btn.innerHTML;
+            }
+            btn.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" style="color: #10b981;"><path fill="currentColor" d="' + CONFIG.viewerIcons.CHECK + '" /></svg>';
+            btn.classList.add('copied');
+
+            const timer = setTimeout(function() {
+                const targetBox = box || btn.closest('.box-container');
+                const isHovered = targetBox ? (targetBox.matches(':hover') || targetBox.querySelector(':hover') !== null) : false;
+
+                if (isHovered) {
+                    btn.innerHTML = btn.dataset.originalHtml;
+                    btn.classList.remove('copied');
+                    btn.blur();
+                } else {
+                    // ホバー状態でなければ、まずフォーカスを解除してフェードアウトを開始
+                    btn.blur();
+                    // フェードアウト完了後（完全に非表示になった後）に元のアイコン・スタイルへ復帰
+                    const resetTimer = setTimeout(function() {
+                        btn.innerHTML = btn.dataset.originalHtml;
+                        btn.classList.remove('copied');
+                        resetIconTimers.delete(btn);
+                    }, 250);
+                    resetIconTimers.set(btn, resetTimer);
+                }
+                feedbackTimers.delete(btn);
+            }, 2000);
+            feedbackTimers.set(btn, timer);
+        }
+
+        // イベント委譲によるクリックハンドリング
+        editorElement.addEventListener('click', async function(e) {
+            const copyBtn = e.target.closest('.box-copy-btn');
+            if (!copyBtn) return;
+
+            e.preventDefault();
+            e.stopPropagation();
+
+            const box = copyBtn.closest('.box-container');
+            if (!box) return;
+
+            const bodyEl = box.querySelector('.box-body');
+            const text = bodyEl
+                ? (bodyEl.innerText !== undefined ? bodyEl.innerText : bodyEl.textContent)
+                : (box.innerText !== undefined ? box.innerText : box.textContent);
+
+            try {
+                await copyText(text || '');
+                showCopySuccess(copyBtn, box);
+            } catch (err) {
+                try {
+                    const range = document.createRange();
+                    range.selectNodeContents(bodyEl || box);
+                    const selection = window.getSelection();
+                    selection.removeAllRanges();
+                    selection.addRange(range);
+                    document.execCommand('copy');
+                    selection.removeAllRanges();
+                    showCopySuccess(copyBtn, box);
+                } catch (fallbackErr) {
+                    console.error('Box copy failed:', fallbackErr);
+                }
+            }
+        });
+    }
+
     document.addEventListener('DOMContentLoaded', function() {
         initSidebar();
         initOutline();
@@ -1527,6 +2279,7 @@ body.viewer-mode .outline-icon { pointer-events: none; }
         initComments();
         initLinks();
         initBlockCopy();
+        initBoxCopy();
     });
 })();
 `;

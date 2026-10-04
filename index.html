@@ -771,6 +771,13 @@
                         <option value="underline">下線</option>
                     </select>
                 </div>
+                <div class="context-menu-row" id="ctx-group-mode-row">
+                    <label>グループ</label>
+                    <select id="ctx-group-mode">
+                        <option value="inline">常に表示</option>
+                        <option value="overlay">オーバーレイ</option>
+                    </select>
+                </div>
                 <div class="context-menu-row">
                     <label>文字色</label>
                     <div id="ctx-shape-text" class="color-swatch" tabindex="0"></div>
@@ -804,6 +811,25 @@
                 <div class="context-menu-row">
                     <label>ラベル</label>
                     <input type="text" id="ctx-connection-label" placeholder="テキスト入力">
+                </div>
+            </div>
+        </div>
+
+        <!-- オーバーレイキャンバス用スタイル編集フォーム -->
+        <div id="overlay-edit-section" class="context-menu-section hidden">
+            <div class="context-menu-title">グループエリア スタイル</div>
+            <div class="context-menu-form">
+                <div class="context-menu-row">
+                    <label>背景色</label>
+                    <div id="ctx-overlay-bg" class="color-swatch" tabindex="0"></div>
+                </div>
+                <div class="context-menu-row">
+                    <label>枠線色</label>
+                    <div id="ctx-overlay-border" class="color-swatch" tabindex="0"></div>
+                </div>
+                <div class="context-menu-row">
+                    <label>文字色</label>
+                    <div id="ctx-overlay-text" class="color-swatch" tabindex="0"></div>
                 </div>
             </div>
         </div>
