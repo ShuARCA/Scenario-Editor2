@@ -69,15 +69,15 @@ export class OutlineManager {
         document.body.appendChild(dummy);
 
         const style = window.getComputedStyle(dummy);
-        
+
         // marginLeft, borderLeftWidth, paddingLeft の合計をインデント幅とする
         const ml = parseFloat(style.marginLeft) || 0;
         const bl = parseFloat(style.borderLeftWidth) || 0;
         const pl = parseFloat(style.paddingLeft) || 0;
-        
+
         const total = ml + bl + pl;
         if (total > 0) {
-           this._outlineIndentWidth = total;
+            this._outlineIndentWidth = total;
         }
 
         document.body.removeChild(dummy);
@@ -212,7 +212,7 @@ export class OutlineManager {
 
         const headings = this.getHeadings();
         if (headings.length === 0) {
-            this.outlineList.innerHTML = '<div class="outline-empty">見出しがありません</div>';
+            this.outlineList.innerHTML = '<div class="outline-empty">No heading</div>';
             return;
         }
 

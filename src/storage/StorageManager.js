@@ -505,6 +505,15 @@ export class StorageManager {
      * @private
      */
     _createMetadata(settings) {
+        if (this.flowchartApp?.groupManager?.overlayStrategy) {
+            const overlayStrat = this.flowchartApp.groupManager.overlayStrategy;
+            this.flowchartApp.shapes.forEach(shape => {
+                if (shape.groupMode === 'overlay') {
+                    shape.overlayOpen = overlayStrat.isOverlayOpen(shape.id) || !!shape._overlayWasOpen;
+                }
+            });
+        }
+
         return {
             title: this.title,
             shapes: Array.from(this.flowchartApp.shapes.entries()),

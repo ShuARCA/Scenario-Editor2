@@ -32,7 +32,8 @@ export const CONFIG = {
             STEP_Y: 100,             // 縦方向の間隔
             WRAP_X: 800,             // 折り返し位置
             GROUP_PADDING: 20,        // グループの内側余白
-            GROUP_HEADER_HEIGHT: 40   // グループヘッダーの高さ
+            GROUP_HEADER_HEIGHT: 40,  // グループヘッダーの高さ
+            GROUP_MODE_DEFAULT: 'inline' // グループ表示モードのデフォルト ('inline' | 'overlay')
         },
 
         /** 色設定 */

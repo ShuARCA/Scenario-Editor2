@@ -6,7 +6,7 @@
  * @module flowchart/ConnectionManager
  */
 
-import { generateId } from '../utils/helpers.js';
+
 
 /**
  * 接続線管理クラス
@@ -41,10 +41,10 @@ export class ConnectionManager {
      * @param {HTMLElement} target - 接続ポイント要素
      */
     startConnect(target) {
-        const shapeEl = target.closest('.shape');
-        if (!shapeEl) return;
+        const nodeEl = target.closest('.shape, .overlay-group-area');
+        if (!nodeEl) return;
 
-        this.connectStartShape = shapeEl.id;
+        this.connectStartShape = nodeEl.id;
         this.connectStartPoint = this._getConnectionPointFromElement(target);
     }
 
@@ -57,8 +57,8 @@ export class ConnectionManager {
     endConnect(target) {
         if (!this.connectStartShape) return false;
 
-        const shapeEl = target.closest('.shape');
-        if (!shapeEl || shapeEl.id === this.connectStartShape) {
+        const nodeEl = target.closest('.shape, .overlay-group-area');
+        if (!nodeEl || nodeEl.id === this.connectStartShape) {
             this.clearConnectionStart();
             return false;
         }
@@ -67,13 +67,13 @@ export class ConnectionManager {
 
         // 既存の接続をチェック
         const existingConn = this.app.connections.find(
-            c => c.from === this.connectStartShape && c.to === shapeEl.id
+            c => c.from === this.connectStartShape && c.to === nodeEl.id
         );
 
         if (!existingConn) {
             this.createConnection(
                 this.connectStartShape,
-                shapeEl.id,
+                nodeEl.id,
                 this.connectStartPoint,
                 endPoint
             );
@@ -93,22 +93,12 @@ export class ConnectionManager {
      * @returns {Object} 作成された接続
      */
     createConnection(fromId, toId, fromPoint = 'bottom', toPoint = 'top') {
-        const connection = {
-            id: generateId('conn'),
-            from: fromId,
-            to: toId,
-            fromPoint: fromPoint,
-            toPoint: toPoint,
-            style: {
-                type: 'solid',
-                arrow: 'end',
-                color: '#94a3b8'
-            }
-        };
+        const connection = this.app.core.createConnection(fromId, toId, {
+            fromPoint,
+            toPoint
+        });
 
-        this.app.connections.push(connection);
         this.drawConnections();
-
         return connection;
     }
 
@@ -158,19 +148,19 @@ export class ConnectionManager {
      * @private
      */
     _drawConnection(conn) {
-        const fromShape = this.app.shapes.get(conn.from);
-        const toShape = this.app.shapes.get(conn.to);
+        const fromShape = this._getNodeOrOverlay(conn.from);
+        const toShape = this._getNodeOrOverlay(conn.to);
         if (!fromShape || !toShape) return;
 
-        // 始点・終点のいずれかが非表示（折りたたみ中の子ノード）なら描画しない
-        if (this._isShapeHidden(fromShape) || this._isShapeHidden(toShape)) return;
+        const isHidden = this._isShapeHidden(fromShape) || this._isShapeHidden(toShape);
 
         const startPt = this._getConnectionPoint(fromShape, conn.fromPoint || 'bottom');
         const endPt = this._getConnectionPoint(toShape, conn.toPoint || 'top');
 
-        const isSelected = conn.id === this.selectedConnectionId;
+        const selectedInterConns = this.getSelectedInterConnectingConnections();
+        const isInterSelected = selectedInterConns.some(c => c.id === conn.id);
+        const isSelected = (conn.id === this.selectedConnectionId) || isInterSelected;
         const strokeColor = conn.style?.color || '#94a3b8';
-        const actualColor = isSelected ? 'var(--primary-color)' : strokeColor;
 
         // パスを計算
         const pathD = this._calculatePath(startPt, endPt, conn.fromPoint, conn.toPoint);
@@ -184,42 +174,90 @@ export class ConnectionManager {
         hitPath.setAttribute('fill', 'none');
         hitPath.style.pointerEvents = 'stroke';
         hitPath.style.cursor = 'pointer';
+        hitPath.dataset.from = conn.from;
+        hitPath.dataset.to = conn.to;
 
         hitPath.addEventListener('click', (e) => {
             e.stopPropagation();
             this.selectConnection(conn.id);
         });
 
-        hitPath.addEventListener('contextmenu', (e) => {
+        const openConnMenu = (e) => {
             e.preventDefault();
             e.stopPropagation();
-            this.selectConnection(conn.id);
+            if (isInterSelected) {
+                // 範囲選択中のノードを繋ぐ接続線の場合、ノードの複数選択を維持したままメニューを開く
+                this.selectedConnectionId = conn.id;
+            } else {
+                this.selectConnection(conn.id);
+            }
             if (this.app.contextMenuManager) {
                 this.app.contextMenuManager.showConnectionContextMenu(conn.id, e.clientX, e.clientY);
             }
-        });
+        };
+
+        hitPath.addEventListener('contextmenu', openConnMenu);
+        hitPath.addEventListener('dblclick', openConnMenu);
 
         // 独立したSVGラッパーの作成
         const wrapper = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
         wrapper.classList.add('connection-wrapper');
+        if (isSelected) {
+            wrapper.classList.add('selected');
+        }
         wrapper.id = `conn-wrapper-${conn.id}`;
+        wrapper.setAttribute('data-from', conn.from);
+        wrapper.setAttribute('data-to', conn.to);
+        wrapper.dataset.from = conn.from;
+        wrapper.dataset.to = conn.to;
+        if (isHidden) {
+            wrapper.style.display = 'none';
+        }
 
         // z-indexの計算（接続するノードのうち深い方のdepthを基準にする）
-        const fromDepth = this.app.groupManager ? this.app.groupManager._getNodeDepth(fromShape) : 0;
-        const toDepth = this.app.groupManager ? this.app.groupManager._getNodeDepth(toShape) : 0;
+        // ノードのz-index体系: 100 + depth * 200  (depth=0→100, depth=1→300, ...)
+        // オーバーレイのz-index体系: 200 + depth * 200 (depth=0→200, depth=1→400, ...)
+        // 接続線はノードより前面・オーバーレイより背面に表示するため +1 するだけでよい
+        // depth=0接続線: 101 (ノード100の前面、オーバーレイ200の背面)
+        // depth=1接続線: 301 (ノード300の前面、オーバーレイ400の背面)
+        const fromNodeShape = fromShape.isOverlay ? fromShape.parentShape : fromShape;
+        const toNodeShape = toShape.isOverlay ? toShape.parentShape : toShape;
+        const fromDepth = this.app.groupManager ? this.app.groupManager._getNodeDepth(fromNodeShape) : 0;
+        const toDepth = this.app.groupManager ? this.app.groupManager._getNodeDepth(toNodeShape) : 0;
         const maxDepth = Math.max(fromDepth, toDepth);
-        // depth=0(ルート) -> zIndex=0, depth=1 -> 20, depth=2 -> 40...
-        // この計算により、親ノード（z-index: 10）の上、かつ子ノード（z-index: 30）の下に表示される
-        wrapper.style.zIndex = maxDepth * 20;
+        wrapper.style.zIndex = 101 + maxDepth * 200;
 
         wrapper.appendChild(hitPath);
+
+        // アクティブ表示用アウトライン（背後に配置）
+        if (isSelected) {
+            const outline = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            outline.classList.add('connection-outline');
+            outline.setAttribute('d', pathD);
+            outline.setAttribute('stroke', 'var(--primary-color)');
+            outline.setAttribute('stroke-width', '7');
+            outline.setAttribute('stroke-opacity', '0.4');
+            outline.setAttribute('fill', 'none');
+            outline.setAttribute('stroke-linejoin', 'round');
+            outline.setAttribute('stroke-linecap', 'round');
+            outline.style.pointerEvents = 'none';
+            wrapper.appendChild(outline);
+        }
 
         // 表示用パス
         const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
         path.id = `conn-path-${conn.id}`;
+        path.classList.add('connection-path');
+        if (isSelected) {
+            path.classList.add('selected');
+        }
         path.setAttribute('d', pathD);
-        path.setAttribute('stroke', actualColor);
-        path.setAttribute('stroke-width', '2');
+        path.dataset.from = conn.from;
+        path.dataset.to = conn.to;
+        path.setAttribute('stroke', strokeColor);
+        path.style.stroke = strokeColor;
+        path.setAttribute('stroke-width', isSelected ? '2.5' : '2');
+        path.style.strokeWidth = isSelected ? '2.5px' : '2px';
         path.setAttribute('fill', 'none');
         path.setAttribute('stroke-linejoin', 'round');
         path.setAttribute('stroke-linecap', 'round');
@@ -230,8 +268,8 @@ export class ConnectionManager {
             path.setAttribute('stroke-dasharray', '8,4');
         }
 
-        // マーカーの更新と適用
-        const { markerId, markerTailId } = this._updateConnectionMarkers(conn.id, actualColor);
+        // マーカーの更新と適用（設定色をそのまま適用）
+        const { markerId, markerTailId } = this._updateConnectionMarkers(conn.id, strokeColor);
         const arrowStyle = conn.style?.arrow || 'end';
 
         // 終点マーカー
@@ -344,12 +382,58 @@ export class ConnectionManager {
     // =====================================================
 
     /**
+     * 現在選択中の全ノードおよびオーバーレイのIDのSetを取得します。
+     * 親ノードとオーバーレイキャンバスは別個の要素として厳密に切り分けます。
+     * @returns {Set<string>}
+     */
+    getSelectedNodeIds() {
+        const ids = new Set();
+        // 選択中のシェイプ（通常ノード / 親ノード）
+        const selectedShapes = this.app.shapeManager ? this.app.shapeManager.getSelectedShapes() : [];
+        selectedShapes.forEach(s => {
+            ids.add(s.id);
+        });
+
+        // 選択中のオーバーレイキャンバス
+        const selectedOverlays = this.app.getSelectedOverlays ? this.app.getSelectedOverlays() : [];
+        selectedOverlays.forEach(ov => {
+            if (ov.areaElement?.id) {
+                ids.add(ov.areaElement.id);
+            } else if (ov.shape?.id) {
+                ids.add(`overlay-area-${ov.shape.id}`);
+            }
+        });
+        return ids;
+    }
+
+    /**
+     * 範囲選択中のノード・オーバーレイ同士を繋ぐ接続線を取得します。
+     * @returns {Array<Object>}
+     */
+    getSelectedInterConnectingConnections() {
+        const selectedShapes = this.app.shapeManager ? this.app.shapeManager.getSelectedShapes() : [];
+        const selectedOverlays = this.app.getSelectedOverlays ? this.app.getSelectedOverlays() : [];
+        const totalSelectedCount = selectedShapes.length + selectedOverlays.length;
+        if (totalSelectedCount < 2) return [];
+
+        const selectedIds = this.getSelectedNodeIds();
+
+        return (this.app.connections || []).filter(c => {
+            if (!c.from || !c.to) return false;
+            return selectedIds.has(c.from) && selectedIds.has(c.to);
+        });
+    }
+
+    /**
      * 接続線を選択します。
      * 
      * @param {string} id - 接続線ID
+     * @param {boolean} [keepShapeSelection=false] - ノードの選択状態を維持するかどうか
      */
-    selectConnection(id) {
-        this.app.shapeManager?.clearSelection();
+    selectConnection(id, keepShapeSelection = false) {
+        if (!keepShapeSelection) {
+            this.app.shapeManager?.clearSelection();
+        }
         this.selectedConnectionId = id;
         this.drawConnections();
     }
@@ -374,14 +458,8 @@ export class ConnectionManager {
         // コアから接続データを削除
         this.app.core.removeConnection(id);
 
-        // パスと当たり判定、ラベルの削除
-        const path = document.getElementById(`conn-path-${id}`);
-        const hit = document.getElementById(`conn-hit-${id}`);
-        const label = document.getElementById(`conn-label-${id}`);
+        // SVGラッパー（内部のパス・当たり判定・ラベルを含む）の削除
         const wrapper = document.getElementById(`conn-wrapper-${id}`);
-        if (path) path.remove();
-        if (hit) hit.remove();
-        if (label) label.remove();
         if (wrapper) wrapper.remove();
 
         // マーカーの削除
@@ -406,7 +484,7 @@ export class ConnectionManager {
     drawConnectionPreview(mouseX, mouseY) {
         if (!this.connectStartShape) return;
 
-        const fromShape = this.app.shapes.get(this.connectStartShape);
+        const fromShape = this._getNodeOrOverlay(this.connectStartShape);
         if (!fromShape) return;
 
         this.clearConnectionPreview();
@@ -430,6 +508,7 @@ export class ConnectionManager {
         preview.setAttribute('stroke-linecap', 'round');
         preview.setAttribute('stroke-dasharray', '5,5');
         preview.setAttribute('fill', 'none');
+        preview.style.pointerEvents = 'none';
 
         this.app.connectionsLayer.appendChild(preview);
     }
@@ -447,25 +526,105 @@ export class ConnectionManager {
     // =====================================================
 
     /**
+     * シェイプまたはオーバーレイキャンバスのオブジェクトを取得します。
+     * @param {string} id - シェイプIDまたはオーバーレイID
+     * @returns {Object|null}
+     * @private
+     */
+    _getNodeOrOverlay(id) {
+        if (!id) return null;
+        if (typeof id === 'string' && id.startsWith('overlay-area-')) {
+            const shapeId = id.replace('overlay-area-', '');
+            const parentShape = this.app.shapes.get(shapeId);
+            if (!parentShape) return null;
+
+            // オーバーレイが開いている場合はインスタンスから最新のリアルタイム座標を取得
+            const overlay = this.app.groupManager?.overlayStrategy?.openOverlays?.get(shapeId);
+            if (overlay && overlay.areaElement) {
+                return {
+                    id: id,
+                    isOverlay: true,
+                    shapeId: shapeId,
+                    parentShape: parentShape,
+                    element: overlay.areaElement,
+                    x: overlay.x,
+                    y: overlay.y,
+                    width: overlay.width,
+                    height: overlay.height
+                };
+            }
+            // 開いていないが保存済みの overlayBounds がある場合、または子シェイプから計算
+            let bounds = parentShape.overlayBounds;
+            if (!bounds && parentShape.children && parentShape.children.length > 0) {
+                let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+                parentShape.children.forEach(cid => {
+                    const c = this.app.shapes.get(typeof cid === 'string' ? cid : cid.id);
+                    if (c) {
+                        minX = Math.min(minX, c.x);
+                        minY = Math.min(minY, c.y);
+                        maxX = Math.max(maxX, c.x + c.width);
+                        maxY = Math.max(maxY, c.y + c.height);
+                    }
+                });
+                if (minX !== Infinity) {
+                    bounds = {
+                        x: minX - 20,
+                        y: minY - 34 - 20,
+                        width: maxX - minX + 40,
+                        height: maxY - minY + 34 + 40
+                    };
+                }
+            }
+            if (bounds) {
+                return {
+                    id: id,
+                    isOverlay: true,
+                    shapeId: shapeId,
+                    parentShape: parentShape,
+                    element: null,
+                    x: bounds.x,
+                    y: bounds.y,
+                    width: bounds.width,
+                    height: bounds.height
+                };
+            }
+            return null;
+        }
+
+        return this.app.shapes.get(id);
+    }
+
+    /**
      * シェイプが非表示かどうかを判定します。
      * DOM要素の表示状態と、祖先ノードの折りたたみ状態の両方を確認します。
      * 
-     * @param {Object} shape - 判定対象のシェイプ
+     * @param {Object} shape - 判定対象のシェイプまたはオーバーレイ
      * @returns {boolean} 非表示の場合true
      * @private
      */
     _isShapeHidden(shape) {
+        if (!shape) return true;
+
+        if (shape.isOverlay) {
+            // オーバーレイ枠の場合：親ノードが非表示、またはオーバーレイが開いていなければ非表示
+            if (this._isShapeHidden(shape.parentShape)) return true;
+            return !this.app.groupManager?.overlayStrategy?.isOverlayOpen(shape.shapeId);
+        }
+
         // DOM要素が非表示であれば非表示と判定
         if (shape.element && shape.element.style.display === 'none') {
             return true;
         }
 
-        // 祖先ノードを遡り、折りたたまれた親を持つ場合も非表示と判定
+        // 祖先ノードを遡り、overlay モードで現在開いていない親を持つ場合は非表示
         let parentId = shape.parent;
         while (parentId) {
             const parent = this.app.shapes.get(parentId);
             if (!parent) break;
-            if (parent.collapsed) return true;
+            if (parent.groupMode === 'overlay') {
+                const isOpen = this.app.groupManager?.overlayStrategy?.isOverlayOpen(parent.id);
+                if (!isOpen) return true;
+            }
             parentId = parent.parent;
         }
 
@@ -579,7 +738,7 @@ export class ConnectionManager {
 
         // 1. 初期スタブの計算
         // ノードから少し離れた位置まで必ず直進させる
-        const minDistance = 0; // 20
+        const minDistance = 20; // 20
         const startStub = {
             x: start.x + sourceDir.x * minDistance,
             y: start.y + sourceDir.y * minDistance

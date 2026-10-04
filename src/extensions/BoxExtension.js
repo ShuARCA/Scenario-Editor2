@@ -328,9 +328,36 @@ class BoxNodeView {
         if (bodyEl) {
             const text = bodyEl.innerText;
             navigator.clipboard.writeText(text).then(() => {
-                const originalIcon = this.copyBtn.innerHTML;
+                if (this.copyFeedbackTimer) {
+                    clearTimeout(this.copyFeedbackTimer);
+                }
+                if (this.copyResetIconTimer) {
+                    clearTimeout(this.copyResetIconTimer);
+                }
+                if (!this.copyBtn.dataset.originalIcon) {
+                    this.copyBtn.dataset.originalIcon = this.copyBtn.innerHTML;
+                }
                 this.copyBtn.innerHTML = ICONS.CHECK;
-                setTimeout(() => this.copyBtn.innerHTML = originalIcon, 2000);
+                this.copyBtn.classList.add('copied');
+
+                this.copyFeedbackTimer = setTimeout(() => {
+                    const isHovered = this.dom.matches(':hover') || (this.dom.querySelector(':hover') !== null);
+                    if (isHovered) {
+                        this.copyBtn.innerHTML = this.copyBtn.dataset.originalIcon;
+                        this.copyBtn.classList.remove('copied');
+                        this.copyBtn.blur();
+                    } else {
+                        // ホバー状態でなければ、まずフォーカスを解除してフェードアウトを開始
+                        this.copyBtn.blur();
+                        // フェードアウト完了後（完全に非表示になった後）に元のアイコン・スタイルへ復帰
+                        this.copyResetIconTimer = setTimeout(() => {
+                            this.copyBtn.innerHTML = this.copyBtn.dataset.originalIcon;
+                            this.copyBtn.classList.remove('copied');
+                            this.copyResetIconTimer = null;
+                        }, 250);
+                    }
+                    this.copyFeedbackTimer = null;
+                }, 2000);
             }).catch(err => console.error('Copy failed:', err));
         }
     }

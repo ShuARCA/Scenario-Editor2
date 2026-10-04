@@ -77,17 +77,24 @@ export class FlowchartCore {
         const shape = {
             id: id,
             text: data.text || '',
+            type: data.type || 'rounded',
             x: data.x ?? CONFIG.FLOWCHART.LAYOUT.START_X,
             y: data.y ?? CONFIG.FLOWCHART.LAYOUT.START_Y,
             width: data.width ?? CONFIG.FLOWCHART.SHAPE.WIDTH,
             height: data.height ?? CONFIG.FLOWCHART.SHAPE.HEIGHT,
             headingId: data.headingId || null,
             headingIndex: data.headingIndex,
+            seen: data.seen ?? false,
             backgroundColor: data.backgroundColor || null,
             borderColor: data.borderColor || null,
             color: data.color || null,
             children: data.children || [],
             parent: data.parent || null,
+            groupMode: data.groupMode || (data.collapsed ? 'overlay' : (CONFIG.FLOWCHART.LAYOUT?.GROUP_MODE_DEFAULT || 'inline')),
+            overlaySize: data.overlaySize || null,
+            overlayBounds: data.overlayBounds || null,  // overlayモード時の枠位置・サイズ（永続化）
+            overlayOpen: data.overlayOpen ?? (data.collapsed === false ? true : false),  // overlay開閉状態（永続化）
+            overlayStyle: data.overlayStyle || null,  // overlayキャンバスのスタイル（背景色・枠線色）
             element: null
         };
 
@@ -139,8 +146,11 @@ export class FlowchartCore {
         const shape = this.shapes.get(id);
         if (!shape) return false;
 
-        // 関連する接続線を削除
-        this.connections = this.connections.filter(c => c.from !== id && c.to !== id);
+        // 関連する接続線を削除（親ノード自身およびオーバーレイ枠宛て）
+        const overlayId = `overlay-area-${id}`;
+        this.connections = this.connections.filter(c => 
+            c.from !== id && c.to !== id && c.from !== overlayId && c.to !== overlayId
+        );
 
         // DOM要素を削除
         if (shape.element) {
@@ -278,19 +288,45 @@ export class FlowchartCore {
         this.shapes.clear();
         this.connections = [];
 
+        const defaultGroupMode = CONFIG.FLOWCHART.LAYOUT?.GROUP_MODE_DEFAULT || 'inline';
+
+        const migrateShape = (id, shapeData) => {
+            let groupMode = shapeData.groupMode;
+            if (!groupMode) {
+                if (shapeData.collapsed === true) {
+                    groupMode = 'overlay';
+                } else {
+                    groupMode = defaultGroupMode;
+                }
+            }
+            const overlaySize = shapeData.overlaySize || (shapeData.width && shapeData.height ? { width: shapeData.width, height: shapeData.height } : null);
+            const { collapsed, collapsedSize, expandedSize, ...cleanData } = shapeData;
+
+            return {
+                ...cleanData,
+                id,
+                groupMode,
+                overlaySize,
+                overlayBounds: shapeData.overlayBounds || null,  // overlay枠の位置・サイズを復元
+                overlayOpen: shapeData.overlayOpen ?? (shapeData.collapsed === false ? true : false),  // overlay開閉状態を復元
+                overlayStyle: shapeData.overlayStyle || null,  // overlayキャンバスのスタイルを復元
+                element: null
+            };
+        };
+
         // シェイプを復元
         if (data.shapes) {
             if (Array.isArray(data.shapes)) {
                 // 配列形式（Map.entries() からの保存）の場合
                 data.shapes.forEach(([id, shapeData]) => {
                     if (id && shapeData) {
-                        this.shapes.set(id, { ...shapeData, id, element: null });
+                        this.shapes.set(id, migrateShape(id, shapeData));
                     }
                 });
             } else {
                 // オブジェクト形式の場合
                 Object.entries(data.shapes).forEach(([id, shapeData]) => {
-                    this.shapes.set(id, { ...shapeData, id, element: null });
+                    this.shapes.set(id, migrateShape(id, shapeData));
                 });
             }
         }

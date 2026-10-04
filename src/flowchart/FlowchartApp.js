@@ -7,7 +7,6 @@
  */
 import { FlowchartCore } from '../core/FlowchartCore.js';
 import { CONFIG } from '../core/Config.js';
-import { generateId } from '../utils/helpers.js';
 
 // マネージャーをインポート
 import {
@@ -228,9 +227,58 @@ export class FlowchartApp {
      * シェイプを選択状態にする
      * 
      * @param {string} id - 選択するシェイプのID
+     * @param {boolean} [addToSelection=false] - 既存の選択を維持して追加選択するかどうか
      */
-    selectShape(id) {
-        this.shapeManager.selectShape(id);
+    selectShape(id, addToSelection = false) {
+        this.shapeManager.selectShape(id, addToSelection);
+    }
+
+    /**
+     * シェイプの選択状態をトグル（切り替え）します。
+     * 
+     * @param {string} id - シェイプID
+     * @returns {boolean}
+     */
+    toggleShapeSelection(id) {
+        return this.shapeManager.toggleShapeSelection(id);
+    }
+
+    /**
+     * 現在選択中の全シェイプを取得します。
+     * 
+     * @returns {Array<Object>}
+     */
+    getSelectedShapes() {
+        return this.shapeManager.getSelectedShapes();
+    }
+
+    /**
+     * 指定したシェイプが選択中かどうかを判定します。
+     * 
+     * @param {string} id - シェイプID
+     * @returns {boolean}
+     */
+    isShapeSelected(id) {
+        return this.shapeManager.isShapeSelected(id);
+    }
+
+    /**
+     * 現在選択中の全オーバーレイキャンバスを取得します。
+     * 
+     * @returns {Array<Object>}
+     */
+    getSelectedOverlays() {
+        return this.groupManager?.overlayStrategy?.getSelectedOverlays?.() || [];
+    }
+
+    /**
+     * 指定したオーバーレイキャンバスが選択中かどうかを判定します。
+     * 
+     * @param {Object} overlay
+     * @returns {boolean}
+     */
+    isOverlaySelected(overlay) {
+        return overlay ? overlay.isSelected() : false;
     }
 
     /**
@@ -239,6 +287,7 @@ export class FlowchartApp {
     clearSelection() {
         this.shapeManager.clearSelection();
         this.connectionManager.clearConnectionSelection();
+        this.groupManager?.overlayStrategy?.clearOverlaySelection();
         this.drawConnections();
     }
 
@@ -325,6 +374,19 @@ export class FlowchartApp {
         this.zoomLevel = this.zoomPanManager.getZoom();
     }
 
+    /**
+     * クライアント座標（画面上のマウス座標）をキャンバス内座標に変換します。
+     * 
+     * @param {number} clientX - クライアントX座標
+     * @param {number} clientY - クライアントY座標
+     * @returns {{x: number, y: number}} キャンバス内座標
+     */
+    clientToCanvasCoords(clientX, clientY) {
+        return this.zoomPanManager
+            ? this.zoomPanManager.clientToCanvasCoords(clientX, clientY)
+            : { x: clientX, y: clientY };
+    }
+
     // ========================================
     // コンテキストメニュー（ContextMenuManagerに委譲）
     // ========================================
@@ -393,6 +455,9 @@ export class FlowchartApp {
      * @param {MouseEvent} e
      */
     handleMouseDown(e) {
+        // 左クリック以外（右クリック、中クリック等）はドラッグや選択操作を行わない
+        if (e.button !== 0) return;
+
         const target = e.target;
 
         // リサイズハンドル（ロック中はブロック）
@@ -405,20 +470,32 @@ export class FlowchartApp {
         }
 
         // 接続ポイント（ロック中はブロック）
-        if (this.mode === 'connect' && target.classList.contains('connection-point')) {
+        const connPoint = target.closest ? target.closest('.connection-point') : null;
+        if (this.mode === 'connect' && connPoint) {
             if (this._locked) return;
-            this.connectionManager.startConnect(target);
+            this.connectionManager.startConnect(connPoint);
+            return;
+        }
+
+        // グループボタン（オーバーレイ+ボタンやトグルボタン）クリック時は親ノードの選択・ドラッグを行わない
+        if (target.closest('.group-overlay-btn, .group-toggle')) {
             return;
         }
 
         // 図形クリック
         const shapeEl = target.closest('.shape');
         if (shapeEl) {
+            const isCtrl = e.ctrlKey || e.metaKey;
+            const shapeId = shapeEl.id;
+
             if (this.mode === 'select') {
                 if (this._locked) {
                     // ロック中は選択＋テキストジャンプ（ドラッグなし）
-                    const shapeId = shapeEl.id;
-                    this.selectShape(shapeId);
+                    if (isCtrl) {
+                        this.toggleShapeSelection(shapeId);
+                    } else {
+                        this.selectShape(shapeId, false);
+                    }
                     // mousedown中のscrollはフォーカスと競合するため非同期実行
                     setTimeout(() => {
                         const shape = this.core.shapes.get(shapeId);
@@ -428,7 +505,7 @@ export class FlowchartApp {
                     }, 0);
                     return;
                 }
-                this.shapeManager.startDrag(e, shapeEl);
+                this.shapeManager.startDrag(e, shapeEl, isCtrl);
             } else if (this.mode === 'connect') {
                 if (this._locked) return;
                 // 接続モードで図形をクリック
@@ -478,10 +555,7 @@ export class FlowchartApp {
 
         // 接続プレビュー
         if (this.mode === 'connect' && this.connectionManager.connectStartShape) {
-            const zoomLevel = this.zoomPanManager?.getZoom() || 1;
-            const canvasRect = this.canvas.getBoundingClientRect();
-            const mouseX = (e.clientX - canvasRect.left + this.canvas.scrollLeft) / zoomLevel;
-            const mouseY = (e.clientY - canvasRect.top + this.canvas.scrollTop) / zoomLevel;
+            const { x: mouseX, y: mouseY } = this.clientToCanvasCoords(e.clientX, e.clientY);
             this.connectionManager.drawConnectionPreview(mouseX, mouseY);
         }
     }
@@ -492,6 +566,9 @@ export class FlowchartApp {
      * @param {MouseEvent} e
      */
     handleMouseUp(e) {
+        // 左クリック以外は何もしない
+        if (e.button !== 0) return;
+
         // パン終了
         if (this.zoomPanManager.isPanningActive()) {
             this.zoomPanManager.endPan();
@@ -511,9 +588,9 @@ export class FlowchartApp {
 
         // 接続完了
         if (this.mode === 'connect' && this.connectionManager.connectStartShape) {
-            const target = e.target;
-            if (target.classList.contains('connection-point')) {
-                this.connectionManager.endConnect(target);
+            const connPoint = e.target.closest ? e.target.closest('.connection-point') : null;
+            if (connPoint) {
+                this.connectionManager.endConnect(connPoint);
             } else {
                 this.connectionManager.clearConnectionStart();
             }
@@ -623,8 +700,6 @@ export class FlowchartApp {
      * @private
      */
     _createShapeFromHeading(h, index, headings) {
-        const id = generateId();
-
         // 位置の計算
         let x = CONFIG.FLOWCHART.LAYOUT.START_X;
         let y = CONFIG.FLOWCHART.LAYOUT.START_Y;
@@ -642,20 +717,14 @@ export class FlowchartApp {
             }
         }
 
-        const newShape = {
-            id: id,
+        this.shapeManager.createShape({
             text: h.text,
-            x: x,
-            y: y,
-            width: CONFIG.FLOWCHART.SHAPE.WIDTH,
-            height: CONFIG.FLOWCHART.SHAPE.HEIGHT,
-            headingIndex: index,
+            x,
+            y,
             headingId: h.id,
-            seen: true,
-            children: []
-        };
-        this.shapes.set(id, newShape);
-        this.createShapeElement(newShape);
+            headingIndex: index,
+            seen: true
+        });
     }
 
     // ========================================
@@ -678,13 +747,17 @@ export class FlowchartApp {
      * 子ノードは親ノードより上に表示されるようにします。
      */
     updateAllZIndexes() {
-        const BASE_Z_INDEX = 10;
-        const Z_INDEX_STEP = 20;
+        const BASE_Z_INDEX = 100;
+        const Z_INDEX_STEP = 200;
 
         // 再帰的に深さ（depth）をベースにz-indexを設定
+        // オーバーレイ(200, 400, 600...) と交互に重なる設計:
+        //   depth=0 -> 100, depth=1 -> 300, depth=2 -> 500...
+        // ただし、オーバーレイが開かれた際には子ノードのz-indexが
+        // OverlayCanvas._applyZIndex() によって上書きされるため、
+        // ここでの値はオーバーレイが閉じている状態の基底値として機能します。
         const setZIndexRecursive = (shape, depth) => {
             if (shape.element) {
-                // depth=0 -> 10, depth=1 -> 30, depth=2 -> 50...
                 shape.element.style.zIndex = BASE_Z_INDEX + (depth * Z_INDEX_STEP);
             }
 
@@ -736,6 +809,11 @@ export class FlowchartApp {
      * @param {Object} data
      */
     setData(data) {
+        // 開いているオーバーレイがあれば閉じる
+        if (this.groupManager?.overlayStrategy) {
+            this.groupManager.overlayStrategy.closeAllOverlays();
+        }
+
         // 既存のシェイプDOMをクリア
         if (this.shapesLayer) {
             this.shapesLayer.innerHTML = '';
@@ -751,14 +829,33 @@ export class FlowchartApp {
         // グループの状態を復元
         if (this.groupManager) {
             this.shapes.forEach(shape => {
-                // スタイルとボタンの復元（group-parentクラスの付与、+/-ボタンの生成）
-                this.groupManager.updateShapeStyle(shape);
-
-                // 折りたたみ状態の適用（子要素の非表示など）
-                if (shape.collapsed) {
-                    this.groupManager.setChildrenVisibility(shape, false);
-                }
+                this.groupManager.restoreGroupState(shape);
             });
+
+            // 保存時に開いていたオーバーレイの展開状態を復元
+            if (this.groupManager.overlayStrategy) {
+                this.shapes.forEach(shape => {
+                    if (shape.groupMode === 'overlay' && shape.overlayOpen) {
+                        // 先祖に閉じているオーバーレイがないか確認
+                        let canOpen = true;
+                        let pid = shape.parent;
+                        while (pid) {
+                            const pShape = this.shapes.get(pid);
+                            if (!pShape) break;
+                            if (pShape.groupMode === 'overlay' && !pShape.overlayOpen) {
+                                canOpen = false;
+                                break;
+                            }
+                            pid = pShape.parent;
+                        }
+                        if (canOpen) {
+                            this.groupManager.overlayStrategy.openOverlay(shape);
+                        } else {
+                            shape._overlayWasOpen = true;
+                        }
+                    }
+                });
+            }
         }
 
         this.drawConnections();
