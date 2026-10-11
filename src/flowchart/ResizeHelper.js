@@ -14,16 +14,16 @@ export const RESIZE_HANDLE_POSITIONS = Object.freeze(['nw', 'ne', 'sw', 'se', 'n
  * リサイズハンドル群をコンテナ要素内に生成して追加します。
  * 
  * @param {HTMLElement} container - ハンドルを追加する親要素
- * @param {((e: MouseEvent, pos: string, handle: HTMLElement) => void)|null} [onMouseDown=null] - ハンドルクリック時のコールバック
+ * @param {((e: PointerEvent|MouseEvent, pos: string, handle: HTMLElement) => void)|null} [onPointerDown=null] - ハンドルクリック/タッチ時のコールバック
  * @returns {HTMLElement[]} 生成されたハンドル要素の配列
  */
-export function createResizeHandles(container, onMouseDown = null) {
+export function createResizeHandles(container, onPointerDown = null) {
     return RESIZE_HANDLE_POSITIONS.map(pos => {
         const handle = document.createElement('div');
         handle.className = `resize-handle ${pos}`;
         handle.dataset.pos = pos;
-        if (onMouseDown) {
-            handle.addEventListener('mousedown', (e) => onMouseDown(e, pos, handle));
+        if (onPointerDown) {
+            handle.addEventListener('pointerdown', (e) => onPointerDown(e, pos, handle));
         }
         container.appendChild(handle);
         return handle;

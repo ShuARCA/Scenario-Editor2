@@ -72,6 +72,26 @@ export class InlineGroupStrategy extends BaseGroupStrategy {
     }
 
     /**
+     * データ復元時のグループ状態復元。
+     * ZIP読み込み時に、保存されていた親ノードのサイズ（width, height）と位置（x, y）を
+     * updateParentSize による自動再計算で上書きせず、そのまま保持します。
+     * 
+     * @param {Object} shape - 親シェイプ
+     */
+    restoreGroupState(shape) {
+        this.updateStyle(shape);
+
+        // 保存されたサイズが存在しない場合（初期値不足など）のみ自動計算
+        if (!shape.width || !shape.height) {
+            this.updateParentSize(shape);
+        } else {
+            this.groupManager.updateShapeDOM(shape);
+        }
+
+        this.setChildrenVisibility(shape, true);
+    }
+
+    /**
      * グループ構成変更時の処理
      * 
      * @param {Object} shape - 親シェイプ

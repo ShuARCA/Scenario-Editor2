@@ -166,6 +166,9 @@
     overflow: hidden;
     position: relative;
     cursor: grab;
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
 }
 
 #flowchart-canvas.panning {
@@ -177,6 +180,7 @@
     height: var(--canvas-size);
     position: relative;
     transform-origin: 0 0;
+    touch-action: none;
 }
 
 /* スクロールバー非表示 */
@@ -217,6 +221,7 @@
     user-select: none;
     font-size: var(--editor-font-size);
     font-weight: 500;
+    touch-action: none;
 
     /* Defaults */
     --shape-bg: var(--surface-color);
@@ -433,12 +438,26 @@
     transition: opacity 0.2s;
     cursor: crosshair;
     pointer-events: none;
+    touch-action: none;
 }
 
 /* 接続モード時のみ接続ポイントを表示 */
 .connect-mode .shape .connection-point,
 .connect-mode .overlay-group-area .connection-point {
     opacity: 1;
+    pointer-events: auto;
+}
+
+/* 接続モード時のタッチ用ヒットエリア（指で掴みやすくする） */
+.connect-mode .shape .connection-point::after,
+.connect-mode .overlay-group-area .connection-point::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 26px;
+    height: 26px;
     pointer-events: auto;
 }
 
@@ -630,6 +649,19 @@
     z-index: 40;
     opacity: 0;
     transition: opacity 0.2s;
+    touch-action: none;
+}
+
+/* タッチ操作用の透明なヒットエリア（スマートフォンでも指で掴みやすくする） */
+.resize-handle::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 28px;
+    height: 28px;
+    pointer-events: auto;
 }
 
 .shape.selected .resize-handle,
@@ -729,6 +761,7 @@ body.locked .toolbar-separator {
     pointer-events: none;
     box-sizing: border-box;
     transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    touch-action: none;
 }
 
 .overlay-group-area.selected {
@@ -756,6 +789,7 @@ body.locked .toolbar-separator {
     pointer-events: auto;
     cursor: move;
     user-select: none;
+    touch-action: none;
     z-index: 12;
 }
 
@@ -809,3 +843,18 @@ body.locked .toolbar-separator {
     color: var(--flowchart-danger-color);
     transform: scale(1.05);
 }
+
+/* ============================================
+   範囲選択枠（Marquee / Box Selection）
+   ============================================ */
+.flowchart-selection-box {
+    position: absolute;
+    border: 1px dashed var(--primary-color, #3b82f6);
+    background-color: color-mix(in srgb, var(--primary-color, #3b82f6) 12%, transparent);
+    box-shadow: 0 0 4px color-mix(in srgb, var(--primary-color, #3b82f6) 20%, transparent);
+    pointer-events: none;
+    z-index: 1000;
+    box-sizing: border-box;
+    display: none;
+    user-select: none;
+}

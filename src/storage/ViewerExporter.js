@@ -402,13 +402,15 @@ ${viewerScript}
 }
 .mode-btn { color: var(--text-muted) !important; }
 .shape {
-    background-color: var(--surface-color) !important;
-    border-color: var(--border-color) !important;
+    /* --shape-bg / --shape-border-color が inline style で設定されていない場合のデフォルト値を上書き */
+    /* !important で background-color / border-color を直接上書きすると CSS 変数による個別色が消えるため禁止 */
+    --shape-bg: var(--surface-color);
+    --shape-border-color: var(--border-color);
     color: var(--text-color) !important;
     cursor: pointer;
 }
 .shape:hover {
-    border-color: var(--primary-color) !important;
+    --shape-border-color: var(--primary-color);
     box-shadow: 0 0 3px color-mix(in srgb, var(--primary-color) 50%, transparent) !important;
 }
 .shape-text { color: var(--text-color) !important; }
@@ -792,6 +794,65 @@ body.viewer-mode .outline-icon { pointer-events: none; }
     color: #10b981 !important;
 }
 
+/* === 画像コンテナおよび段組み（float）スタイル === */
+.resizable-container {
+    position: relative;
+    display: inline-block;
+    max-width: 100%;
+    margin: 0.2em;
+    overflow: visible;
+    vertical-align: top;
+}
+.resizable-container img {
+    margin: 0;
+    display: block;
+    max-width: 100%;
+    height: auto;
+}
+.resizable-container.align-left {
+    display: block;
+    margin-left: 0;
+    margin-right: auto;
+}
+.resizable-container.align-center {
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+}
+.resizable-container.align-right {
+    display: block;
+    margin-left: auto;
+    margin-right: 0;
+}
+.resizable-container.float-enabled.align-left {
+    float: left;
+    margin-right: 16px;
+}
+.resizable-container.float-enabled.align-right {
+    float: right;
+    margin-left: 16px;
+}
+.resizable-container.align-center + p,
+.resizable-container:not(.float-enabled) + p,
+.resizable-container.align-center + *,
+.resizable-container:not(.float-enabled) + * {
+    clear: both;
+}
+#editor::after {
+    content: '';
+    display: table;
+    clear: both;
+}
+body.viewer-mode .resizable-container:hover,
+body.viewer-mode .resizable-container.selected,
+body.viewer-mode .resizable-container.resizing {
+    outline: none !important;
+    box-shadow: none !important;
+}
+body.viewer-mode .resizable-container .resize-handle {
+    display: none !important;
+}
+
 @media print {
     .box-controls,
     .block-copy-button,
@@ -822,6 +883,78 @@ body.viewer-mode .outline-icon { pointer-events: none; }
             blocks.forEach(el => {
                 if (el.children.length === 0 && (!el.textContent || el.textContent.trim() === '')) {
                     el.innerHTML = '<br>';
+                }
+            });
+
+            // 画像コンテナの整形: 配置と段組み（float）を反映
+            const images = doc.body.querySelectorAll('img');
+            images.forEach(img => {
+                // 既に resizable-container 内にある場合はハンドル等のクリーンアップのみ
+                const existingContainer = img.closest('.resizable-container');
+                if (existingContainer) {
+                    existingContainer.querySelectorAll('.resize-handle').forEach(el => el.remove());
+                    return;
+                }
+
+                const alignment = img.getAttribute('data-alignment') || 'left';
+                const floatEnabled = img.getAttribute('data-float-enabled') === 'true' && alignment !== 'center';
+
+                const container = doc.createElement('div');
+                container.className = `resizable-container align-${alignment}`;
+                if (floatEnabled) {
+                    container.classList.add('float-enabled');
+                }
+
+                // 幅の決定
+                let width = img.style.width;
+                if (!width && img.getAttribute('data-original-width')) {
+                    width = `${img.getAttribute('data-original-width')}px`;
+                }
+                if (!width && img.getAttribute('width')) {
+                    const w = img.getAttribute('width');
+                    width = isNaN(w) ? w : `${w}px`;
+                }
+
+                // エディタの実DOMからのフォールバック取得
+                if (!width) {
+                    try {
+                        const src = img.getAttribute('src');
+                        if (src) {
+                            const liveImgs = document.querySelectorAll('#editor img');
+                            for (const liveImg of liveImgs) {
+                                if (liveImg.getAttribute('src') === src) {
+                                    const liveContainer = liveImg.closest('.resizable-container');
+                                    if (liveContainer && liveContainer.style.width) {
+                                        width = liveContainer.style.width;
+                                        break;
+                                    }
+                                    if (liveImg.style.width) {
+                                        width = liveImg.style.width;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    } catch (_) {}
+                }
+
+                if (width) {
+                    container.style.width = width;
+                    img.style.width = width;
+                }
+
+                img.style.display = 'block';
+                img.style.height = 'auto';
+                img.style.maxWidth = '100%';
+
+                const parent = img.parentElement;
+                if (parent && parent.tagName.toLowerCase() === 'p' && parent.children.length === 1 && parent.textContent.trim() === '') {
+                    parent.parentNode.insertBefore(container, parent);
+                    container.appendChild(img);
+                    parent.remove();
+                } else if (img.parentNode) {
+                    img.parentNode.insertBefore(container, img);
+                    container.appendChild(img);
                 }
             });
 
@@ -916,12 +1049,24 @@ body.viewer-mode .outline-icon { pointer-events: none; }
         const overlayStrat = this.flowchartApp?.groupManager?.overlayStrategy;
         for (const [id, shape] of this.flowchartApp.shapes.entries()) {
             const isOpen = overlayStrat ? (overlayStrat.isOverlayOpen(id) || !!shape.overlayOpen || !!shape._overlayWasOpen) : (!!shape.overlayOpen || !!shape._overlayWasOpen);
+            let overlayBounds = shape.overlayBounds || null;
+            if (overlayStrat && overlayStrat.isOverlayOpen(id)) {
+                const overlay = overlayStrat.openOverlays.get(id);
+                if (overlay && overlay.areaElement) {
+                    overlayBounds = {
+                        x: overlay.x,
+                        y: overlay.y,
+                        width: overlay.width,
+                        height: overlay.height
+                    };
+                }
+            }
             data[id] = {
                 headingId: shape.headingId || null,
                 groupMode: shape.groupMode || (shape.collapsed ? 'overlay' : 'inline'),
                 children: shape.children ? shape.children.map(c => typeof c === 'string' ? c : c.id || c) : [],
                 parent: shape.parent || null,
-                overlayBounds: shape.overlayBounds || null,
+                overlayBounds: overlayBounds,
                 overlayStyle: shape.overlayStyle || null,
                 overlayOpen: isOpen
             };
@@ -1279,7 +1424,86 @@ body.viewer-mode .outline-icon { pointer-events: none; }
         if (zoomOutBtn) zoomOutBtn.addEventListener('click', function() { setZoom(zoomLevel - 0.1); });
         if (fitViewBtn) fitViewBtn.addEventListener('click', fitView);
 
+        // ピンチズーム用ポインター追跡
+        const activePointers = new Map();
+        let lastPinchDist = 0;
+        let lastPinchMidX = 0;
+        let lastPinchMidY = 0;
+
+        canvas.style.touchAction = 'none';
+
+        canvas.addEventListener('pointerdown', function(e) {
+            activePointers.set(e.pointerId, { clientX: e.clientX, clientY: e.clientY });
+
+            // 2本指以上のピンチ中はパン開始しない
+            if (activePointers.size > 1) {
+                isPanning = false;
+                return;
+            }
+
+            if (e.target.closest('.shape') || e.target.closest('.mode-btn') || e.target.closest('.overlay-group-area')) return;
+            isPanning = true;
+            startMouseX = e.clientX;
+            startMouseY = e.clientY;
+            startPanX = panX;
+            startPanY = panY;
+            canvas.style.cursor = 'grabbing';
+            e.preventDefault();
+            canvas.setPointerCapture(e.pointerId);
+        });
+
+        canvas.addEventListener('pointermove', function(e) {
+            if (!activePointers.has(e.pointerId)) return;
+            activePointers.set(e.pointerId, { clientX: e.clientX, clientY: e.clientY });
+
+            // 2本指ピンチズーム
+            if (activePointers.size === 2) {
+                isPanning = false;
+                const ptrs = Array.from(activePointers.values());
+                const newDist = Math.hypot(ptrs[0].clientX - ptrs[1].clientX, ptrs[0].clientY - ptrs[1].clientY);
+                const midX = (ptrs[0].clientX + ptrs[1].clientX) / 2;
+                const midY = (ptrs[0].clientY + ptrs[1].clientY) / 2;
+                if (lastPinchDist > 0) {
+                    setZoom(zoomLevel * (newDist / lastPinchDist), midX, midY);
+                }
+                lastPinchDist = newDist;
+                lastPinchMidX = midX;
+                lastPinchMidY = midY;
+                return;
+            }
+
+            if (!isPanning) return;
+            panX = startPanX + (e.clientX - startMouseX);
+            panY = startPanY + (e.clientY - startMouseY);
+            applyTransform();
+        });
+
+        function endPan(e) {
+            activePointers.delete(e.pointerId);
+            if (activePointers.size === 0) {
+                lastPinchDist = 0;
+                if (isPanning) {
+                    isPanning = false;
+                    canvas.style.cursor = '';
+                }
+            } else if (activePointers.size === 1) {
+                // 2本指から1本指に戻ったらピンチ終了
+                lastPinchDist = 0;
+                const remaining = Array.from(activePointers.values())[0];
+                startMouseX = remaining.clientX;
+                startMouseY = remaining.clientY;
+                startPanX = panX;
+                startPanY = panY;
+                isPanning = false;
+            }
+        }
+
+        canvas.addEventListener('pointerup', endPan);
+        canvas.addEventListener('pointercancel', endPan);
+
+        // マウス向けフォールバック（既存ブラウザ互換）
         canvas.addEventListener('mousedown', function(e) {
+            if (activePointers.size > 0) return; // ポインターイベント使用中は無視
             if (e.target.closest('.shape') || e.target.closest('.mode-btn') || e.target.closest('.overlay-group-area')) return;
             isPanning = true;
             startMouseX = e.clientX;
@@ -1291,14 +1515,14 @@ body.viewer-mode .outline-icon { pointer-events: none; }
         });
 
         window.addEventListener('mousemove', function(e) {
-            if (!isPanning) return;
+            if (!isPanning || activePointers.size > 0) return;
             panX = startPanX + (e.clientX - startMouseX);
             panY = startPanY + (e.clientY - startMouseY);
             applyTransform();
         });
 
         window.addEventListener('mouseup', function() {
-            if (isPanning) {
+            if (isPanning && activePointers.size === 0) {
                 isPanning = false;
                 canvas.style.cursor = '';
             }
@@ -2088,18 +2312,19 @@ body.viewer-mode .outline-icon { pointer-events: none; }
         let isResizing = false;
 
         if (sidebar && resizer) {
-            resizer.addEventListener('mousedown', function(e) {
+            const startSidebarResize = function(e) {
+                if (e.button !== 0) return;
                 if (sidebar.classList.contains('collapsed')) return;
                 isResizing = true;
+                resizer.classList.add('resizing');
                 document.body.style.cursor = 'col-resize';
                 e.preventDefault();
-            });
-
-            document.addEventListener('mousemove', function(e) {
-                if (!isResizing) return;
-                const newWidth = Math.max(150, Math.min(500, e.clientX));
-                sidebar.style.setProperty('--sidebar-width', newWidth + 'px');
-            });
+                if (e.pointerId !== undefined && resizer.setPointerCapture) {
+                    resizer.setPointerCapture(e.pointerId);
+                }
+            };
+            resizer.addEventListener('pointerdown', startSidebarResize);
+            resizer.addEventListener('mousedown', startSidebarResize);
         }
 
         const verticalResizer = document.getElementById('vertical-resizer');
@@ -2107,37 +2332,60 @@ body.viewer-mode .outline-icon { pointer-events: none; }
         let isVerticalResizing = false;
 
         if (verticalResizer && flowchartContainer) {
-            verticalResizer.addEventListener('mousedown', function(e) {
+            const startVerticalResize = function(e) {
+                if (e.button !== 0) return;
                 if (flowchartContainer.classList.contains('collapsed')) return;
                 isVerticalResizing = true;
+                verticalResizer.classList.add('resizing');
                 document.body.style.cursor = 'row-resize';
                 e.preventDefault();
-            });
+                if (e.pointerId !== undefined && verticalResizer.setPointerCapture) {
+                    verticalResizer.setPointerCapture(e.pointerId);
+                }
+            };
+            verticalResizer.addEventListener('pointerdown', startVerticalResize);
+            verticalResizer.addEventListener('mousedown', startVerticalResize);
+        }
 
-            document.addEventListener('mousemove', function(e) {
-                if (!isVerticalResizing) return;
-                const toolbar = document.getElementById('toolbar');
-                const headerHeight = toolbar ? toolbar.offsetHeight : 0;
-                const totalHeight = window.innerHeight - headerHeight;
+        const handleMove = function(e) {
+            if (isResizing && sidebar) {
+                const newWidth = Math.max(150, Math.min(500, e.clientX));
+                sidebar.style.setProperty('--sidebar-width', newWidth + 'px');
+            }
 
-                let newHeight = e.clientY - headerHeight;
-                newHeight = Math.max(100, Math.min(totalHeight - 100, newHeight));
+            if (isVerticalResizing && flowchartContainer) {
+                const containerRect = flowchartContainer.getBoundingClientRect();
+                const containerTop = containerRect.top;
+                const maxAllowed = window.innerHeight - containerTop - 100;
+
+                let newHeight = e.clientY - containerTop;
+                newHeight = Math.max(100, Math.min(maxAllowed, newHeight));
 
                 flowchartContainer.style.height = newHeight + 'px';
                 flowchartContainer.style.flexGrow = '0';
-            });
-        }
+            }
+        };
 
-        document.addEventListener('mouseup', function() {
+        document.addEventListener('pointermove', handleMove);
+        document.addEventListener('mousemove', handleMove);
+
+        const handleEnd = function() {
             if (isResizing) {
                 isResizing = false;
+                if (resizer) resizer.classList.remove('resizing');
                 document.body.style.cursor = '';
             }
             if (isVerticalResizing) {
                 isVerticalResizing = false;
+                if (verticalResizer) verticalResizer.classList.remove('resizing');
                 document.body.style.cursor = '';
+                window.dispatchEvent(new Event('resize'));
             }
-        });
+        };
+
+        document.addEventListener('pointerup', handleEnd);
+        document.addEventListener('pointercancel', handleEnd);
+        document.addEventListener('mouseup', handleEnd);
     }
 
     function initBoxCopy() {

@@ -136,8 +136,8 @@ export class ContextMenuManager {
             }
         });
 
-        // 外側クリックで閉じる (ピッカーが開いている場合はピッカーの挙動に任せるか、ここで閉じる)
-        document.addEventListener('mousedown', (e) => {
+        // 外側クリック/タップで閉じる (ピッカーが開いている場合はピッカーの挙動に任せるか、ここで閉じる)
+        const closeMenuOnOutside = (e) => {
             // コンテキストメニュー外かつカラーピッカー外なら閉じる
             const inMenu = this.contextMenu && this.contextMenu.contains(e.target);
             const inPicker = this.globalPickerContainer && this.globalPickerContainer.contains(e.target);
@@ -147,7 +147,9 @@ export class ContextMenuManager {
             if (!inMenu && !inPicker && !inShape && !inOverlay) {
                 this.hideContextMenu(); // これでピッカーも閉じる（hideContextMenu内で処理）
             }
-        });
+        };
+        document.addEventListener('pointerdown', closeMenuOnOutside);
+        document.addEventListener('mousedown', closeMenuOnOutside);
 
         // シェイプスタイル入力 (スウォッチクリックイベント)
         this._setupShapeStyleInputs();
@@ -354,6 +356,7 @@ export class ContextMenuManager {
 
         // 外側クリック監視を追加
         requestAnimationFrame(() => {
+            document.addEventListener('pointerdown', this.pickerOutsideClickHandler, true);
             document.addEventListener('mousedown', this.pickerOutsideClickHandler, true);
         });
     }
@@ -364,6 +367,7 @@ export class ContextMenuManager {
      */
     _closeColorPicker() {
         // イベント解除
+        document.removeEventListener('pointerdown', this.pickerOutsideClickHandler, true);
         document.removeEventListener('mousedown', this.pickerOutsideClickHandler, true);
 
         if (this.globalPickerContainer) {
