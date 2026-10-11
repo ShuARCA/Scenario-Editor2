@@ -23,63 +23,95 @@ export class UIManager {
             // クラスの付け替えのみでアニメーションさせるため、JSによるwidth操作は削除
         });
 
-        // サイドバーのリサイズ
-        this.resizer.addEventListener('mousedown', (e) => {
+        // サイドバーのリサイズ（ポインター・タッチ・マウス対応）
+        const startSidebarResize = (e) => {
+            if (e.button !== 0) return;
             if (this.sidebar.classList.contains('collapsed')) return;
             this.isResizing = true;
+            this.resizer.classList.add('resizing');
             document.body.style.cursor = 'col-resize';
             e.preventDefault();
-        });
-
-        document.addEventListener('mousemove', (e) => {
-            if (!this.isResizing) return;
-            const newWidth = Math.max(150, Math.min(500, e.clientX));
-            // style.widthではなくCSS変数を更新
-            this.sidebar.style.setProperty('--sidebar-width', `${newWidth}px`);
-            this.sidebarWidth = newWidth;
-        });
-
-        document.addEventListener('mouseup', () => {
-            if (this.isResizing) {
-                this.isResizing = false;
-                document.body.style.cursor = 'default';
+            if (e.pointerId !== undefined) {
+                this.resizer.setPointerCapture?.(e.pointerId);
             }
-            if (this.isVerticalResizing) {
-                this.isVerticalResizing = false;
-                document.body.style.cursor = 'default';
-            }
-        });
+        };
+        this.resizer.addEventListener('pointerdown', startSidebarResize);
+        this.resizer.addEventListener('mousedown', startSidebarResize);
 
-        // 垂直リサイズ（フローチャートとエディタの間）
+        // 垂直リサイズ（フローチャートとエディタの間、ポインター・タッチ・マウス対応）
         this.verticalResizer = document.getElementById('vertical-resizer');
         this.flowchartContainer = document.getElementById('flowchart-container');
         this.editorContainer = document.getElementById('editor-container');
         this.isVerticalResizing = false;
 
+        const startVerticalResize = (e) => {
+            if (e.button !== 0) return;
+            if (this.flowchartContainer && this.flowchartContainer.classList.contains('collapsed')) return;
+            this.isVerticalResizing = true;
+            if (this.verticalResizer) {
+                this.verticalResizer.classList.add('resizing');
+                if (e.pointerId !== undefined) {
+                    this.verticalResizer.setPointerCapture?.(e.pointerId);
+                }
+            }
+            document.body.style.cursor = 'row-resize';
+            e.preventDefault();
+        };
+
         if (this.verticalResizer) {
-            this.verticalResizer.addEventListener('mousedown', (e) => {
-                this.isVerticalResizing = true;
-                document.body.style.cursor = 'row-resize';
-                e.preventDefault();
-            });
+            this.verticalResizer.addEventListener('pointerdown', startVerticalResize);
+            this.verticalResizer.addEventListener('mousedown', startVerticalResize);
+        }
 
-            document.addEventListener('mousemove', (e) => {
-                if (!this.isVerticalResizing) return;
+        // 移動イベント（ポインター・マウス両対応）
+        const handleMove = (e) => {
+            // サイドバーリサイズ中
+            if (this.isResizing) {
+                const newWidth = Math.max(150, Math.min(500, e.clientX));
+                this.sidebar.style.setProperty('--sidebar-width', `${newWidth}px`);
+                this.sidebarWidth = newWidth;
+            }
 
-                // ヘッダーの高さを考慮
-                const headerHeight = 50;
-                const containerTop = headerHeight;
-                const totalHeight = window.innerHeight - headerHeight;
+            // 垂直リサイズ中
+            if (this.isVerticalResizing && this.flowchartContainer) {
+                const containerRect = this.flowchartContainer.getBoundingClientRect();
+                const containerTop = containerRect.top;
+                const totalHeight = window.innerHeight;
+                const maxAllowed = totalHeight - containerTop - 100;
 
                 let newHeight = e.clientY - containerTop;
-
-                // 最小・最大サイズの制限
-                newHeight = Math.max(100, Math.min(totalHeight - 100, newHeight));
+                newHeight = Math.max(100, Math.min(maxAllowed, newHeight));
 
                 this.flowchartContainer.style.height = `${newHeight}px`;
-                this.flowchartContainer.style.flexGrow = '0'; // flex-growを無効化して固定高さにする
-                // エディタはflex-grow: 1なので自動的に残りのスペースを埋める
-            });
-        }
+                this.flowchartContainer.style.flexGrow = '0';
+            }
+        };
+
+        document.addEventListener('pointermove', handleMove);
+        document.addEventListener('mousemove', handleMove);
+
+        // 終了イベント（ポインター・マウス両対応）
+        const handleEnd = () => {
+            let wasVertical = this.isVerticalResizing;
+            if (this.isResizing) {
+                this.isResizing = false;
+                this.resizer.classList.remove('resizing');
+                document.body.style.cursor = 'default';
+            }
+            if (this.isVerticalResizing) {
+                this.isVerticalResizing = false;
+                if (this.verticalResizer) {
+                    this.verticalResizer.classList.remove('resizing');
+                }
+                document.body.style.cursor = 'default';
+            }
+            if (wasVertical) {
+                window.dispatchEvent(new Event('resize'));
+            }
+        };
+
+        document.addEventListener('pointerup', handleEnd);
+        document.addEventListener('pointercancel', handleEnd);
+        document.addEventListener('mouseup', handleEnd);
     }
 }

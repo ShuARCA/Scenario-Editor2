@@ -130,10 +130,11 @@ export class FlowchartApp {
             }
         });
 
-        // キャンバスのマウスイベント
-        this.canvas.addEventListener('mousedown', (e) => this.handleMouseDown(e));
-        document.addEventListener('mousemove', (e) => this.handleMouseMove(e));
-        document.addEventListener('mouseup', (e) => this.handleMouseUp(e));
+        // キャンバスのポインターイベント（タッチ・マウス両対応）
+        this.canvas.addEventListener('pointerdown', (e) => this.handlePointerDown(e));
+        document.addEventListener('pointermove', (e) => this.handlePointerMove(e));
+        document.addEventListener('pointerup', (e) => this.handlePointerUp(e));
+        document.addEventListener('pointercancel', (e) => this.handlePointerCancel(e));
 
         // キーボードイベント（矢印キーでノード移動）
         document.addEventListener('keydown', (e) => this.handleKeyDown(e));
@@ -446,16 +447,16 @@ export class FlowchartApp {
     }
 
     // ========================================
-    // マウスイベント処理
+    // ポインター・マウスイベント処理
     // ========================================
 
     /**
-     * マウスダウンイベントを処理します。
+     * ポインターダウン（タッチ/マウス）イベントを処理します。
      * 
-     * @param {MouseEvent} e
+     * @param {PointerEvent|MouseEvent} e
      */
-    handleMouseDown(e) {
-        // 左クリック以外（右クリック、中クリック等）はドラッグや選択操作を行わない
+    handlePointerDown(e) {
+        // 左クリック/タッチ以外（右クリック、中クリック等）はドラッグや選択操作を行わない
         if (e.button !== 0) return;
 
         const target = e.target;
@@ -519,22 +520,34 @@ export class FlowchartApp {
 
         // 接続線クリック
         if (target.tagName.toLowerCase() === 'path' || target.closest('path')) {
+            const isCtrl = e.ctrlKey || e.metaKey;
+            if (isCtrl && this.mode === 'select' && !this._locked) {
+                e.preventDefault();
+                this.shapeManager.startBoxSelection(e);
+                return;
+            }
             this.clearSelection();
             return;
         }
 
         // 背景クリック
         e.preventDefault();
+        const isCtrl = e.ctrlKey || e.metaKey;
+        if (isCtrl && this.mode === 'select' && !this._locked) {
+            this.shapeManager.startBoxSelection(e);
+            return;
+        }
+
         this.clearSelection();
         this.zoomPanManager.startPan(e);
     }
 
     /**
-     * マウスムーブイベントを処理します。
+     * ポインタームーブ（ドラッグ/移動）イベントを処理します。
      * 
-     * @param {MouseEvent} e
+     * @param {PointerEvent|MouseEvent} e
      */
-    handleMouseMove(e) {
+    handlePointerMove(e) {
         // パン中
         if (this.zoomPanManager.isPanningActive()) {
             this.zoomPanManager.updatePan(e);
@@ -544,6 +557,12 @@ export class FlowchartApp {
         // リサイズ中
         if (this.shapeManager.isResizingActive()) {
             this.shapeManager.updateResize(e);
+            return;
+        }
+
+        // 範囲選択中
+        if (this.shapeManager.isBoxSelectingActive()) {
+            this.shapeManager.updateBoxSelection(e);
             return;
         }
 
@@ -561,17 +580,22 @@ export class FlowchartApp {
     }
 
     /**
-     * マウスアップイベントを処理します。
+     * ポインターアップ（指を離す/マウス離す）イベントを処理します。
      * 
-     * @param {MouseEvent} e
+     * @param {PointerEvent|MouseEvent} e
      */
-    handleMouseUp(e) {
-        // 左クリック以外は何もしない
+    handlePointerUp(e) {
+        // 左クリック/タッチ以外は何もしない
         if (e.button !== 0) return;
 
         // パン終了
         if (this.zoomPanManager.isPanningActive()) {
-            this.zoomPanManager.endPan();
+            this.zoomPanManager.endPan(e);
+        }
+
+        // 範囲選択終了
+        if (this.shapeManager.isBoxSelectingActive()) {
+            this.shapeManager.endBoxSelection(e);
         }
 
         // リサイズ終了
@@ -588,7 +612,55 @@ export class FlowchartApp {
 
         // 接続完了
         if (this.mode === 'connect' && this.connectionManager.connectStartShape) {
-            const connPoint = e.target.closest ? e.target.closest('.connection-point') : null;
+            let connPoint = null;
+
+            // 1. 指/カーソルを離した座標の直下要素を取得（タッチデバイスでは e.target が始点要素に固定されるため必須）
+            if (e.clientX !== undefined && e.clientY !== undefined) {
+                const hitEl = document.elementFromPoint(e.clientX, e.clientY);
+                if (hitEl) {
+                    connPoint = hitEl.closest ? hitEl.closest('.connection-point') : null;
+                }
+
+                // 重なり要素から接続ポイントを検索
+                if (!connPoint && document.elementsFromPoint) {
+                    const elements = document.elementsFromPoint(e.clientX, e.clientY);
+                    for (const el of elements) {
+                        const pt = el.closest ? el.closest('.connection-point') : null;
+                        if (pt) {
+                            connPoint = pt;
+                            break;
+                        }
+                    }
+                }
+
+                // 2. 接続ポイントそのものではなくノード（シェイプまたはオーバーレイ）上にドロップされた場合、
+                //    そのノードの最も近い接続ポイントを自動選択
+                if (!connPoint && hitEl) {
+                    const targetNode = hitEl.closest ? hitEl.closest('.shape, .overlay-group-area') : null;
+                    if (targetNode && targetNode.id !== this.connectionManager.connectStartShape) {
+                        const points = targetNode.querySelectorAll('.connection-point');
+                        let closestPt = null;
+                        let minDistance = Infinity;
+                        points.forEach(pt => {
+                            const rect = pt.getBoundingClientRect();
+                            const ptCenterX = rect.left + rect.width / 2;
+                            const ptCenterY = rect.top + rect.height / 2;
+                            const dist = Math.hypot(e.clientX - ptCenterX, e.clientY - ptCenterY);
+                            if (dist < minDistance) {
+                                minDistance = dist;
+                                closestPt = pt;
+                            }
+                        });
+                        connPoint = closestPt;
+                    }
+                }
+            }
+
+            // フォールバック: e.target（マウス操作等）
+            if (!connPoint && e.target?.closest) {
+                connPoint = e.target.closest('.connection-point');
+            }
+
             if (connPoint) {
                 this.connectionManager.endConnect(connPoint);
             } else {
@@ -596,6 +668,60 @@ export class FlowchartApp {
             }
             this.connectionManager.clearConnectionPreview();
         }
+    }
+
+    /**
+     * ポインターキャンセル（タッチ中断/OS割り込み等）イベントを処理します。
+     * 
+     * @param {PointerEvent} e
+     */
+    handlePointerCancel(e) {
+        if (this.zoomPanManager.isPanningActive()) {
+            this.zoomPanManager.endPan(e);
+        }
+
+        if (this.shapeManager.isBoxSelectingActive()) {
+            this.shapeManager.endBoxSelection(e);
+        }
+
+        if (this.shapeManager.isResizingActive()) {
+            this.shapeManager.endResize();
+            this.updateCanvasSize();
+        }
+
+        if (this.shapeManager.isDraggingActive()) {
+            this.shapeManager.endDrag();
+            this.updateCanvasSize();
+        }
+
+        if (this.mode === 'connect' && this.connectionManager.connectStartShape) {
+            this.connectionManager.clearConnectionStart();
+            this.connectionManager.clearConnectionPreview();
+        }
+    }
+
+    /**
+     * 後方互換用マウスダウンハンドラ
+     * @param {MouseEvent} e
+     */
+    handleMouseDown(e) {
+        return this.handlePointerDown(e);
+    }
+
+    /**
+     * 後方互換用マウスムーブハンドラ
+     * @param {MouseEvent} e
+     */
+    handleMouseMove(e) {
+        return this.handlePointerMove(e);
+    }
+
+    /**
+     * 後方互換用マウスアップハンドラ
+     * @param {MouseEvent} e
+     */
+    handleMouseUp(e) {
+        return this.handlePointerUp(e);
     }
 
     /**
@@ -618,8 +744,10 @@ export class FlowchartApp {
         const arrowKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
         if (!arrowKeys.includes(e.key)) return;
 
-        // 選択中のノードがなければスキップ
-        if (!this.shapeManager._getSelectedShape()) return;
+        // 選択中のノードまたはオーバーレイがなければスキップ
+        const hasSelectedShape = !!this.shapeManager._getSelectedShape();
+        const hasSelectedOverlay = (this.getSelectedOverlays() || []).length > 0;
+        if (!hasSelectedShape && !hasSelectedOverlay) return;
 
         // 移動量（1px固定）
         const step = 1;
@@ -832,27 +960,35 @@ export class FlowchartApp {
                 this.groupManager.restoreGroupState(shape);
             });
 
-            // 保存時に開いていたオーバーレイの展開状態を復元
+            // 保存時に開いていたオーバーレイの展開状態を復元（親から順に展開）
             if (this.groupManager.overlayStrategy) {
-                this.shapes.forEach(shape => {
-                    if (shape.groupMode === 'overlay' && shape.overlayOpen) {
-                        // 先祖に閉じているオーバーレイがないか確認
-                        let canOpen = true;
-                        let pid = shape.parent;
-                        while (pid) {
-                            const pShape = this.shapes.get(pid);
-                            if (!pShape) break;
-                            if (pShape.groupMode === 'overlay' && !pShape.overlayOpen) {
-                                canOpen = false;
-                                break;
-                            }
-                            pid = pShape.parent;
+                const overlayShapes = Array.from(this.shapes.values())
+                    .filter(shape => shape.groupMode === 'overlay' && shape.overlayOpen);
+
+                const getDepth = (s) => {
+                    let d = 0, p = s.parent;
+                    while (p) { d++; p = this.shapes.get(p)?.parent; }
+                    return d;
+                };
+                overlayShapes.sort((a, b) => getDepth(a) - getDepth(b));
+
+                overlayShapes.forEach(shape => {
+                    // 先祖に閉じているオーバーレイがないか確認
+                    let canOpen = true;
+                    let pid = shape.parent;
+                    while (pid) {
+                        const pShape = this.shapes.get(pid);
+                        if (!pShape) break;
+                        if (pShape.groupMode === 'overlay' && !pShape.overlayOpen) {
+                            canOpen = false;
+                            break;
                         }
-                        if (canOpen) {
-                            this.groupManager.overlayStrategy.openOverlay(shape);
-                        } else {
-                            shape._overlayWasOpen = true;
-                        }
+                        pid = pShape.parent;
+                    }
+                    if (canOpen) {
+                        this.groupManager.overlayStrategy.openOverlay(shape);
+                    } else {
+                        shape._overlayWasOpen = true;
                     }
                 });
             }

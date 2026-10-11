@@ -509,7 +509,19 @@ export class StorageManager {
             const overlayStrat = this.flowchartApp.groupManager.overlayStrategy;
             this.flowchartApp.shapes.forEach(shape => {
                 if (shape.groupMode === 'overlay') {
-                    shape.overlayOpen = overlayStrat.isOverlayOpen(shape.id) || !!shape._overlayWasOpen;
+                    const isOpen = overlayStrat.isOverlayOpen(shape.id);
+                    shape.overlayOpen = isOpen || !!shape._overlayWasOpen;
+                    if (isOpen) {
+                        const overlay = overlayStrat.openOverlays.get(shape.id);
+                        if (overlay && overlay.areaElement) {
+                            shape.overlayBounds = {
+                                x: overlay.x,
+                                y: overlay.y,
+                                width: overlay.width,
+                                height: overlay.height
+                            };
+                        }
+                    }
                 }
             });
         }

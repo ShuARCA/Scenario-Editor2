@@ -108,12 +108,10 @@ export class OverlayCanvas {
         this._ensureChildPositions();
         this._showChildren();
 
-        // shape.overlayBounds が保存済みであれば復元し、子が枠外に出ていれば拡張
+        // shape.overlayBounds が保存済みであれば復元（手動リサイズされたサイズ・位置を保持）
         // 未保存（初回展開）であれば子ノード群からfitで計算
         if (this.shape.overlayBounds) {
             this.setBounds(this.shape.overlayBounds);
-            // 子が枠外に出ている場合だけ拡張（手動リサイズ結果を保護）
-            this.updateAreaBounds('expand');
         } else {
             this.updateAreaBounds('fit');
         }
@@ -441,6 +439,7 @@ export class OverlayCanvas {
         closeBtn.className = 'overlay-area-close-btn';
         closeBtn.innerHTML = '&times;';
         closeBtn.title = '閉じる (Esc)';
+        closeBtn.addEventListener('pointerdown', (e) => e.stopPropagation());
         closeBtn.addEventListener('mousedown', (e) => e.stopPropagation());
         closeBtn.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -451,10 +450,10 @@ export class OverlayCanvas {
         this.headerElement.appendChild(closeBtn);
         this.areaElement.appendChild(this.headerElement);
 
-        // ヘッダードラッグ
-        this.headerElement.addEventListener('mousedown', (e) => {
+        // ヘッダードラッグ（ポインター・タッチ・マウス対応）
+        this.headerElement.addEventListener('pointerdown', (e) => {
             if (e.button !== 0) return;
-            if (e.target === closeBtn) return;
+            if (e.target === closeBtn || closeBtn.contains(e.target)) return;
             const isCtrl = e.ctrlKey || e.metaKey;
             this._startHeaderDrag(e, isCtrl);
         });
@@ -1004,6 +1003,9 @@ export class OverlayCanvas {
      * @private
      */
     _setupEvents() {
+        window.addEventListener('pointermove', this._onMouseMove);
+        window.addEventListener('pointerup', this._onMouseUp);
+        window.addEventListener('pointercancel', this._onMouseUp);
         window.addEventListener('mousemove', this._onMouseMove);
         window.addEventListener('mouseup', this._onMouseUp);
         document.addEventListener('keydown', this._onKeyDown);
@@ -1014,6 +1016,9 @@ export class OverlayCanvas {
      * @private
      */
     _removeEvents() {
+        window.removeEventListener('pointermove', this._onMouseMove);
+        window.removeEventListener('pointerup', this._onMouseUp);
+        window.removeEventListener('pointercancel', this._onMouseUp);
         window.removeEventListener('mousemove', this._onMouseMove);
         window.removeEventListener('mouseup', this._onMouseUp);
         document.removeEventListener('keydown', this._onKeyDown);

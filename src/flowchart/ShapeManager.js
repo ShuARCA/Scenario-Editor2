@@ -41,6 +41,13 @@ export class ShapeManager {
         this._lastClickTime = 0;
         this._lastClickShapeId = null;
         this._isPotentialDoubleClick = false;
+
+        // 範囲選択操作状態
+        this.isBoxSelecting = false;
+        this.boxSelectStartPos = { x: 0, y: 0 };
+        this.initialSelectedShapeIds = new Set();
+        this.initialSelectedOverlayIds = new Set();
+        this.selectionBoxEl = null;
     }
 
     /**
@@ -241,6 +248,9 @@ export class ShapeManager {
      * オーバーレイキャンバスの選択状態も同時に解除します。
      */
     clearSelection() {
+        if (this.isBoxSelecting) {
+            this.endBoxSelection();
+        }
         this._clearSingleSelectTimer();
         this.app.shapes.forEach(s => {
             if (s.element) s.element.classList.remove('selected');
@@ -344,7 +354,129 @@ export class ShapeManager {
         this.clearSelection();
     }
 
+    // =====================================================
+    // 範囲選択（矩形選択）操作
+    // =====================================================
 
+    /**
+     * 選択枠要素を取得または生成します。
+     * @private
+     * @returns {HTMLElement|null}
+     */
+    _getOrCreateSelectionBox() {
+        if (!this.selectionBoxEl) {
+            this.selectionBoxEl = document.createElement('div');
+            this.selectionBoxEl.className = 'flowchart-selection-box';
+            const container = this.app.canvasContent || this.app.canvas;
+            if (container) {
+                container.appendChild(this.selectionBoxEl);
+            }
+        }
+        return this.selectionBoxEl;
+    }
+
+    /**
+     * 範囲選択（矩形選択）を開始します。
+     * 
+     * @param {MouseEvent} e - マウスイベント
+     */
+    startBoxSelection(e) {
+        this.isBoxSelecting = true;
+        const { x, y } = this.app.clientToCanvasCoords(e.clientX, e.clientY);
+        this.boxSelectStartPos = { x, y };
+
+        // 既存の選択状態を保持（追加選択のため）
+        this.initialSelectedShapeIds = new Set(this.getSelectedShapes().map(s => s.id));
+        const initialOverlays = this.app.getSelectedOverlays?.() || [];
+        this.initialSelectedOverlayIds = new Set(initialOverlays.map(ov => ov.shape.id));
+
+        const boxEl = this._getOrCreateSelectionBox();
+        if (boxEl) {
+            boxEl.style.left = `${x}px`;
+            boxEl.style.top = `${y}px`;
+            boxEl.style.width = '0px';
+            boxEl.style.height = '0px';
+            boxEl.style.display = 'block';
+        }
+    }
+
+    /**
+     * 範囲選択（矩形選択）を更新します。
+     * 
+     * @param {MouseEvent} e - マウスイベント
+     */
+    updateBoxSelection(e) {
+        if (!this.isBoxSelecting) return;
+
+        const { x, y } = this.app.clientToCanvasCoords(e.clientX, e.clientY);
+        const minX = Math.min(this.boxSelectStartPos.x, x);
+        const maxX = Math.max(this.boxSelectStartPos.x, x);
+        const minY = Math.min(this.boxSelectStartPos.y, y);
+        const maxY = Math.max(this.boxSelectStartPos.y, y);
+
+        const boxEl = this._getOrCreateSelectionBox();
+        if (boxEl) {
+            boxEl.style.left = `${minX}px`;
+            boxEl.style.top = `${minY}px`;
+            boxEl.style.width = `${maxX - minX}px`;
+            boxEl.style.height = `${maxY - minY}px`;
+        }
+
+        // 1. ノード（シェイプ）の完全包含判定
+        this.app.shapes.forEach(shape => {
+            if (!shape.element) return;
+            // 非表示ノード（折りたたまれたグループ内の子ノードなど）は除外
+            if (shape.element.style.display === 'none' || shape.visible === false) return;
+
+            const shapeRight = shape.x + shape.width;
+            const shapeBottom = shape.y + shape.height;
+            const isContained = shape.x >= minX && shapeRight <= maxX && shape.y >= minY && shapeBottom <= maxY;
+
+            if (this.initialSelectedShapeIds.has(shape.id) || isContained) {
+                shape.element.classList.add('selected');
+            } else {
+                shape.element.classList.remove('selected');
+            }
+        });
+
+        // 2. 開いているグループ枠（オーバーレイ枠）の完全包含判定
+        const openOverlays = this.app.groupManager?.overlayStrategy?.openOverlays;
+        if (openOverlays) {
+            for (const [shapeId, overlay] of openOverlays) {
+                if (!overlay.areaElement) continue;
+                const ovRight = overlay.x + overlay.width;
+                const ovBottom = overlay.y + overlay.height;
+                const isContained = overlay.x >= minX && ovRight <= maxX && overlay.y >= minY && ovBottom <= maxY;
+
+                if (this.initialSelectedOverlayIds.has(shapeId) || isContained) {
+                    overlay.areaElement.classList.add('selected');
+                } else {
+                    overlay.areaElement.classList.remove('selected');
+                }
+            }
+        }
+
+        this._updateMultiSelectionClass();
+    }
+
+    /**
+     * 範囲選択（矩形選択）を終了します。
+     * 
+     * @param {MouseEvent} [e] - マウスイベント
+     */
+    endBoxSelection(e) {
+        if (!this.isBoxSelecting) return;
+        this.isBoxSelecting = false;
+
+        if (this.selectionBoxEl) {
+            this.selectionBoxEl.style.display = 'none';
+        }
+
+        this.initialSelectedShapeIds = new Set();
+        this.initialSelectedOverlayIds = new Set();
+
+        this._updateMultiSelectionClass();
+    }
 
     // =====================================================
     // ドラッグ操作
@@ -358,6 +490,8 @@ export class ShapeManager {
      * @param {boolean} [isCtrl=false] - Ctrlキー（またはCmdキー）が押されているかどうか
      */
     startDrag(e, shapeEl, isCtrl = false) {
+        if (this.isDragging) return;
+
         const shape = this.app.shapes.get(shapeEl.id);
         if (!shape) {
             console.warn(`Shape data not found for id: ${shapeEl.id}`);
@@ -411,10 +545,21 @@ export class ShapeManager {
         const { x: mouseX, y: mouseY } = this.app.clientToCanvasCoords(e.clientX, e.clientY);
         this.dragStartCanvasPos = { x: mouseX, y: mouseY };
 
-        // 選択中のシェイプ群から、祖先が選択ノードに含まれていないルート移動対象ノードを抽出
-        // （祖先が移動すれば子孫は moveGroupRecursive で自動追従するため、二重移動を防ぐ）
+        // 選択中のシェイプ群およびオーバーレイ群から、ドラッグ対象となるルート要素を抽出
+        this._setupDraggedRoots();
+    }
+
+    /**
+     * ドラッグ移動対象となるルートシェイプ群およびルートオーバーレイ群を抽出し、
+     * this.draggedRootShapes および this.draggedRootOverlays に設定します。
+     * 親の移動で自動追従する子孫要素を除外して二重移動を防止します。
+     * @private
+     */
+    _setupDraggedRoots() {
         const selectedShapes = this.getSelectedShapes();
         const selectedIds = new Set(selectedShapes.map(s => s.id));
+        const selectedOverlays = this.app.getSelectedOverlays?.() || [];
+        const overlayParentIds = new Set(selectedOverlays.map(ov => ov.shape.id));
 
         const isAncestorSelected = (s) => {
             let pId = s.parent;
@@ -426,28 +571,55 @@ export class ShapeManager {
             return false;
         };
 
+        // 選択ノードの中で、選択オーバーレイの内部子ノードなら除外（オーバーレイの移動で追従する）
+        const isInsideSelectedOverlay = (s) => {
+            let pId = s.parent;
+            while (pId) {
+                if (overlayParentIds.has(pId)) return true;
+                const p = this.app.shapes.get(pId);
+                pId = p ? p.parent : null;
+            }
+            return false;
+        };
+
         this.draggedRootShapes = selectedShapes
-            .filter(s => !isAncestorSelected(s))
-            .map(s => ({
-                shape: s,
-                startX: s.x,
-                startY: s.y
+            .filter(s => !isAncestorSelected(s) && !isInsideSelectedOverlay(s))
+            .map(s => ({ shape: s, startX: s.x, startY: s.y }));
+
+        // 祖先に選択シェイプまたは選択オーバーレイがあるオーバーレイは除外（親の移動で追従するため）
+        const isOverlayAncestorSelected = (ov) => {
+            if (selectedIds.has(ov.shape.id)) return true;
+            let pId = ov.shape.parent;
+            while (pId) {
+                if (selectedIds.has(pId) || overlayParentIds.has(pId)) return true;
+                const p = this.app.shapes.get(pId);
+                pId = p ? p.parent : null;
+            }
+            return false;
+        };
+
+        this.draggedRootOverlays = selectedOverlays
+            .filter(ov => !isOverlayAncestorSelected(ov))
+            .map(ov => ({
+                overlay: ov,
+                startX: ov.x,
+                startY: ov.y,
             }));
     }
 
     /**
      * ドラッグを更新します。
-     * 選択中の全ルートノードをまとめて移動します。
+     * 選択中の全ルートノードおよびルートオーバーレイキャンバスをまとめて移動します。
      * 
      * @param {MouseEvent} e - マウスイベント
      */
     updateDrag(e) {
         if (!this.isDragging || !this.dragTarget) return;
 
-        // 移動判定（わずかなマウス揺れはクリックとして扱う）
+        // 移動判定（わずかな指やマウスの揺れはクリックとして扱う）
         const dx = Math.abs(e.clientX - this.dragStartPos.x);
         const dy = Math.abs(e.clientY - this.dragStartPos.y);
-        if (dx > 3 || dy > 3) this.hasMoved = true;
+        if (dx > 4 || dy > 4) this.hasMoved = true;
 
         if (!this.hasMoved) return;
 
@@ -455,46 +627,53 @@ export class ShapeManager {
         const totalDeltaX = mouseX - this.dragStartCanvasPos.x;
         const totalDeltaY = mouseY - this.dragStartCanvasPos.y;
 
-        if (!this.draggedRootShapes || this.draggedRootShapes.length === 0) return;
+        const hasShapes = this.draggedRootShapes && this.draggedRootShapes.length > 0;
+        const hasOverlays = this.draggedRootOverlays && this.draggedRootOverlays.length > 0;
+        if (!hasShapes && !hasOverlays) return;
 
-        for (const item of this.draggedRootShapes) {
-            const newX = item.startX + totalDeltaX;
-            const newY = item.startY + totalDeltaY;
+        // 選択中のシェイプを一括移動
+        if (hasShapes) {
+            for (const item of this.draggedRootShapes) {
+                const newX = item.startX + totalDeltaX;
+                const newY = item.startY + totalDeltaY;
 
-            const stepDeltaX = newX - item.shape.x;
-            const stepDeltaY = newY - item.shape.y;
+                const stepDeltaX = newX - item.shape.x;
+                const stepDeltaY = newY - item.shape.y;
 
-            item.shape.x = newX;
-            item.shape.y = newY;
-            this.updateShapePosition(item.shape);
+                item.shape.x = newX;
+                item.shape.y = newY;
+                this.updateShapePosition(item.shape);
 
-            // グループ（子ノード・オーバーレイ枠）を追従移動
-            this.app.groupManager?.moveGroupRecursive(item.shape, stepDeltaX, stepDeltaY);
+                // グループ（子ノード・オーバーレイ枠）を追従移動
+                this.app.groupManager?.moveGroupRecursive(item.shape, stepDeltaX, stepDeltaY);
+            }
         }
 
-        // 選択中のオーバーレイキャンバス（ドラッグ対象以外）も一括移動
-        for (const item of (this.draggedRootOverlays || [])) {
-            const newX = item.startX + totalDeltaX;
-            const newY = item.startY + totalDeltaY;
-            const stepDeltaX = newX - item.overlay.x;
-            const stepDeltaY = newY - item.overlay.y;
+        // 選択中のオーバーレイキャンバスを一括移動
+        if (hasOverlays) {
+            for (const item of this.draggedRootOverlays) {
+                const newX = item.startX + totalDeltaX;
+                const newY = item.startY + totalDeltaY;
+                const stepDeltaX = newX - item.overlay.x;
+                const stepDeltaY = newY - item.overlay.y;
 
-            item.overlay.move(stepDeltaX, stepDeltaY);
+                item.overlay.move(stepDeltaX, stepDeltaY);
 
-            // オーバーレイ内の子ノードも全て平行移動
-            if (item.overlay.shape.children) {
-                item.overlay.shape.children.forEach(childId => {
-                    const child = this.app.shapes.get(childId);
-                    if (child) {
-                        child.x += stepDeltaX;
-                        child.y += stepDeltaY;
-                        this.app.groupManager?.updateShapeDOM(child);
-                        if (child.children?.length > 0) {
-                            this.app.groupManager?._moveChildrenRecursive(child, stepDeltaX, stepDeltaY);
+                // オーバーレイ内の子ノードも全て平行移動
+                if (item.overlay.shape.children) {
+                    item.overlay.shape.children.forEach(childId => {
+                        const child = this.app.shapes.get(childId);
+                        if (child) {
+                            child.x += stepDeltaX;
+                            child.y += stepDeltaY;
+                            this.app.groupManager?.updateShapeDOM(child);
+                            if (child.children?.length > 0) {
+                                this.app.groupManager?._moveChildrenRecursive(child, stepDeltaX, stepDeltaY);
+                            }
+                            this.app.groupManager?.moveOverlaysRecursive(child, stepDeltaX, stepDeltaY);
                         }
-                        this.app.groupManager?.moveOverlaysRecursive(child, stepDeltaX, stepDeltaY);
-                    }
-                });
+                    });
+                }
             }
         }
 
@@ -526,12 +705,18 @@ export class ShapeManager {
                 if (this._shouldSingleSelectOnMouseUp) {
                     const targetId = this.dragTarget.id;
                     const headingId = shape?.headingId;
+                    const isOverlay = this._isOverlayDragging;
+                    const activeOverlay = this._activeDragOverlay;
                     // 直ちに単一選択にせず、ダブルクリックの可能性を待つために遅延実行
                     this._singleSelectTimer = setTimeout(() => {
                         this._singleSelectTimer = null;
-                        this.selectShape(targetId, false);
-                        if (headingId && this.app.editorManager) {
-                            this.app.editorManager.scrollToHeading(headingId);
+                        if (isOverlay && activeOverlay) {
+                            activeOverlay.select(false);
+                        } else {
+                            this.selectShape(targetId, false);
+                            if (headingId && this.app.editorManager) {
+                                this.app.editorManager.scrollToHeading(headingId);
+                            }
                         }
                     }, 250);
                 } else if (!this._isPotentialDoubleClick && shape?.headingId && this.app.editorManager) {
@@ -552,6 +737,8 @@ export class ShapeManager {
         this.dragTarget = null;
         this.hasMoved = false;
         this._shouldSingleSelectOnMouseUp = false;
+        this._isOverlayDragging = false;
+        this._activeDragOverlay = null;
         this.draggedRootShapes = [];
         this.draggedRootOverlays = [];
     }
@@ -575,6 +762,7 @@ export class ShapeManager {
             const isNowSelected = overlayCanvas.toggleSelect();
             if (!isNowSelected) {
                 this.isDragging = false;
+                this.dragTarget = null;
                 return;
             }
         } else {
@@ -582,57 +770,23 @@ export class ShapeManager {
                 overlayCanvas.select(false);
             } else {
                 // 既に選択済み: 複数選択を維持してドラッグ準備
+                const selectedCount = this.getSelectedShapes().length;
+                const overlayCount = this.app.getSelectedOverlays?.()?.length || 0;
+                if (selectedCount + overlayCount > 1) {
+                    this._shouldSingleSelectOnMouseUp = true;
+                }
             }
         }
 
         this.isDragging = true;
         this.dragTarget = overlayCanvas.areaElement;
+        this._activeDragOverlay = overlayCanvas;
         this.dragStartPos = { x: e.clientX, y: e.clientY };
         this.dragStartCanvasPos = this.app.clientToCanvasCoords(e.clientX, e.clientY);
         this.hasMoved = false;
-        this._shouldSingleSelectOnMouseUp = false;
         this._isOverlayDragging = true;
 
-        // 選択中のノードのドラッグ対象を障定
-        const selectedShapes = this.getSelectedShapes();
-        const selectedIds = new Set(selectedShapes.map(s => s.id));
-
-        const isAncestorSelected = (s) => {
-            let pId = s.parent;
-            while (pId) {
-                if (selectedIds.has(pId)) return true;
-                const p = this.app.shapes.get(pId);
-                pId = p ? p.parent : null;
-            }
-            return false;
-        };
-
-        // 選択中オーバーレイの内部子ノードを除外したノードのドラッグ対象を記録
-        const selectedOverlays = this.app.getSelectedOverlays?.() || [];
-        const overlayParentIds = new Set(selectedOverlays.map(ov => ov.shape.id));
-
-        // 選択ノードの中で、選択オーバーレイの内部子ノードなら除外（オーバレイの移動で追従する）
-        const isInsideSelectedOverlay = (s) => {
-            let pId = s.parent;
-            while (pId) {
-                if (overlayParentIds.has(pId)) return true;
-                const p = this.app.shapes.get(pId);
-                pId = p ? p.parent : null;
-            }
-            return false;
-        };
-
-        this.draggedRootShapes = selectedShapes
-            .filter(s => !isAncestorSelected(s) && !isInsideSelectedOverlay(s))
-            .map(s => ({ shape: s, startX: s.x, startY: s.y }));
-
-        // オーバーレイが移動するための初期位置を記録
-        this.draggedRootOverlays = selectedOverlays
-            .map(ov => ({
-                overlay: ov,
-                startX: ov.x,
-                startY: ov.y,
-            }));
+        this._setupDraggedRoots();
 
         e.preventDefault();
         e.stopPropagation();
@@ -650,6 +804,7 @@ export class ShapeManager {
      * @param {HTMLElement} handle - リサイズハンドル
      */
     startResize(e, handle) {
+        if (this.isResizing) return;
         e.stopPropagation();
         const shapeEl = handle.closest('.shape');
         if (!shapeEl) return;
@@ -955,8 +1110,22 @@ export class ShapeManager {
             this.app.groupManager?.moveGroupRecursive(shape, deltaX, deltaY);
         }
 
+        // 祖先に選択シェイプまたは選択オーバーレイがあるオーバーレイは除外（親の移動で追従するため）
+        const isOverlayAncestorSelected = (ov) => {
+            if (selectedIds.has(ov.shape.id)) return true;
+            let pId = ov.shape.parent;
+            while (pId) {
+                if (selectedIds.has(pId) || overlayParentIds.has(pId)) return true;
+                const p = this.app.shapes.get(pId);
+                pId = p ? p.parent : null;
+            }
+            return false;
+        };
+
+        const rootOverlays = selectedOverlays.filter(ov => !isOverlayAncestorSelected(ov));
+
         // 選択中オーバーレイおよびその内部子ノードも一括移動
-        for (const overlay of selectedOverlays) {
+        for (const overlay of rootOverlays) {
             overlay.move(deltaX, deltaY);
             if (overlay.shape.children) {
                 overlay.shape.children.forEach(childId => {
@@ -998,5 +1167,14 @@ export class ShapeManager {
      */
     isResizingActive() {
         return this.isResizing;
+    }
+
+    /**
+     * 範囲選択中かどうかを取得します。
+     * 
+     * @returns {boolean}
+     */
+    isBoxSelectingActive() {
+        return this.isBoxSelecting;
     }
 }
