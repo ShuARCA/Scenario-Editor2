@@ -11,6 +11,7 @@
 export * from '@tiptap/core';
 import { Node, mergeAttributes, Extension, Mark } from '@tiptap/core';
 import { DOMParser } from '@tiptap/pm/model';
+import { Plugin, PluginKey } from '@tiptap/pm/state';
 
 // Extensions (拡張機能)
 import StarterKit from '@tiptap/starter-kit';
@@ -31,6 +32,8 @@ export {
     Extension,
     Mark,
     DOMParser,
+    Plugin,
+    PluginKey,
 
     // バンドルする拡張機能
     StarterKit,

@@ -2,17 +2,17 @@
  * HeadingWithId - Tiptap用 見出し拡張機能
  * 
  * このモジュールは、Tiptapエディタの見出し（H1-H4）に以下の機能を追加します：
- * - id属性の自動生成と永続化
+ * - id属性の自動生成と永続化（複数行選択時の個別ユニークID付与、重複IDの自動解消）
  * - data-outline-icon属性によるアウトライン機能との連携
  * 
  * 設計思想:
  * - Single Source of Truth: Tiptap状態を唯一の情報源とする
- * - 自動ID付与: onCreate/onTransactionフックでIDを確実に付与
- * - Undo履歴に影響しない: ID付与は履歴に残さない
+ * - 同期的一意性保証: ProseMirrorのappendTransactionフックでドキュメント変更時に同期的にIDの重複・未設定を検知・補正
+ * - Undo履歴に影響しない: 自動ID補正は履歴に残さない（addToHistory: false）
  * 
  * @module extensions/headingWithId
  */
-import { Node, mergeAttributes } from 'tiptap';
+import { Node, mergeAttributes, Plugin, PluginKey } from 'tiptap';
 
 // ============================================================
 // 定数・設定
@@ -62,43 +62,47 @@ function isValidLevel(level, validLevels) {
 // ============================================================
 
 /**
- * 全見出しノードのID付与を確認・補完します。
+ * 全見出しノードのID付与・重複解消を確認・補完します。
  * 
  * この関数は以下のタイミングで呼び出されます：
  * - エディタ作成時（onCreate）
- * - ドキュメント変更時（onTransaction）
+ * - 外部からの明示的呼び出し（commands.ensureHeadingIds）
  * 
  * 特徴:
- * - IDがない見出しのみに新規IDを付与
+ * - IDがない見出し、または重複している見出しに新規ユニークIDを付与
  * - Undo履歴には残さない（addToHistory: false）
  * - 変更がない場合はdispatchしない（パフォーマンス考慮）
  * 
- * @param {import('tiptap').Editor} editor - Tiptapエディタインスタンス
+ * @param {Object} editor - Tiptapエディタインスタンス
  */
 function ensureHeadingIds(editor) {
+    if (!editor || !editor.state) return;
     const { state } = editor;
     const { tr, doc } = state;
     let hasModifications = false;
+    const seenIds = new Set();
 
     // ドキュメント内の全ノードを走査
     doc.descendants((node, pos) => {
-        // 見出しノードでIDがない場合のみ処理
-        if (node.type.name === 'heading' && !node.attrs.id) {
-            const newId = generateId();
-
-            // ノードの属性を更新（IDを付与）
-            tr.setNodeMarkup(pos, undefined, {
-                ...node.attrs,
-                id: newId
-            });
-
-            hasModifications = true;
+        if (node.type.name === 'heading') {
+            const currentId = node.attrs.id;
+            // IDがない、または既に出現したID（重複）の場合に新規IDを割り当て
+            if (!currentId || seenIds.has(currentId)) {
+                const newId = generateId();
+                tr.setNodeMarkup(pos, undefined, {
+                    ...node.attrs,
+                    id: newId
+                });
+                seenIds.add(newId);
+                hasModifications = true;
+            } else {
+                seenIds.add(currentId);
+            }
         }
     });
 
     // 変更があった場合のみ適用
     if (hasModifications) {
-        // Undo履歴に残さない設定
         tr.setMeta('addToHistory', false);
         editor.view.dispatch(tr);
     }
@@ -112,7 +116,7 @@ function ensureHeadingIds(editor) {
  * HeadingWithId拡張
  * 
  * StarterKitのHeading拡張を上書きし、以下の機能を追加：
- * - 見出しへのID自動付与
+ * - 見出しへのID自動付与（複数行選択時の個別ID付与・同期的な重複検知補正）
  * - アウトラインアイコンの管理
  * - 各種コマンド（setHeading, toggleHeading, setHeadingIcon）
  */
@@ -194,31 +198,70 @@ export const HeadingWithId = Node.create({
     },
 
     // ========================================
+    // ProseMirror プラグイン（同期的な一意性保証）
+    // ========================================
+
+    /**
+     * ProseMirrorプラグインを追加します。
+     * ドキュメント変更時に同期的にIDの未設定・重複を検知し、即座にユニークIDを付与します。
+     * 
+     * @returns {Array} プラグイン配列
+     */
+    addProseMirrorPlugins() {
+        return [
+            new Plugin({
+                key: new PluginKey('headingWithIdSync'),
+                appendTransaction: (transactions, _oldState, newState) => {
+                    // ドキュメント内容の変更がない場合は何もしない
+                    const docChanged = transactions.some(tr => tr.docChanged);
+                    if (!docChanged) return null;
+
+                    const { doc } = newState;
+                    const tr = newState.tr;
+                    let hasModifications = false;
+                    const seenIds = new Set();
+
+                    doc.descendants((node, pos) => {
+                        if (node.type.name === 'heading') {
+                            const currentId = node.attrs.id;
+                            // IDがない、または重複している場合は新規ユニークIDを割り当て
+                            if (!currentId || seenIds.has(currentId)) {
+                                const newId = generateId();
+                                tr.setNodeMarkup(pos, undefined, {
+                                    ...node.attrs,
+                                    id: newId
+                                });
+                                seenIds.add(newId);
+                                hasModifications = true;
+                            } else {
+                                seenIds.add(currentId);
+                            }
+                        }
+                    });
+
+                    if (hasModifications) {
+                        // Undo履歴に影響を与えずに同期適用
+                        tr.setMeta('addToHistory', false);
+                        return tr;
+                    }
+
+                    return null;
+                }
+            })
+        ];
+    },
+
+    // ========================================
     // ライフサイクルフック
     // ========================================
 
     /**
      * エディタ作成時の処理
-     * 初期コンテンツの全見出しにIDを付与
+     * 初期コンテンツの全見出しにIDを付与・重複解消
      */
     onCreate() {
-        // 初回レンダリング完了後に実行
+        // 初回レンダリング完了後に念のため補正実行
         setTimeout(() => ensureHeadingIds(this.editor), 0);
-    },
-
-    /**
-     * トランザクション発生時の処理
-     * 新規見出し作成時にIDを自動付与
-     * 
-     * @param {Object} param0 - トランザクション情報
-     * @param {Transaction} param0.transaction - ProseMirrorトランザクション
-     */
-    onTransaction({ transaction }) {
-        // ドキュメント変更時のみ処理
-        if (transaction.docChanged) {
-            // 現在のトランザクション完了後に実行
-            setTimeout(() => ensureHeadingIds(this.editor), 0);
-        }
     },
 
     // ========================================
@@ -271,46 +314,110 @@ export const HeadingWithId = Node.create({
     addCommands() {
         return {
             /**
-             * 選択範囲を見出しに変換します。
+             * 選択範囲を見出しに変換します（複数行選択時は各行に固有のユニークIDを付与）。
              * 
              * @param {Object} attributes - 見出し属性
              * @param {number} attributes.level - 見出しレベル（1-4）
-             * @param {string} [attributes.id] - 見出しID（省略時は自動生成）
+             * @param {string} [attributes.id] - 見出しID（単一選択時のみ有効、省略時または複数行時は自動生成）
              * @param {string} [attributes.outlineIcon] - アウトラインアイコンID
              * @returns {Function} コマンド関数
              */
-            setHeading: (attributes) => ({ commands }) => {
-                if (!isValidLevel(attributes.level, this.options.levels)) {
+            setHeading: (attributes) => ({ tr, state }) => {
+                const { level } = attributes;
+                if (!isValidLevel(level, this.options.levels)) {
                     return false;
                 }
 
-                const attrs = {
-                    ...attributes,
-                    id: attributes.id || generateId()
-                };
+                const headingType = state.schema.nodes[this.name];
+                if (!headingType) return false;
 
-                return commands.setNode(this.name, attrs);
+                const { from, to } = state.selection;
+                const targets = [];
+                state.doc.nodesBetween(from, to, (node, pos) => {
+                    if (node.isTextblock) {
+                        targets.push({ node, pos });
+                        return false;
+                    }
+                });
+
+                if (targets.length === 0) return false;
+
+                targets.forEach(({ node, pos }) => {
+                    const mappedPos = tr.mapping.map(pos);
+                    const $pos = tr.doc.resolve(mappedPos);
+                    const index = $pos.index();
+                    if ($pos.parent.canReplaceWith(index, index + 1, headingType)) {
+                        const newId = (targets.length === 1 && attributes.id) ? attributes.id : generateId();
+                        tr.setNodeMarkup(mappedPos, headingType, {
+                            ...node.attrs,
+                            ...attributes,
+                            level,
+                            id: newId,
+                            outlineIcon: attributes.outlineIcon || node.attrs.outlineIcon || DEFAULT_ICON
+                        });
+                    }
+                });
+
+                return true;
             },
 
             /**
-             * 見出しと段落をトグルします。
-             * 見出しの場合は段落に、段落の場合は見出しに変換
+             * 見出しと段落をトグルします（複数行選択時は各行に固有のユニークIDを付与）。
+             * 選択範囲内の全ノードが既に指定レベルの見出しである場合は段落に変換し、
+             * そうでない場合はすべて指定レベルの見出しに変換します。
              * 
              * @param {Object} attributes - 見出し属性
              * @param {number} attributes.level - 見出しレベル（1-4）
              * @returns {Function} コマンド関数
              */
-            toggleHeading: (attributes) => ({ commands }) => {
-                if (!isValidLevel(attributes.level, this.options.levels)) {
+            toggleHeading: (attributes) => ({ tr, state, commands }) => {
+                const { level } = attributes;
+                if (!isValidLevel(level, this.options.levels)) {
                     return false;
                 }
 
-                const attrs = {
-                    ...attributes,
-                    id: generateId()  // トグル時は新規ID
-                };
+                const headingType = state.schema.nodes[this.name];
+                if (!headingType) return false;
 
-                return commands.toggleNode(this.name, 'paragraph', attrs);
+                const { from, to } = state.selection;
+                const targets = [];
+                state.doc.nodesBetween(from, to, (node, pos) => {
+                    if (node.isTextblock) {
+                        targets.push({ node, pos });
+                        return false;
+                    }
+                });
+
+                if (targets.length === 0) return false;
+
+                // 選択範囲内のすべてのテキストブロックが既に該当レベルの見出しであるかチェック
+                const allSameHeading = targets.every(
+                    t => t.node.type === headingType && t.node.attrs.level === level
+                );
+
+                if (allSameHeading) {
+                    // 全て同じ見出しの場合は段落（paragraph）に戻す
+                    return commands.setParagraph();
+                }
+
+                // 見出しに変換（各ノードごとに新規ユニークIDを付与）
+                targets.forEach(({ node, pos }) => {
+                    const mappedPos = tr.mapping.map(pos);
+                    const $pos = tr.doc.resolve(mappedPos);
+                    const index = $pos.index();
+                    if ($pos.parent.canReplaceWith(index, index + 1, headingType)) {
+                        const newId = generateId();
+                        tr.setNodeMarkup(mappedPos, headingType, {
+                            ...node.attrs,
+                            ...attributes,
+                            level,
+                            id: newId,
+                            outlineIcon: node.attrs.outlineIcon || DEFAULT_ICON
+                        });
+                    }
+                });
+
+                return true;
             },
 
             /**
@@ -324,7 +431,7 @@ export const HeadingWithId = Node.create({
             },
 
             /**
-             * 全見出しにIDが付与されていることを確認します。
+             * 全見出しにIDが付与されていることを確認し、重複があれば解消します。
              * 外部から明示的にID付与を実行する場合に使用
              * 
              * @returns {Function} コマンド関数

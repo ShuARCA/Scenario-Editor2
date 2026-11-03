@@ -1,6 +1,17 @@
 import { defineConfig } from 'vitest/config';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 export default defineConfig({
+  resolve: {
+    alias: {
+      tiptap: path.resolve(__dirname, 'assets/vendor/tiptap.bundle.js'),
+      pdfjs: path.resolve(__dirname, 'assets/lib/pdf.min.mjs')
+    }
+  },
   test: {
     // テスト環境の設定
     environment: 'jsdom',

@@ -26,7 +26,8 @@ import {
     ColorPickerManager,
     ToolbarManager,
     BlockCopyManager,
-    LockManager
+    LockManager,
+    DirtyStateManager
 } from './managers/index.js';
 import { ShortcutManager } from './managers/ShortcutManager.js';
 
@@ -41,6 +42,10 @@ import { StorageManager } from './storage/index.js';
 import { PdfExportModal } from './ui/PdfExportModal.js';
 import { HtmlExportModal } from './ui/HtmlExportModal.js';
 
+// 見出し表示・レイヤー管理
+import { HeadingVisibilityManager } from './managers/HeadingVisibilityManager.js';
+import { HeadingVisibilityPopup } from './ui/HeadingVisibilityPopup.js';
+
 document.addEventListener('DOMContentLoaded', () => {
     // 1. コアモジュールの初期化
     const eventBus = new EventBus();
@@ -52,6 +57,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 2.5 ロックマネージャーの初期化
     const lockManager = new LockManager(eventBus);
+    const dirtyStateManager = new DirtyStateManager(eventBus);
 
     // 2.6 カスタムCSSマネージャーの初期化
     const customCssManager = new CustomCssManager();
@@ -161,13 +167,34 @@ document.addEventListener('DOMContentLoaded', () => {
     editorManagers.outline.shortcutManager = shortcutManager;
 
     // 6. コールバック設定（EditorManagerファサードがやっていた役割）
+    // 見出しの作成・削除・レベル変更を即座に検知するためのシグネチャキャッシュ
+    let lastHeadingSignature = editorManagers.outline.getHeadings().map(h => `${h.id}:${h.level}`).join('|');
+
+    const debouncedUpdate = debounce(() => {
+        editorManagers.outline.updateOutline();
+        eventBus.emit('editor:update', editorManagers.outline.getHeadings());
+        editorManagers.link.checkBrokenHeadingLinks();
+    }, CONFIG.EDITOR.DEBOUNCE_WAIT);
+
+    // 未保存変更の検知リスナー
+    eventBus.on('editor:rawUpdate', () => dirtyStateManager.markDirty());
+    eventBus.on('flowchart:change', () => dirtyStateManager.markDirty());
+
     editorCore.onUpdate(() => {
-        const debouncedUpdate = debounce(() => {
+        // 見出しの構造変化（作成・削除・レベル変動）をリアルタイム判定
+        const currentHeadings = editorManagers.outline.getHeadings();
+        const currentSignature = currentHeadings.map(h => `${h.id}:${h.level}`).join('|');
+
+        if (currentSignature !== lastHeadingSignature) {
+            lastHeadingSignature = currentSignature;
+            // 見出しの増減時はdebounceを待たずに即時反映（一括操作のグレーアウトを瞬時に更新）
             editorManagers.outline.updateOutline();
-            eventBus.emit('editor:update', editorManagers.outline.getHeadings());
+            eventBus.emit('editor:update', currentHeadings);
             editorManagers.link.checkBrokenHeadingLinks();
-        }, CONFIG.EDITOR.DEBOUNCE_WAIT);
-        debouncedUpdate();
+        } else {
+            // 通常の本文入力はdebounceで更新
+            debouncedUpdate();
+        }
     });
 
     editorCore.onSelectionUpdate(() => {
@@ -209,18 +236,32 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
 
+    // 6.5 見出し表示マネージャーとレイヤー管理ポップアップの初期化
+    const headingVisibilityManager = new HeadingVisibilityManager(eventBus);
+    editorManagers.outline.setVisibilityManager(headingVisibilityManager);
+
+    const headingVisibilityPopup = new HeadingVisibilityPopup({
+        visibilityManager: headingVisibilityManager,
+        outlineManager: editorManagers.outline,
+        eventBus
+    });
+
     // 7. フローチャートの初期化
     const flowchartApp = new FlowchartApp(eventBus);
     flowchartApp.setEditorManager(editorFacade); // フローチャートにもファサードを渡す（syncFromEditorなどで使用）
+    flowchartApp.setHeadingVisibilityManager(headingVisibilityManager);
     flowchartApp.init(); // 明示的に初期化
+    headingVisibilityPopup.setFlowchartApp(flowchartApp);
+    headingVisibilityPopup.setLocked(lockManager.isLocked());
 
     // 8. 検索・ストレージの初期化
     // SearchManagerにはEditorCoreを渡す（先ほどSearchManagerをEditorCore依存に修正したため）
     const searchManager = new SearchManager(editorCore);
 
     // StorageManagerには依存関係をフルセットで渡す（CustomCssManagerの追加）
-    const storageManager = new StorageManager(editorCore, editorManagers.colorPicker, flowchartApp, settingsManager, lockManager, customCssManager);
+    const storageManager = new StorageManager(editorCore, editorManagers.colorPicker, flowchartApp, settingsManager, lockManager, customCssManager, dirtyStateManager);
     storageManager.outlineManager = editorManagers.outline;
+    storageManager.setHeadingVisibilityManager(headingVisibilityManager);
     storageManager.setViewerExporterDeps({
         customCssManager,
         outlineManager: editorManagers.outline,
@@ -243,6 +284,11 @@ document.addEventListener('DOMContentLoaded', () => {
     editorManagers.outline.updateOutline();
     eventBus.emit('editor:update', editorManagers.outline.getHeadings());
 
+    // 表示変更時にアウトライン再描画
+    eventBus.on('heading:visibility:changed', () => {
+        editorManagers.outline.updateOutline();
+    });
+
     // 10. ロック変更イベントリスナー
     eventBus.on('lock:changed', (isLocked) => {
         editorCore.setLocked(isLocked);
@@ -254,6 +300,7 @@ document.addEventListener('DOMContentLoaded', () => {
         searchManager.setLocked(isLocked);
         shortcutManager.setLocked(isLocked);
         flowchartApp.setLocked(isLocked);
+        headingVisibilityPopup.setLocked(isLocked);
     });
 
     console.log('iEditWeb Initialized (Full Modular Structure)');

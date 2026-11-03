@@ -15,3 +15,4 @@ export { ColorPickerManager } from './ColorPickerManager.js';
 export { ToolbarManager } from './ToolbarManager.js';
 export { BlockCopyManager } from './BlockCopyManager.js';
 export { LockManager } from './LockManager.js';
+export { DirtyStateManager } from './DirtyStateManager.js';

@@ -197,9 +197,13 @@ body {
   display: flex;
   flex-direction: column;
   position: relative;
-  transition: margin-left 0.3s ease;
+  transition: width 0.22s cubic-bezier(0.16, 1, 0.3, 1), min-width 0.22s cubic-bezier(0.16, 1, 0.3, 1), margin-left 0.3s ease;
   flex-shrink: 0;
   margin-left: 0;
+}
+
+#sidebar:has(#resizer.resizing) {
+  transition: none !important;
 }
 
 #sidebar.collapsed {

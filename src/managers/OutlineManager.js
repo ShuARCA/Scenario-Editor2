@@ -11,6 +11,16 @@ import { CONFIG } from '../core/Config.js';
 import { scrollIntoView } from '../utils/dom.js';
 
 /**
+ * レイヤー表示管理用のSVGアイコン定義（ユーザー指定）
+ */
+const LAYER_VISIBILITY_ICONS = {
+    // 表示時（文字色と同様）
+    visible: `<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M607.5-372.5Q660-425 660-500t-52.5-127.5Q555-680 480-680t-127.5 52.5Q300-575 300-500t52.5 127.5Q405-320 480-320t127.5-52.5Zm-204-51Q372-455 372-500t31.5-76.5Q435-608 480-608t76.5 31.5Q588-545 588-500t-31.5 76.5Q525-392 480-392t-76.5-31.5ZM214-281.5Q94-363 40-500q54-137 174-218.5T480-800q146 0 266 81.5T920-500q-54 137-174 218.5T480-200q-146 0-266-81.5Z"/></svg>`,
+    // 非表示時（ミュートのグレーアウトカラー）
+    hidden: `<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="M792-56 624-222q-35 11-70.5 16.5T480-200q-151 0-269-83.5T40-500q21-53 53-98.5t73-81.5L56-792l56-56 736 736-56 56ZM480-320q11 0 20.5-1t20.5-4L305-541q-3 11-4 20.5t-1 20.5q0 75 52.5 127.5T480-320Zm292 18L645-428q7-17 11-34.5t4-37.5q0-75-52.5-127.5T480-680q-20 0-37.5 4T408-664L306-766q41-17 84-25.5t90-8.5q151 0 269 83.5T920-500q-23 59-60.5 109.5T772-302ZM587-486 467-606q28-5 51.5 4.5T559-574q17 18 24.5 41.5T587-486Z"/></svg>`
+};
+
+/**
  * アウトライン管理クラス
  */
 export class OutlineManager {
@@ -49,8 +59,112 @@ export class OutlineManager {
         /** @type {number} 1階層あたりのインデント幅(px) */
         this._outlineIndentWidth = 28; // デフォルト値。動的に計算して上書きされる
 
+        /** @type {import('./HeadingVisibilityManager.js').HeadingVisibilityManager|null} */
+        this.visibilityManager = null;
+
+        /** @type {boolean} レイヤー管理モード（サイドバー拡張）状態 */
+        this.isLayerMode = false;
+
+        /** @type {any} フローチャートAppへの参照 */
+        this.flowchartApp = null;
+
         // スタイルから1階層分のインデント幅を計算
         this._calculateOutlineIndentWidth();
+    }
+
+    /**
+     * 見出し表示マネージャーを設定します。
+     * @param {import('./HeadingVisibilityManager.js').HeadingVisibilityManager} manager
+     */
+    setVisibilityManager(manager) {
+        this.visibilityManager = manager;
+        if (manager && manager.eventBus) {
+            manager.eventBus.on('heading:visibility:changed', () => {
+                this.updateOutline();
+            });
+            manager.eventBus.on('heading:visibility:layer-ui-sync', () => {
+                this._refreshAllNodeButtons();
+            });
+        }
+    }
+
+    /**
+     * フローチャートAppへの参照を設定します。
+     * @param {any} flowchartApp
+     */
+    setFlowchartApp(flowchartApp) {
+        this.flowchartApp = flowchartApp;
+    }
+
+    /**
+     * レイヤー管理モード（サイドバー拡張表示）の有効/無効を切り替えます。
+     * @param {boolean} enabled
+     */
+    setLayerMode(enabled) {
+        this.isLayerMode = !!enabled;
+        this.updateOutline();
+    }
+
+    /**
+     * キャンバス上でグループ化されている親ノードが非表示状態かどうかを判定します。
+     * @private
+     * @param {string} headingId
+     * @returns {boolean}
+     */
+    _isParentNodeHiddenOnCanvas(headingId) {
+        if (!this.flowchartApp || !this.flowchartApp.shapes || !this.visibilityManager) return false;
+        const shapes = Array.from(this.flowchartApp.shapes.values());
+        const shape = shapes.find(s => (s.headingId || s.id) === headingId);
+        let currParentId = shape?.parent;
+        const visited = new Set();
+        while (currParentId) {
+            if (visited.has(currParentId)) break;
+            visited.add(currParentId);
+            const pShape = this.flowchartApp.shapes.get(currParentId);
+            if (!pShape) break;
+            const pHeadingId = pShape.headingId || pShape.id;
+            if (!this.visibilityManager.isFlowchartSelfVisible(pHeadingId)) {
+                return true;
+            }
+            currParentId = pShape.parent;
+        }
+        return false;
+    }
+
+    /**
+     * アウトライン一覧内のすべてのノードボタンの表示状態を即座に更新します。
+     * 親ノードの表示/非表示が切り替わった際に、配下の子ノードのボタンスタイルを同期します。
+     * @private
+     */
+    _refreshAllNodeButtons() {
+        if (!this.outlineList || !this.visibilityManager) return;
+        const buttons = this.outlineList.querySelectorAll('.outline-layer-btn.node-vis-btn');
+        buttons.forEach(btn => {
+            const controls = btn.closest('.outline-layer-controls');
+            const rowEl = btn.closest('.outline-item-row');
+            const headingId = controls?.dataset.headingId || rowEl?.querySelector('.outline-item')?.dataset.headingId;
+            if (!headingId) return;
+
+            const isParentHidden = this._isParentNodeHiddenOnCanvas(headingId);
+            const isNodeSelfVis = this.visibilityManager.isFlowchartSelfVisible(headingId);
+            const effectiveNodeVis = isNodeSelfVis && !isParentHidden;
+
+            let nodeBtnClass = 'outline-layer-btn node-vis-btn';
+            let nodeTitle = '';
+            if (isParentHidden) {
+                nodeBtnClass += ' is-parent-hidden is-hidden';
+                nodeTitle = '親ノードが非表示のため非表示（親を表示すると復帰）';
+            } else if (effectiveNodeVis) {
+                nodeBtnClass += ' is-visible';
+                nodeTitle = 'ノード表示中 (クリックで非表示)';
+            } else {
+                nodeBtnClass += ' is-hidden';
+                nodeTitle = 'ノード非表示中 (クリックで表示)';
+            }
+            btn.className = nodeBtnClass;
+            btn.title = nodeTitle;
+            btn.innerHTML = effectiveNodeVis ? LAYER_VISIBILITY_ICONS.visible : LAYER_VISIBILITY_ICONS.hidden;
+        });
     }
 
     /**
@@ -176,16 +290,27 @@ export class OutlineManager {
         const editorContainer = this.editor.editorContainer;
         const tiptapElement = editorContainer?.querySelector('.tiptap');
 
+        let headingIndex = 0;
         // Tiptap状態から見出し情報を取得
         this.editor.tiptap.state.doc.descendants((node, pos) => {
             if (node.type.name === 'heading') {
                 const level = node.attrs.level;
-                const id = node.attrs.id;
+                let id = node.attrs.id;
                 const text = node.textContent || '';
                 const icon = node.attrs.outlineIcon || 'document';
 
+                // IDが未設定の場合のフォールバック
+                if (!id) {
+                    const domHeadings = tiptapElement?.querySelectorAll(`h1, h2, h3, h4, h5, h6`);
+                    if (domHeadings && domHeadings[headingIndex]?.id) {
+                        id = domHeadings[headingIndex].id;
+                    } else {
+                        id = `h-${headingIndex + 1}-${pos}`;
+                    }
+                }
+
                 // DOM要素への参照も取得（既存APIとの互換性維持）
-                const element = tiptapElement?.querySelector(`h${level}[id="${id}"]`);
+                const element = tiptapElement?.querySelector(`[id="${id}"]`) || tiptapElement?.querySelectorAll(`h${level}`)[headingIndex];
 
                 headings.push({
                     text,
@@ -194,6 +319,7 @@ export class OutlineManager {
                     id,
                     icon
                 });
+                headingIndex++;
             }
         });
 
@@ -213,6 +339,10 @@ export class OutlineManager {
         const headings = this.getHeadings();
         if (headings.length === 0) {
             this.outlineList.innerHTML = '<div class="outline-empty">No heading</div>';
+            const eventBus = this.editor?.eventBus || this.visibilityManager?.eventBus;
+            if (eventBus) {
+                eventBus.emit('outline:updated', []);
+            }
             return;
         }
 
@@ -229,6 +359,11 @@ export class OutlineManager {
         // コンテキストメニューが開いている場合はアンカーを再設定
         if (this.contextMenuTargetId && this.contextMenu && !this.contextMenu.classList.contains('hidden')) {
             this._reanchorToCurrentTarget();
+        }
+
+        const eventBus = this.editor?.eventBus || this.visibilityManager?.eventBus;
+        if (eventBus) {
+            eventBus.emit('outline:updated', headings);
         }
     }
 
@@ -287,20 +422,38 @@ export class OutlineManager {
             wrapper.style.paddingLeft = `0px`;
         }
 
+        // 行コンテナ（見出し項目部とレイヤー操作部を同じ行で切り分けて配置）
+        const rowEl = document.createElement('div');
+        rowEl.className = 'outline-item-row';
+
+        // 1. 見出し項目部 (通常時・管理モードで構成は完全に同一)
         const itemEl = document.createElement('div');
         itemEl.className = 'outline-item';
         itemEl.dataset.headingId = item.id;
 
-        // 1. アイコン
+        // 表示/非表示判定
+        const isSelfOutlineVisible = !this.visibilityManager || this.visibilityManager.isOutlineVisible(item.id);
+        if (this.isLayerMode) {
+            // レイヤー管理モード中：非表示項目は見出し本体をグレーアウト表示
+            if (!isSelfOutlineVisible) {
+                itemEl.classList.add('outline-hidden-preview');
+            }
+        } else {
+            // 通常モード：非表示項目は完全に隠す
+            if (!isSelfOutlineVisible) {
+                itemEl.classList.add('hidden-by-visibility');
+                itemEl.style.display = 'none';
+            }
+        }
+
+        // 1-1. アイコン
         const iconEl = document.createElement('div');
         iconEl.className = 'outline-icon';
         // アイコン表示ロジックの復元
         if (item.icon && item.icon !== 'none' && OUTLINE_ICONS[item.icon]) {
             iconEl.innerHTML = OUTLINE_ICONS[item.icon].svg;
         } else if (item.icon && OUTLINE_ICONS[item.icon]) {
-            // item.iconはあるが 'none' でないかどうかのチェックが漏れた場合の保険、または明示的なデフォルト
-            // バックアップでは `if (item.icon && item.icon !== 'none' && OUTLINE_ICONS[item.icon])` となっている
-            // ここではバックアップのロジックを優先
+            // 保険
         }
 
         iconEl.title = 'クリックでアイコンを変更';
@@ -310,13 +463,13 @@ export class OutlineManager {
         });
         itemEl.appendChild(iconEl);
 
-        // 2. テキスト
+        // 1-2. テキスト
         const textEl = document.createElement('span');
         textEl.className = 'outline-text';
         textEl.textContent = item.text || '(無題)';
         itemEl.appendChild(textEl);
 
-        // 3. メニューボタン（ホバー時表示）
+        // 1-3. メニューボタン（ホバー時表示）
         const menuBtn = document.createElement('div');
         menuBtn.className = 'outline-menu-btn';
         menuBtn.innerHTML = `<svg viewBox="0 0 24 24"><path d="M12,16A2,2 0 0,1 14,18A2,2 0 0,1 12,20A2,2 0 0,1 10,18A2,2 0 0,1 12,16M12,10A2,2 0 0,1 14,12A2,2 0 0,1 12,14A2,2 0 0,1 10,12A2,2 0 0,1 12,10M12,4A2,2 0 0,1 14,6A2,2 0 0,1 12,8A2,2 0 0,1 10,6A2,2 0 0,1 12,4Z"/></svg>`;
@@ -327,7 +480,7 @@ export class OutlineManager {
         });
         itemEl.appendChild(menuBtn);
 
-        // 4. トグルアイコン
+        // 1-4. トグルアイコン（折りたたみ）
         if (item.children.length > 0) {
             const toggleEl = document.createElement('div');
             toggleEl.className = 'outline-toggle';
@@ -341,11 +494,10 @@ export class OutlineManager {
             itemEl.appendChild(toggleEl);
         }
 
-        // 右クリックでコンテキストメニュー（ボタンクリックと同様の挙動）
+        // 右クリックでコンテキストメニュー
         itemEl.addEventListener('contextmenu', (e) => {
             e.preventDefault();
             e.stopPropagation();
-            // メニューボタンをアンカーとして使用
             this._showContextMenuFromButton(item.id, item.level, menuBtn);
         });
 
@@ -355,22 +507,113 @@ export class OutlineManager {
             this._setOutlineHighlight(item.id);
         });
 
-        wrapper.appendChild(itemEl);
+        rowEl.appendChild(itemEl);
+
+        // 2. レイヤー管理操作部（見出し項目部とは切り分け、row内に独立して配置）
+        if (this.isLayerMode) {
+            const controls = document.createElement('div');
+            controls.className = 'outline-layer-controls';
+            controls.dataset.headingId = item.id;
+            controls.addEventListener('click', (e) => {
+                // コントロール領域のクリックが見出しスクロール・アクティブ化に波及しないよう防止
+                e.stopPropagation();
+            });
+
+            // 2-1. 目次表示切り替えボタン（指定SVGアイコン）
+            const outlineBtn = document.createElement('button');
+            outlineBtn.className = `outline-layer-btn outline-vis-btn ${isSelfOutlineVisible ? 'is-visible' : 'is-hidden'}`;
+            outlineBtn.title = isSelfOutlineVisible ? '目次表示中 (クリックで非表示)' : '目次非表示中 (クリックで表示)';
+            outlineBtn.innerHTML = isSelfOutlineVisible ? LAYER_VISIBILITY_ICONS.visible : LAYER_VISIBILITY_ICONS.hidden;
+            outlineBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (!this.visibilityManager) return;
+                const next = this.visibilityManager.toggleOutlineVisible(item.id);
+                outlineBtn.className = `outline-layer-btn outline-vis-btn ${next ? 'is-visible' : 'is-hidden'}`;
+                outlineBtn.title = next ? '目次表示中 (クリックで非表示)' : '目次非表示中 (クリックで表示)';
+                outlineBtn.innerHTML = next ? LAYER_VISIBILITY_ICONS.visible : LAYER_VISIBILITY_ICONS.hidden;
+
+                if (next) {
+                    itemEl.classList.remove('outline-hidden-preview');
+                } else {
+                    itemEl.classList.add('outline-hidden-preview');
+                }
+
+                if (this.visibilityManager.eventBus) {
+                    this.visibilityManager.eventBus.emit('heading:visibility:layer-ui-sync');
+                }
+            });
+            controls.appendChild(outlineBtn);
+
+            // 2-2. ノード表示切り替えボタン（指定SVGアイコン）
+            const isParentHidden = this._isParentNodeHiddenOnCanvas(item.id);
+            const isNodeSelfVis = !this.visibilityManager || this.visibilityManager.isFlowchartSelfVisible(item.id);
+            const effectiveNodeVis = isNodeSelfVis && !isParentHidden;
+
+            const nodeBtn = document.createElement('button');
+            let nodeBtnClass = `outline-layer-btn node-vis-btn`;
+            let nodeTitle = '';
+            if (isParentHidden) {
+                nodeBtnClass += ' is-parent-hidden is-hidden';
+                nodeTitle = '親ノードが非表示のため非表示（親を表示すると復帰）';
+            } else if (effectiveNodeVis) {
+                nodeBtnClass += ' is-visible';
+                nodeTitle = 'ノード表示中 (クリックで非表示)';
+            } else {
+                nodeBtnClass += ' is-hidden';
+                nodeTitle = 'ノード非表示中 (クリックで表示)';
+            }
+            nodeBtn.className = nodeBtnClass;
+            nodeBtn.title = nodeTitle;
+            nodeBtn.innerHTML = effectiveNodeVis ? LAYER_VISIBILITY_ICONS.visible : LAYER_VISIBILITY_ICONS.hidden;
+
+            nodeBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (!this.visibilityManager) return;
+                this.visibilityManager.toggleFlowchartVisible(item.id);
+                // ノード即時反映
+                if (this.flowchartApp) {
+                    this.flowchartApp.applyVisibility();
+                }
+                // 全ノードボタンの連動状態（親子関係）を更新
+                this._refreshAllNodeButtons();
+
+                if (this.visibilityManager.eventBus) {
+                    this.visibilityManager.eventBus.emit('heading:visibility:layer-ui-sync');
+                }
+            });
+            controls.appendChild(nodeBtn);
+
+            rowEl.appendChild(controls);
+        }
+
+        wrapper.appendChild(rowEl);
 
         // 子アイテム
+        let hasVisibleChild = false;
         if (item.children.length > 0) {
             const childrenContainer = document.createElement('div');
             childrenContainer.className = 'outline-children';
 
-            const isCollapsed = this.outlineCollapsedState.get(item.id) || false;
+            // 通常モード時のみ、自身が表示されている場合のみ折りたたみ状態を適用
+            const isCollapsed = !this.isLayerMode && isSelfOutlineVisible && (this.outlineCollapsedState.get(item.id) || false);
             if (isCollapsed) {
                 childrenContainer.classList.add('collapsed');
             }
 
             item.children.forEach(child => {
-                childrenContainer.appendChild(this._createOutlineItemElement(child));
+                const childEl = this._createOutlineItemElement(child);
+                if (childEl && childEl.style.display !== 'none') {
+                    hasVisibleChild = true;
+                }
+                childrenContainer.appendChild(childEl);
             });
             wrapper.appendChild(childrenContainer);
+        }
+
+        // 通常モード時のみ：自身が非表示かつ表示すべき子もいない場合はラッパーごと隠す
+        if (!this.isLayerMode && !isSelfOutlineVisible && !hasVisibleChild) {
+            wrapper.classList.add('hidden-by-visibility');
+            wrapper.style.display = 'none';
         }
 
         return wrapper;
@@ -471,7 +714,7 @@ export class OutlineManager {
         let parent = wrapper.parentElement;
         while (parent && parent !== this.outlineList) {
             if (parent.classList.contains('outline-item-wrapper')) {
-                const parentItem = parent.querySelector(':scope > .outline-item');
+                const parentItem = parent.querySelector('.outline-item');
                 if (parentItem && this._isOutlineItemVisible(parent)) {
                     return parentItem;
                 }
@@ -781,6 +1024,19 @@ export class OutlineManager {
         if (moveDownItem) {
             moveDownItem.classList.toggle('disabled', !canMoveDown);
         }
+
+        // 表示/非表示ラベルの更新
+        const outlineLabel = this.contextMenu.querySelector('#ctx-outline-vis-label');
+        if (outlineLabel && this.visibilityManager) {
+            const isOutlineVis = this.visibilityManager.isOutlineVisible(headingId);
+            outlineLabel.textContent = isOutlineVis ? 'アウトラインで非表示' : 'アウトラインで表示';
+        }
+
+        const flowchartLabel = this.contextMenu.querySelector('#ctx-flowchart-vis-label');
+        if (flowchartLabel && this.visibilityManager) {
+            const isNodeVis = this.visibilityManager.isFlowchartSelfVisible(headingId);
+            flowchartLabel.textContent = isNodeVis ? 'ノードを非表示' : 'ノードを表示';
+        }
     }
 
     /**
@@ -882,6 +1138,23 @@ export class OutlineManager {
             case 'changeIcon':
                 this._openIconPickerForTarget();
                 return; // メニューを閉じてアイコンピッカーを開くため、状態更新をスキップ
+            case 'toggleOutlineVisibility':
+                if (this.visibilityManager) {
+                    this.visibilityManager.toggleOutlineVisible(this.contextMenuTargetId);
+                    this.updateOutline();
+                }
+                this.hideContextMenu();
+                return;
+            case 'toggleFlowchartVisibility':
+                if (this.visibilityManager) {
+                    this.visibilityManager.toggleFlowchartVisible(this.contextMenuTargetId);
+                }
+                this.hideContextMenu();
+                return;
+            case 'deleteHeading':
+                this._deleteHeading(this.contextMenuTargetId);
+                this.hideContextMenu();
+                return;
         }
 
         // 操作後にメニュー項目の有効/無効状態を更新
@@ -1168,5 +1441,34 @@ export class OutlineManager {
         }
 
         return { from: fromPos, to: toPos };
+    }
+
+    /**
+     * 見出しおよびそのセクションをエディタから削除します。
+     * @param {string} headingId - 削除する見出しID
+     * @private
+     */
+    _deleteHeading(headingId) {
+        if (!headingId || !this.editor.tiptap) return;
+
+        const headings = this.getHeadings();
+        const currentIndex = headings.findIndex(h => h.id === headingId);
+        if (currentIndex === -1) return;
+
+        const target = headings[currentIndex];
+        const title = target.text || '(無題)';
+
+        if (!confirm(`見出し「${title}」と配下の内容を削除してもよろしいですか？`)) {
+            return;
+        }
+
+        const range = this._getHeadingSectionRange(headingId, target.level, headings, currentIndex);
+        if (!range) return;
+
+        const tr = this.editor.tiptap.state.tr;
+        tr.delete(range.from, range.to);
+        this.editor.tiptap.view.dispatch(tr);
+
+        this.updateOutline();
     }
 }

@@ -1,0 +1,383 @@
+/* ==========================================================================
+   サイドバー拡張レイヤー管理UI (Sidebar Layer Mode)
+   イラストソフト風のレイヤー・表示非表示管理スタイル
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   レイヤー管理UIのコンポーネント変数定義
+   テーマ変数（main.css / SettingsManager）と連動し、実環境での運用・保守性を最大化
+   -------------------------------------------------------------------------- */
+:root {
+  --layer-sidebar-width: 400px;
+  --layer-btn-size: 24px;
+  --layer-btn-icon-size: 18px;
+  --layer-col-width: 36px;
+  --layer-controls-gap: 24px;
+  --layer-controls-margin: 12px;
+}
+
+/* --------------------------------------------------------------------------
+   サイドバーヘッダーのアクションボタン（レイヤー管理切替）
+   -------------------------------------------------------------------------- */
+.sidebar-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  padding: 0 4px;
+  height: 24px;
+}
+
+.sidebar-section-header h3 {
+  margin: 0 !important;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  letter-spacing: 0.08em;
+}
+
+.sidebar-action-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-muted);
+  width: 26px;
+  height: 26px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  padding: 0;
+}
+
+.sidebar-action-btn:hover {
+  background-color: var(--surface-hover);
+  color: var(--text-color);
+  border-color: var(--border-hover, var(--border-color));
+}
+
+.sidebar-action-btn:focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 1px;
+}
+
+.sidebar-action-btn.active {
+  background-color: color-mix(in srgb, var(--primary-color) 15%, transparent);
+  color: var(--primary-color);
+  border-color: var(--primary-color);
+}
+
+.sidebar-action-btn .icon {
+  width: 15px;
+  height: 15px;
+}
+
+/* --------------------------------------------------------------------------
+   サイドバー拡張モード (Sidebar Layer Mode: 400px)
+   -------------------------------------------------------------------------- */
+#sidebar {
+  transition: width 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+    min-width 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+    margin-left 0.3s ease;
+}
+
+#sidebar.sidebar-layer-mode {
+  --sidebar-width: var(--layer-sidebar-width) !important;
+}
+
+/* --------------------------------------------------------------------------
+   レイヤー管理ツールバー (#outline-layer-toolbar)
+   -------------------------------------------------------------------------- */
+.outline-layer-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 0;
+  animation: layerToolbarSlideDown 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.outline-layer-toolbar.hidden {
+  display: none !important;
+}
+
+@keyframes layerToolbarSlideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* --------------------------------------------------------------------------
+   列ヘッダー（項目、目次、ノード）
+   下のコントロール列（.outline-layer-controls）と幅・間隔を完全同期
+   -------------------------------------------------------------------------- */
+.layer-columns-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  user-select: none;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.layer-columns-header .col-title {
+  flex: 1;
+  padding-left: 4px;
+}
+
+.layer-columns-header .col-action-headers {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-right: 4px;
+}
+
+.layer-columns-header .col-action-header {
+  width: var(--layer-col-width);
+  text-align: center;
+}
+
+/* --------------------------------------------------------------------------
+   一括操作セクション（トグルで折りたたみ可能）
+   -------------------------------------------------------------------------- */
+.layer-batch-section {
+  display: flex;
+  flex-direction: column;
+}
+
+/* 一括操作ヘッダー行（クリックで開閉） */
+.layer-batch-header-item {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  user-select: none;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 4px 6px;
+  margin-bottom: 0;
+  margin-right: calc((var(--layer-col-width) * 2) + var(--layer-controls-gap) + 12px);
+  border-radius: 4px;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.layer-batch-header-item:hover {
+  color: var(--text-color);
+}
+
+.layer-batch-header-item:focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 1px;
+}
+
+/* 一括操作リスト（H1〜H4が縦に並ぶ） */
+.layer-batch-list {
+  display: flex;
+  flex-direction: column;
+  border-bottom: 1px dashed var(--border-color);
+  transition: opacity 0.18s ease;
+}
+
+.layer-batch-list.collapsed {
+  display: none !important;
+}
+
+/* H1〜H4 の各行 (.layer-batch-row) */
+.layer-batch-row {
+  border-radius: 4px;
+  transition: background-color 0.15s ease;
+}
+
+.layer-batch-row:not(.is-empty):hover {
+  background-color: var(--surface-hover);
+}
+
+.layer-batch-row.is-empty {
+  cursor: default;
+}
+
+.layer-batch-item {
+  cursor: default;
+}
+
+.layer-batch-level-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
+  color: inherit;
+  cursor: default;
+  pointer-events: none;
+}
+
+.layer-batch-level-icon:hover {
+  background-color: transparent !important;
+}
+
+.layer-batch-level-icon svg {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
+}
+
+.layer-batch-item.layer-batch-empty {
+  opacity: 0.45;
+}
+
+.outline-layer-btn.is-disabled {
+  opacity: 0.35 !important;
+  cursor: not-allowed !important;
+  pointer-events: none;
+}
+
+/* --------------------------------------------------------------------------
+   アウトライン項目の行レイアウト (.outline-item-row)
+   見出し項目部 (.outline-item) と レイヤー操作部 (.outline-layer-controls) を同じ行で切り分けて配置
+   -------------------------------------------------------------------------- */
+.outline-item-row {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  position: relative;
+}
+
+/* 見出し項目部：通常時・管理モードで構成が完全に同一 */
+.outline-item {
+  flex: 1;
+  min-width: 0;
+}
+
+/* --------------------------------------------------------------------------
+   レイヤー操作ボタン群 (.outline-layer-controls)
+   見出し項目部とは完全に独立した兄弟要素として配置
+   -------------------------------------------------------------------------- */
+.outline-layer-controls {
+  display: none;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--layer-controls-gap);
+  margin-left: var(--layer-controls-margin);
+  margin-right: var(--layer-controls-margin);
+  padding-left: 4px;
+  padding-right: 4px;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 2;
+  color: var(--text-color);
+}
+
+/* サイドバーがレイヤーモードの場合のみコントロールを表示 */
+.sidebar-layer-mode .outline-layer-controls {
+  display: inline-flex;
+}
+
+.outline-layer-btn {
+  background-color: transparent;
+  border: 1px solid transparent;
+  width: var(--layer-btn-size);
+  height: var(--layer-btn-size);
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+  transition: transform 0.12s ease, background-color 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+  line-height: 0;
+}
+
+.outline-layer-btn svg {
+  width: var(--layer-btn-icon-size);
+  height: var(--layer-btn-icon-size);
+  fill: currentColor;
+  transition: transform 0.12s ease, opacity 0.12s ease;
+}
+
+.outline-layer-btn:hover {
+  background-color: var(--surface-hover);
+  border-color: var(--border-hover, var(--border-color));
+  transform: scale(1.08);
+}
+
+.outline-layer-btn:active {
+  transform: scale(0.95);
+}
+
+.outline-layer-btn:focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 1px;
+}
+
+/* 表示状態：文字色と同様（通常文字色を維持） */
+.outline-layer-btn.is-visible {
+  color: var(--text-color);
+  opacity: 1;
+}
+
+/* 非表示状態：ミュートカラー（ユーザー指定） */
+.outline-layer-btn.is-hidden {
+  color: var(--text-muted);
+  opacity: 0.5;
+}
+
+/* 親ノード非表示連動による実効非表示状態 */
+.outline-layer-btn.is-parent-hidden {
+  color: var(--text-muted);
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+/* --------------------------------------------------------------------------
+   アウトラインのグレーアウト表示（管理モード中の非表示項目）
+   見出し項目部 (.outline-item) のみがグレーアウトされ、
+   独立したレイヤー操作部 (.outline-layer-controls) は一切影響を受けない
+   -------------------------------------------------------------------------- */
+.sidebar-layer-mode .outline-item.outline-hidden-preview {
+  opacity: 0.5 !important;
+  background-color: color-mix(in srgb, var(--text-muted) 10%, transparent) !important;
+  color: var(--text-muted) !important;
+  border-left: 2px dashed var(--border-color);
+}
+
+.sidebar-layer-mode .outline-item.outline-hidden-preview .outline-text {
+  text-decoration: line-through;
+  color: var(--text-muted);
+}
+
+/* 通常モード（管理モードOFF）時の完全非表示 */
+:not(.sidebar-layer-mode) .outline-item.hidden-by-visibility,
+:not(.sidebar-layer-mode) .outline-item-wrapper.hidden-by-visibility {
+  display: none !important;
+}
+
+/* レイヤーモード中、自身が非表示でもラッパーごと消さない */
+.sidebar-layer-mode .outline-item-wrapper.hidden-by-visibility,
+.sidebar-layer-mode .outline-item.hidden-by-visibility {
+  display: flex !important;
+}
+
+/* --------------------------------------------------------------------------
+   編集ロック連動
+   ロック時はレイヤー管理トリガーボタンを非表示
+   -------------------------------------------------------------------------- */
+body.locked #outline-layer-mgr-btn {
+  display: none !important;
+}

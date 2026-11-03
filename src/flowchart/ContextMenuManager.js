@@ -183,21 +183,25 @@ export class ContextMenuManager {
 
         const separator = this.contextMenu.querySelector('.context-menu-separator');
         const deleteItem = this.contextMenu.querySelector('.context-menu-item.delete');
+        const hideItem = this.contextMenu.querySelector('#ctx-shape-hide-item');
 
         // セクションの表示切り替え
         if (type === 'shape') {
             this._showShapeSection();
             if (separator) separator.classList.remove('hidden');
-            if (deleteItem) deleteItem.classList.remove('hidden');
+            if (deleteItem) deleteItem.classList.add('hidden'); // ノードの削除機能はなくし、非表示機能に統一
+            if (hideItem) hideItem.classList.remove('hidden');
         } else if (type === 'connection') {
             this._showConnectionSection();
             if (separator) separator.classList.remove('hidden');
             if (deleteItem) deleteItem.classList.remove('hidden');
+            if (hideItem) hideItem.classList.add('hidden');
         } else if (type === 'overlay') {
             this._showOverlaySection();
             // オーバーレイキャンバスのメニューでは削除ボタンは不要
             if (separator) separator.classList.add('hidden');
             if (deleteItem) deleteItem.classList.add('hidden');
+            if (hideItem) hideItem.classList.add('hidden');
         }
 
         // 画面はみ出し防止のための簡単な調整（必要に応じて実装）
@@ -287,6 +291,16 @@ export class ContextMenuManager {
             } else if (this.selectedConnectionForContext) {
                 this.app.removeConnection(this.selectedConnectionForContext);
             }
+        } else if (action === 'hideNode') {
+            const targetShapes = this._getTargetShapes();
+            const shapes = targetShapes.length > 0 ? targetShapes : (this.selectedShapeForContext ? [this.app.shapes.get(this.selectedShapeForContext)] : []);
+            shapes.forEach(shape => {
+                if (shape && this.app.headingVisibilityManager) {
+                    const id = shape.headingId || shape.id;
+                    this.app.headingVisibilityManager.setFlowchartVisible(id, false);
+                }
+            });
+            this.app.applyVisibility();
         }
     }
 
