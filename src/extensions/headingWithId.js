@@ -12,7 +12,9 @@
  * 
  * @module extensions/headingWithId
  */
-import { Node, mergeAttributes, Plugin, PluginKey } from 'tiptap';
+import * as tiptap from 'tiptap';
+
+const { Node, mergeAttributes, Plugin, PluginKey } = tiptap;
 
 // ============================================================
 // 定数・設定
@@ -208,6 +210,11 @@ export const HeadingWithId = Node.create({
      * @returns {Array} プラグイン配列
      */
     addProseMirrorPlugins() {
+        if (!Plugin || !PluginKey) {
+            console.warn('[HeadingWithId] tiptapモジュールからPluginまたはPluginKeyを取得できませんでした。重複ID同期プラグインはスキップされます。ブラウザのキャッシュを更新してください。');
+            return [];
+        }
+
         return [
             new Plugin({
                 key: new PluginKey('headingWithIdSync'),

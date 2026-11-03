@@ -7,7 +7,7 @@
  * 要件 12.3: オフライン状態でのドキュメント編集・保存をサポート
  */
 
-const CACHE_NAME = 'Tsumugi-v2';
+const CACHE_NAME = 'Tsumugi-v7';
 const ASSETS = [
   // ルートファイル
   './',
@@ -26,6 +26,7 @@ const ASSETS = [
   './src/settings.js',
   './src/eventBus.js',
   './src/config.js',
+  './src/extensions/headingWithId.js',
 
   // スタイルシート
   './styles/main.css',
@@ -33,8 +34,14 @@ const ASSETS = [
   './styles/flowchart.css',
   './styles/search.css',
   './styles/settings.css',
+  './styles/layer-manager.css',
+  './styles/color-picker.css',
+  './styles/custom-css.css',
+  './styles/pdf-export.css',
+  './styles/html-export.css',
 
-  // ライブラリ
+  // ライブラリ & ベンダーバンドル
+  './assets/vendor/tiptap.bundle.js',
   './assets/lib/jszip.min.js',
   './assets/lib/FileSaver.min.js',
 
@@ -81,6 +88,23 @@ self.addEventListener('fetch', (event) => {
   }
 
   if (requestUrl.protocol !== 'http:' && requestUrl.protocol !== 'https:') {
+    return;
+  }
+
+  // localhost / 127.0.0.1 開発環境では常に最新コードを取得（ネットワーク優先）
+  const isDev = requestUrl.hostname === 'localhost' || requestUrl.hostname === '127.0.0.1';
+  if (isDev) {
+    event.respondWith(
+      fetch(event.request)
+        .then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200) {
+            const responseToCache = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseToCache));
+          }
+          return networkResponse;
+        })
+        .catch(() => caches.match(event.request))
+    );
     return;
   }
 
