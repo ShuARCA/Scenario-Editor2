@@ -7,7 +7,8 @@
     "start": "serve .",
     "test": "vitest --run",
     "test:watch": "vitest",
-    "test:ui": "vitest --ui"
+    "test:ui": "vitest --ui",
+    "bundle:tiptap": "node scripts/bundle-tiptap.js"
   },
   "dependencies": {
     "@tiptap/core": "^2.1.13",
