@@ -53,6 +53,7 @@ export class FlowchartApp {
         this.zoomPanManager = null;
         this.contextMenuManager = null;
         this.groupManager = null;
+        this.headingVisibilityManager = null;
 
         // 初期化はmain.jsから明示的に呼ばれることを想定
         // this.init(); 
@@ -79,6 +80,14 @@ export class FlowchartApp {
      */
     setEditorManager(em) {
         this.editorManager = em;
+    }
+
+    /**
+     * 見出し表示マネージャーを設定
+     * @param {import('../managers/HeadingVisibilityManager.js').HeadingVisibilityManager} manager
+     */
+    setHeadingVisibilityManager(manager) {
+        this.headingVisibilityManager = manager;
     }
 
     /**
@@ -152,6 +161,60 @@ export class FlowchartApp {
      */
     _setupEventBusListeners() {
         this.eventBus.on('editor:update', (headings) => this.syncFromEditor(headings));
+        this.eventBus.on('heading:visibility:changed', () => this.applyVisibility());
+    }
+
+    /**
+     * 見出し表示設定に基づき、ノードおよび接続線の表示/非表示を反映します。
+     */
+    applyVisibility() {
+        if (!this.headingVisibilityManager) return;
+
+        this.shapes.forEach((shape) => {
+            if (!shape || !shape.element) return;
+            const targetId = shape.headingId || shape.id;
+
+            const isVisible = this.headingVisibilityManager.isNodeEffectivelyVisible(targetId, (id) => {
+                const s = Array.from(this.shapes.values()).find(item => (item.headingId || item.id) === id);
+                if (s && s.parent) {
+                    const parentShape = this.shapes.get(s.parent);
+                    return parentShape ? (parentShape.headingId || parentShape.id) : null;
+                }
+                return null;
+            });
+
+            shape.visible = isVisible;
+            if (!isVisible) {
+                shape.element.style.display = 'none';
+                shape.element.classList.remove('selected');
+
+                // グループ化した親ノードで、オーバレイキャンバスを表示中の場合は連動して閉じる
+                if (this.groupManager?.overlayStrategy?.isOverlayOpen(shape.id)) {
+                    this.groupManager.overlayStrategy.closeOverlay(shape);
+                }
+            } else {
+                let shouldShow = true;
+                if (shape.parent && this.groupManager) {
+                    const parentShape = this.shapes.get(shape.parent);
+                    if (parentShape) {
+                        const strategy = this.groupManager.getStrategy(parentShape);
+                        if (strategy && typeof strategy.resolveVisibility === 'function') {
+                            shouldShow = strategy.resolveVisibility(parentShape, true);
+                        }
+                    }
+                }
+                if (shouldShow) {
+                    shape.element.style.display = 'flex';
+                } else {
+                    shape.element.style.display = 'none';
+                    shape.element.classList.remove('selected');
+                }
+            }
+        });
+
+        if (this.connectionManager) {
+            this.connectionManager.drawConnections();
+        }
     }
 
     // ========================================
@@ -297,9 +360,19 @@ export class FlowchartApp {
      * 
      * @param {string} id - 削除するシェイプのID
      */
+    
+    /**
+     * フローチャートの変更を通知します。
+     */
+    notifyChange() {
+        if (this.eventBus) {
+            this.eventBus.emit('flowchart:change');
+        }
+    }
     removeShape(id) {
         this.shapeManager.removeShape(id);
         this.drawConnections();
+        this.notifyChange();
     }
 
     /**
@@ -338,6 +411,7 @@ export class FlowchartApp {
      */
     removeConnection(id) {
         this.connectionManager.removeConnection(id);
+        this.notifyChange();
     }
 
     /**
@@ -817,6 +891,7 @@ export class FlowchartApp {
 
         this.drawConnections();
         this.updateCanvasSize();
+        this.applyVisibility();
     }
 
     /**

@@ -28,16 +28,20 @@ export class StorageManager {
      * @param {import('../managers/LockManager.js').LockManager} [lockManager] - ロックマネージャー
      * @param {import('../ui/CustomCssManager.js').CustomCssManager} [customCssManager] - カスタムCSSマネージャー
      */
-    constructor(editorCore, colorPickerManager, flowchartApp, settingsManager, lockManager, customCssManager) {
+    constructor(editorCore, colorPickerManager, flowchartApp, settingsManager, lockManager, customCssManager, dirtyStateManager = null) {
         this.editorCore = editorCore;
         this.colorPickerManager = colorPickerManager;
         this.flowchartApp = flowchartApp;
         this.settingsManager = settingsManager;
         this.lockManager = lockManager || null;
         this.customCssManager = customCssManager || null;
+        this.dirtyStateManager = dirtyStateManager || null;
 
         /** @type {import('../managers/OutlineManager.js').OutlineManager|null} アウトラインマネージャー */
         this.outlineManager = null;
+
+        /** @type {import('../managers/HeadingVisibilityManager.js').HeadingVisibilityManager|null} 見出し表示マネージャー */
+        this.headingVisibilityManager = null;
 
         this.sanitizer = new Sanitizer();
 
@@ -102,6 +106,22 @@ export class StorageManager {
      */
     setPdfExportModal(pdfExportModal) {
         this.pdfExportModal = pdfExportModal;
+    }
+
+    /**
+     * HeadingVisibilityManager のインスタンスを設定します。
+     * @param {import('../managers/HeadingVisibilityManager.js').HeadingVisibilityManager} manager
+     */
+    
+    /**
+     * DirtyStateManager のインスタンスを設定します。
+     * @param {import('../managers/DirtyStateManager.js').DirtyStateManager} manager
+     */
+    setDirtyStateManager(manager) {
+        this.dirtyStateManager = manager;
+    }
+    setHeadingVisibilityManager(manager) {
+        this.headingVisibilityManager = manager;
     }
 
     /**
@@ -295,7 +315,14 @@ export class StorageManager {
 
         const confirmEdit = () => {
             const newTitle = input.value.trim() || '無題のドキュメント';
-            this.setTitle(newTitle);
+            if (newTitle !== currentTitle) {
+                this.setTitle(newTitle);
+                if (this.dirtyStateManager) {
+                    this.dirtyStateManager.markDirty();
+                }
+            } else {
+                this.setTitle(currentTitle);
+            }
         };
 
         input.addEventListener('keydown', (e) => {
@@ -423,6 +450,9 @@ export class StorageManager {
             } else {
                 // フォールバック: 従来のダウンロード
                 saveAs(content, this.filename);
+                if (this.dirtyStateManager) {
+                    this.dirtyStateManager.markClean();
+                }
             }
 
         } catch (error) {
@@ -464,6 +494,9 @@ export class StorageManager {
         // ファイル名を localStorage に保存
         localStorage.setItem('ieditweb-last-filename', newFilename);
         console.log('ファイルを保存しました:', newFilename);
+        if (this.dirtyStateManager) {
+            this.dirtyStateManager.markClean();
+        }
     }
 
 
@@ -535,7 +568,8 @@ export class StorageManager {
             customColors: this.colorPickerManager.getCustomColors(),
             locked: this.lockManager ? this.lockManager.isLocked() : false,
             customCss: this.customCssManager ? JSON.parse(this.customCssManager.exportToJson()) : null,
-            outlineCollapsedState: this.outlineManager ? this.outlineManager.getCollapsedState() : null
+            outlineCollapsedState: this.outlineManager ? this.outlineManager.getCollapsedState() : null,
+            headingVisibility: this.headingVisibilityManager ? this.headingVisibilityManager.serialize() : null
         };
     }
 
@@ -585,14 +619,24 @@ export class StorageManager {
      * @param {File} file - 読み込むファイル
      */
     async _processLoadedFile(file) {
-        // ZipHandlerで読み込み
-        await this.zipHandler.loadAsync(file);
+        if (this.dirtyStateManager) {
+            this.dirtyStateManager.suspend();
+        }
 
-        // 各コンポーネントを順次復元
-        await this._restoreEditorContent();
-        await this._restoreFlowchartData();
+        try {
+            // ZipHandlerで読み込み
+            await this.zipHandler.loadAsync(file);
 
-        alert('読み込み完了');
+            // 各コンポーネントを順次復元
+            await this._restoreEditorContent();
+            await this._restoreFlowchartData();
+
+            alert('読み込み完了');
+        } finally {
+            if (this.dirtyStateManager) {
+                this.dirtyStateManager.resume(true);
+            }
+        }
     }
 
     /**
@@ -692,6 +736,9 @@ export class StorageManager {
 
         // アウトラインの折りたたみ状態を復元
         this._restoreOutlineCollapsedState(data);
+
+        // 見出しの表示/非表示状態を復元
+        this._restoreHeadingVisibility(data);
     }
 
     /**
@@ -798,6 +845,15 @@ export class StorageManager {
     }
 
     /**
+     * 見出し表示/非表示状態を復元します。
+     * @private
+     */
+    _restoreHeadingVisibility(data) {
+        if (!this.headingVisibilityManager) return;
+        this.headingVisibilityManager.deserialize(data.headingVisibility || null);
+    }
+
+    /**
      * ロック状態を復元します。
      * @private
      */
@@ -848,6 +904,9 @@ export class StorageManager {
                 this.setTitle(pdfTitle);
 
                 alert('PDFのインポートが完了しました。');
+                if (this.dirtyStateManager) {
+                    this.dirtyStateManager.markDirty();
+                }
             } catch (importError) {
                 console.error('PDFインポートエラー:', importError);
                 alert('PDFのインポートに失敗しました: ' + importError.message);
@@ -932,6 +991,9 @@ export class StorageManager {
 
             console.log('Google Drive に保存しました:', result.name, '(ID:', result.id, ')');
             alert('Google Drive に保存しました: ' + result.name);
+            if (this.dirtyStateManager) {
+                this.dirtyStateManager.markClean();
+            }
 
         } catch (error) {
             if (error.name === 'AbortError') {

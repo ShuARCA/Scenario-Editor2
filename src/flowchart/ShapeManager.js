@@ -723,12 +723,15 @@ export class ShapeManager {
                     // 単一選択ノードをクリックした場合は通常通り見出しジャンプ
                     this.app.editorManager.scrollToHeading(shape.headingId);
                 }
-            } else if (this.app.groupManager && this.draggedRootShapes?.length > 0) {
+            } else if (this.hasMoved) {
+                if (this.app.notifyChange) this.app.notifyChange();
+                if (this.app.groupManager && this.draggedRootShapes?.length > 0) {
                 // 移動があった場合: 移動した各ルートシェイプのドロップ判定
                 // 同時移動中の他のルートシェイプへの誤ったグループ化を防ぐため除外IDを渡す
                 const ignoredIds = new Set(this.draggedRootShapes.map(item => item.shape.id));
                 for (const item of this.draggedRootShapes) {
                     this.app.groupManager.handleDrop(item.shape, ignoredIds);
+                }
                 }
             }
         }

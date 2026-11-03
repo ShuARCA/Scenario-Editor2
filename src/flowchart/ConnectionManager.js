@@ -99,6 +99,7 @@ export class ConnectionManager {
         });
 
         this.drawConnections();
+        if (this.app.notifyChange) this.app.notifyChange();
         return connection;
     }
 
